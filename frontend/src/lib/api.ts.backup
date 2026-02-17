@@ -1,0 +1,143 @@
+/**
+ * API Client
+ * 
+ * Axios-based API client for backend communication
+ */
+
+import axios, { AxiosError, AxiosInstance } from 'axios'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+// Create axios instance
+const api: AxiosInstance = axios.create({
+  baseURL: API_URL,
+  timeout: 120000, // 2 minutes for long-running requests
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// Request interceptor - add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// Response interceptor - handle errors
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      // Unauthorized - clear token and redirect to login
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('user')
+      window.location.href = '/signin'
+    }
+    return Promise.reject(error)
+  }
+)
+
+// Auth API
+export const authApi = {
+  signInWithGoogle: async (idToken: string) => {
+    const response = await api.post('/auth/google', { id_token: idToken })
+    return response.data
+  },
+
+  getCurrentUser: async () => {
+    const response = await api.get('/auth/me')
+    return response.data
+  },
+
+  refreshToken: async () => {
+    const response = await api.post('/auth/refresh')
+    return response.data
+  },
+}
+
+// Research API
+export const researchApi = {
+  generateSpecification: async (formData: FormData) => {
+    const response = await api.post('/research/generate', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return response.data
+  },
+
+  getStatus: async (projectId: number) => {
+    const response = await api.get(`/research/status/${projectId}`)
+    return response.data
+  },
+
+  getResult: async (projectId: number) => {
+    const response = await api.get(`/research/result/${projectId}`)
+    return response.data
+  },
+
+  cancelGeneration: async (projectId: number) => {
+    const response = await api.post(`/research/cancel/${projectId}`)
+    return response.data
+  },
+}
+
+// Projects API
+export const projectsApi = {
+  listProjects: async (params?: {
+    skip?: number
+    limit?: number
+    status?: string
+  }) => {
+    const response = await api.get('/projects', { params })
+    return response.data
+  },
+
+  getProject: async (projectId: number) => {
+    const response = await api.get(`/projects/${projectId}`)
+    return response.data
+  },
+
+  deleteProject: async (projectId: number) => {
+    const response = await api.delete(`/projects/${projectId}`)
+    return response.data
+  },
+
+  getAnalytics: async (projectId: number) => {
+    const response = await api.get(`/projects/${projectId}/analytics`)
+    return response.data
+  },
+}
+
+// User API
+export const userApi = {
+  getProfile: async () => {
+    const response = await api.get('/user/profile')
+    return response.data
+  },
+
+  updateProfile: async (data: { full_name?: string }) => {
+    const response = await api.patch('/user/profile', data)
+    return response.data
+  },
+
+  getStats: async () => {
+    const response = await api.get('/user/stats')
+    return response.data
+  },
+
+  deleteAccount: async () => {
+    const response = await api.delete('/user/account')
+    return response.data
+  },
+}
+
+export default api

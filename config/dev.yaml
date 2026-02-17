@@ -1,0 +1,26 @@
+# Development Configuration Overrides
+
+debug: true
+log_level: "DEBUG"
+
+research:
+  web_search:
+    max_queries: 3  # Fewer searches in dev
+  
+  auto_discovery:
+    target_projects: 2  # Faster in dev
+    min_required: 1
+  
+  review:
+    max_iterations: 2  # Faster iterations in dev
+  
+  features:
+    deep_research: false  # Disable expensive feature in dev
+    parallel_agents: false
+
+database:
+  echo: true  # Show SQL queries in dev
+
+storage:
+  provider: "local"
+  local_path: "./output_dev"
