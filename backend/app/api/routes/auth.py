@@ -10,7 +10,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 
 from app.services.auth_service import AuthService
-# from app.models.user import User
+
 from app.models.database import User
 from app.api.dependencies import get_db_session
 from app.adapters.email_adapter import get_email_adapter

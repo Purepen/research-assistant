@@ -17,8 +17,8 @@ from passlib.context import CryptContext
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
-from app.models.user import User
-from app.models.database import Project
+from app.models.database import User, Project
+
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
