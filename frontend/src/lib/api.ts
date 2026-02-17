@@ -9,9 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const api: AxiosInstance = axios.create({
   baseURL: API_URL,
   timeout: 120000,
-  // headers: {
-  //   'Content-Type': 'application/json',
-  // },
+
 })
 
 // Request interceptor
@@ -101,7 +99,12 @@ export const authApi = {
 // Research API (unchanged)
 export const researchApi = {
   generateSpecification: async (formData: FormData) => {
-    const response = await api.post('/research/generate', formData)
+    // const response = await api.post('/research/generate', formData)
+    const response = await api.post('/research/generate', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
     return response.data
   },
   

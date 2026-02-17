@@ -10,8 +10,10 @@ from docx import Document
 from datetime import datetime
 
 from app.models.config import SpecificationConfig
-from app.models.database import Project, ProjectResult, ProjectAnalytics
-from app.core.domain.project import ProjectLifecycle, ProjectStatus
+# from app.models.database import Project, ProjectResult, ProjectAnalytics
+# from app.core.domain.project import ProjectLifecycle, ProjectStatus
+from app.models.database import Project, ProjectResult, ProjectAnalytics, ProjectStatus
+from app.core.domain.project import ProjectLifecycle, ProjectStatus as DomainProjectStatus
 from app.core.pipelines.main_pipeline import run_complete_specification_system
 from app.adapters.storage_adapter import get_storage_adapter
 from app.adapters.email_adapter import get_email_adapter
@@ -88,8 +90,10 @@ class ResearchService:
         """
         
         # Initialize lifecycle
-        lifecycle = ProjectLifecycle(ProjectStatus.DRAFT)
-        lifecycle.transition_to(ProjectStatus.QUEUED, "User initiated generation")
+        # lifecycle = ProjectLifecycle(ProjectStatus.DRAFT)
+        # lifecycle.transition_to(ProjectStatus.QUEUED, "User initiated generation")
+        lifecycle = ProjectLifecycle(DomainProjectStatus.DRAFT)
+        lifecycle.transition_to(DomainProjectStatus.QUEUED, "User initiated generation")
         
         # Update project status
         project.status = ProjectStatus.QUEUED
@@ -99,7 +103,8 @@ class ResearchService:
         
         try:
             # Transition to generating
-            lifecycle.transition_to(ProjectStatus.GENERATING, "Starting main pipeline")
+            # lifecycle.transition_to(ProjectStatus.GENERATING, "Starting main pipeline")
+            lifecycle.transition_to(DomainProjectStatus.GENERATING, "Starting main pipeline")
             project.status = ProjectStatus.GENERATING
             project.progress_percentage = 10
             if db_session:
@@ -121,7 +126,8 @@ class ResearchService:
             duration = (end_time - start_time).total_seconds()
             
             # Transition to complete
-            lifecycle.transition_to(ProjectStatus.COMPLETE, "Generation successful")
+            # lifecycle.transition_to(ProjectStatus.COMPLETE, "Generation successful")
+            lifecycle.transition_to(DomainProjectStatus.COMPLETE, "Generation successful")
             project.status = ProjectStatus.COMPLETE
             project.progress_percentage = 100
             project.completed_at = datetime.utcnow()
@@ -167,7 +173,8 @@ class ResearchService:
         
         except Exception as e:
             # Transition to failed
-            lifecycle.transition_to(ProjectStatus.FAILED, f"Error: {str(e)}")
+            # lifecycle.transition_to(ProjectStatus.FAILED, f"Error: {str(e)}")
+            lifecycle.transition_to(DomainProjectStatus.FAILED, f"Error: {str(e)}")
             project.status = ProjectStatus.FAILED
             if db_session:
                 db_session.commit()

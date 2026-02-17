@@ -22,7 +22,8 @@ class UserProfile(BaseModel):
     email: str
     full_name: str
     created_at: str
-    last_login: str
+    # last_login: str
+    last_login: Optional[str]
     total_projects: int
     completed_projects: int
 
@@ -41,7 +42,8 @@ async def get_user_profile(
     """
     
     # Count projects
-    from app.core.domain.project import ProjectStatus
+    # from app.core.domain.project import ProjectStatus
+    from app.models.database import ProjectStatus
     
     total_projects = db.query(Project).filter(Project.user_id == user.id).count()
     
@@ -55,7 +57,8 @@ async def get_user_profile(
         "email": user.email,
         "full_name": user.full_name,
         "created_at": user.created_at.isoformat(),
-        "last_login": user.last_login.isoformat(),
+        # "last_login": user.last_login.isoformat(),
+        "last_login": user.last_login.isoformat() if user.last_login else None,
         "total_projects": total_projects,
         "completed_projects": completed_projects
     }
@@ -91,7 +94,8 @@ async def get_user_stats(
     Get user statistics
     """
     
-    from app.core.domain.project import ProjectStatus
+    # from app.core.domain.project import ProjectStatus
+    from app.models.database import ProjectStatus
     from sqlalchemy import func
     from app.models.database import ProjectAnalytics
     

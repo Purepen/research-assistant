@@ -1,5 +1,4 @@
-"""
-Project Analysis Models
+"""Project Analysis Models
 
 Extracted from: Notebook Cell 3
 Purpose: Spec-shaped format for analyzing past projects (makes synthesis easier)

@@ -18,6 +18,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 
 from app.models.user import User
+from app.models.database import Project
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -311,6 +312,24 @@ class AuthService:
             return None
         except jwt.InvalidTokenError:
             return None
+
+    
+    def check_user_permission(
+        self,
+        user: User,
+        project_id: int,
+        db_session
+    ) -> bool:
+        """Check whether a user can access a project."""
+
+        if not db_session:
+            return False
+
+        project = db_session.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            return False
+
+        return project.user_id == user.id
     
     def get_current_user(self, token: str, db_session) -> Optional[User]:
         """Get user from JWT token"""

@@ -2,7 +2,6 @@
 
 import { useRef } from 'react'
 import { Upload, FileText, X } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
 import { formatFileSize } from '@/lib/utils'
 
 interface Step2Props {
@@ -22,12 +21,29 @@ export function Step2FileUploads({ files, updateFiles }: Step2Props) {
     if (file) {
       updateFiles({ guidelines: file })
     }
+    
+    // Allow selecting the same file again on subsequent uploads
+    e.target.value = ''
   }
+  
 
   const handlePastProjectsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newFiles = Array.from(e.target.files || [])
     updateFiles({ pastProjects: [...files.pastProjects, ...newFiles] })
+    const existingKeys = new Set(
+      files.pastProjects.map(file => `${file.name}-${file.size}-${file.lastModified}`)
+    )
+
+    const uniqueNewFiles = newFiles.filter(
+      file => !existingKeys.has(`${file.name}-${file.size}-${file.lastModified}`)
+    )
+
+    updateFiles({ pastProjects: [...files.pastProjects, ...uniqueNewFiles] })
+
+    // Allow selecting the same files again after removal
+    e.target.value = ''
   }
+
 
   const removeGuidelines = () => {
     updateFiles({ guidelines: undefined })
@@ -39,6 +55,10 @@ export function Step2FileUploads({ files, updateFiles }: Step2Props) {
   const removePastProject = (index: number) => {
     const newFiles = files.pastProjects.filter((_, i) => i !== index)
     updateFiles({ pastProjects: newFiles })
+    
+    if (pastProjectsRef.current) {
+      pastProjectsRef.current.value = ''
+    }
   }
 
   return (

@@ -65,7 +65,8 @@ async def list_projects(
     
     # Filter by status if provided
     if status:
-        from app.core.domain.project import ProjectStatus
+        from app.models.database import ProjectStatus
+        # from app.core.domain.project import ProjectStatus
         try:
             status_enum = ProjectStatus[status.upper()]
             query = query.filter(Project.status == status_enum)

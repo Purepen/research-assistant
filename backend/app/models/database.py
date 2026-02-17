@@ -72,7 +72,18 @@ class Project(Base):
     past_projects_mode = Column(String(20), nullable=False)  # user_provided, auto_discover, hybrid
     
     # Status tracking
-    status = Column(Enum(ProjectStatus), default=ProjectStatus.DRAFT, nullable=False, index=True)
+    # status = Column(Enum(ProjectStatus), default=ProjectStatus.DRAFT, nullable=False, index=True)
+    status = Column(
+        Enum(
+            ProjectStatus,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            native_enum=False,
+            name="projectstatus",
+        ),
+        default=ProjectStatus.DRAFT,
+        nullable=False,
+        index=True,
+    )
     progress_percentage = Column(Integer, default=0)
     current_phase = Column(String(50), nullable=True)
     

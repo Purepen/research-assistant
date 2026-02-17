@@ -13,6 +13,7 @@ import { Step4Review } from '@/components/generate/Step4Review'
 import { useGenerateSpecification } from '@/hooks/useProjects'
 import { useRouter } from 'next/navigation'
 import { GenerationConfig } from '@/types'
+import axios from 'axios'
 
 const steps = [
   { number: 1, title: 'Basic Info', description: 'Field and topic' },
@@ -81,10 +82,16 @@ export default function GeneratePage() {
       const result = await generateSpec(apiFormData)
       
       // Redirect to project page
-      router.push(`/dashboard/projects/${result.project_id}`)
+      // router.push(`/dashboard/projects/${result.project_id}`)
+      router.push('/dashboard/projects')
       
     } catch (error) {
-      console.error('Generation failed:', error)
+      // console.error('Generation failed:', error)
+      if (axios.isAxiosError(error)) {
+        console.error('Generation failed:', error.response?.status, error.response?.data)
+      } else {
+        console.error('Generation failed:', error)
+      }
     }
   }
 
