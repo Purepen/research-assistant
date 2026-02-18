@@ -1,12 +1,18 @@
 """
 FastAPI Main Application
-
-Purpose: Entry point for the Research Assistant backend API
 """
+
+# ============================================================
+# CRITICAL: Load .env FIRST — before ANY other import
+# that might call os.getenv() at module load time
+# (e.g. adapters, auth_service, agent definitions)
+# ============================================================
+from dotenv import load_dotenv
+load_dotenv()  # reads backend/.env into os.environ immediately
+# ============================================================
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import os
 
 from app.api.routes import (
@@ -16,7 +22,6 @@ from app.api.routes import (
     user_router,
 )
 
-# Create FastAPI app
 app = FastAPI(
     title="Research Assistant API",
     description="AI-powered research specification generation",
@@ -25,28 +30,15 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# 🔹 CREATE DATABASE TABLES ON STARTUP (DEV ONLY)
-
-
-# # CORS Configuration *original follow come code
-# origins = [
-#     "http://localhost:3000",  # Next.js dev server
-#     "http://localhost:3001",
-#     "https://research-assistant.vercel.app",  # Production frontend
-#     os.getenv("FRONTEND_URL", "http://localhost:3000"),
-# ]
-
-# CORS Configuration
+# CORS
 origins = [
-    "http://localhost:3000",  # Next.js dev server
+    "http://localhost:3000",
     "http://localhost:3001",
-    "https://research-assistant.vercel.app",  # Production frontend
+    "https://research-assistant.vercel.app",
 ]
-
 frontend_url = os.getenv("FRONTEND_URL")
 if frontend_url:
     origins.append(frontend_url)
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,7 +49,6 @@ app.add_middleware(
 )
 
 
-# Health check endpoint
 @app.get("/")
 async def root():
     return {
@@ -70,40 +61,21 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for monitoring"""
+    openai_ok = bool(os.getenv("OPENAI_API_KEY"))
+    anthropic_ok = bool(os.getenv("ANTHROPIC_API_KEY"))
     return {
         "status": "healthy",
-        "database": "connected",  # TODO: Add actual DB check
-        "openai": "connected",    # TODO: Add actual OpenAI check
+        "openai_key_loaded": openai_ok,
+        "anthropic_key_loaded": anthropic_ok,
     }
 
 
-# Include routers
 app.include_router(auth_router)
 app.include_router(research_router)
 app.include_router(projects_router)
 app.include_router(user_router)
 
 
-# # Global exception handler
-# @app.exception_handler(Exception)
-# async def global_exception_handler(request, exc):
-#     return JSONResponse(
-#         status_code=500,
-#         content={
-#             "detail": "Internal server error",
-#             "error": str(exc) if os.getenv("DEBUG") == "true" else "Something went wrong"
-#         }
-#     )
-
-
 if __name__ == "__main__":
     import uvicorn
-    
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
