@@ -1,30 +1,28 @@
 """
-Projects Routes — FIXED
+Projects Routes — with Download Endpoint
 
-Added:
-  GET /projects/{id}/download   — generates and streams a .docx specification file
-  
-Other fixes:
-  - has_results added to ProjectDetail response
-  - current_phase exposed in detail response
+Endpoint added: GET /projects/{project_id}/download
+Returns a .docx file built from specification_json stored in the database.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from __future__ import annotations
+
+import io
+from typing import Optional, List
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime
-import io
 
 from app.models.database import Project
 from app.api.dependencies import get_db_session, get_current_user
 
-router = APIRouter(prefix="/projects", tags=["Projects"])
+router   = APIRouter(prefix="/projects", tags=["Projects"])
 security = HTTPBearer()
 
 
-# ── Response Models ───────────────────────────────────────────────────────────
+# ── Response models ────────────────────────────────────────────────────────────
 
 class ProjectListItem(BaseModel):
     id: int
@@ -57,15 +55,15 @@ class ProjectDetail(BaseModel):
     decision: Optional[str]
 
 
-# ── List Projects ─────────────────────────────────────────────────────────────
+# ── List ───────────────────────────────────────────────────────────────────────
 
 @router.get("/", response_model=List[ProjectListItem])
 async def list_projects(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
-    status: Optional[str] = Query(None),
-    user=Depends(get_current_user),
-    db=Depends(get_db_session),
+    skip:   int            = Query(0,  ge=0),
+    limit:  int            = Query(20, ge=1, le=100),
+    status: Optional[str]  = Query(None),
+    user   = Depends(get_current_user),
+    db     = Depends(get_db_session),
 ):
     query = db.query(Project).filter(Project.user_id == user.id)
 
@@ -81,65 +79,70 @@ async def list_projects(
 
     return [
         {
-            "id": p.id,
-            "field_of_study": p.field_of_study,
-            "research_topic": p.research_topic,
-            "academic_level": p.academic_level,
-            "status": p.status.value,
-            "progress_percentage": p.progress_percentage or 0,
-            "created_at": p.created_at.isoformat(),
-            "completed_at": p.completed_at.isoformat() if p.completed_at else None,
-            "total_marks": p.result.total_marks if p.result else None,
-            "decision": p.result.decision if p.result else None,
+            "id":                  p.id,
+            "field_of_study":      p.field_of_study,
+            "research_topic":      p.research_topic,
+            "academic_level":      p.academic_level,
+            "status":              p.status.value,
+            "progress_percentage": p.progress_percentage,
+            "created_at":          p.created_at.isoformat(),
+            "completed_at":        p.completed_at.isoformat() if p.completed_at else None,
+            "total_marks":         p.result.total_marks  if p.result else None,
+            "decision":            p.result.decision     if p.result else None,
         }
         for p in projects
     ]
 
 
-# ── Get Single Project ────────────────────────────────────────────────────────
+# ── Detail ─────────────────────────────────────────────────────────────────────
 
 @router.get("/{project_id}", response_model=ProjectDetail)
 async def get_project(
     project_id: int,
-    user=Depends(get_current_user),
-    db=Depends(get_db_session),
+    user = Depends(get_current_user),
+    db   = Depends(get_db_session),
 ):
     project = db.query(Project).filter(
-        Project.id == project_id, Project.user_id == user.id
+        Project.id == project_id,
+        Project.user_id == user.id,
     ).first()
 
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
+    from app.core.domain.project import ProjectLifecycle
+    lifecycle = ProjectLifecycle(project.status)
+
     return {
-        "id": project.id,
-        "field_of_study": project.field_of_study,
-        "research_topic": project.research_topic,
-        "academic_level": project.academic_level,
-        "effort_level": project.effort_level,
-        "past_projects_mode": project.past_projects_mode,
-        "status": project.status.value,
-        "progress_percentage": project.progress_percentage or 0,
-        "current_phase": project.current_phase,
-        "created_at": project.created_at.isoformat(),
-        "started_at": project.started_at.isoformat() if project.started_at else None,
-        "completed_at": project.completed_at.isoformat() if project.completed_at else None,
-        "has_results": project.result is not None,
-        "total_marks": project.result.total_marks if project.result else None,
-        "decision": project.result.decision if project.result else None,
+        "id":                  project.id,
+        "field_of_study":      project.field_of_study,
+        "research_topic":      project.research_topic,
+        "academic_level":      project.academic_level,
+        "effort_level":        project.effort_level,
+        "past_projects_mode":  project.past_projects_mode,
+        "status":              project.status.value,
+        "progress_percentage": project.progress_percentage,
+        "current_phase":       lifecycle.get_phase_description(),
+        "created_at":          project.created_at.isoformat(),
+        "started_at":          project.started_at.isoformat()   if project.started_at   else None,
+        "completed_at":        project.completed_at.isoformat() if project.completed_at else None,
+        "has_results":         project.result is not None,
+        "total_marks":         project.result.total_marks  if project.result else None,
+        "decision":            project.result.decision     if project.result else None,
     }
 
 
-# ── Delete Project ────────────────────────────────────────────────────────────
+# ── Delete ─────────────────────────────────────────────────────────────────────
 
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: int,
-    user=Depends(get_current_user),
-    db=Depends(get_db_session),
+    user = Depends(get_current_user),
+    db   = Depends(get_db_session),
 ):
     project = db.query(Project).filter(
-        Project.id == project_id, Project.user_id == user.id
+        Project.id == project_id,
+        Project.user_id == user.id,
     ).first()
 
     if not project:
@@ -150,19 +153,21 @@ async def delete_project(
     return {"success": True, "message": "Project deleted"}
 
 
-# ── Analytics ─────────────────────────────────────────────────────────────────
+# ── Analytics ──────────────────────────────────────────────────────────────────
 
 @router.get("/{project_id}/analytics")
 async def get_project_analytics(
     project_id: int,
-    user=Depends(get_current_user),
-    db=Depends(get_db_session),
+    user = Depends(get_current_user),
+    db   = Depends(get_db_session),
 ):
     from app.models.database import ProjectAnalytics
 
     project = db.query(Project).filter(
-        Project.id == project_id, Project.user_id == user.id
+        Project.id == project_id,
+        Project.user_id == user.id,
     ).first()
+
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
@@ -174,182 +179,207 @@ async def get_project_analytics(
         return {"message": "Analytics not available yet"}
 
     return {
-        "project_id": project_id,
-        "num_iterations": analytics.num_iterations,
-        "num_web_searches": analytics.num_web_searches,
+        "project_id":              project_id,
+        "num_iterations":          analytics.num_iterations,
+        "num_web_searches":        analytics.num_web_searches,
         "num_auto_projects_found": analytics.num_auto_projects_found,
         "num_user_projects_analyzed": analytics.num_user_projects_analyzed,
-        "final_word_count": analytics.final_word_count,
-        "target_word_count": analytics.target_word_count,
-        "total_generation_time": analytics.total_generation_time,
-        "completeness_score": analytics.completeness_score,
-        "novelty_score": analytics.novelty_score,
+        "final_word_count":        analytics.final_word_count,
+        "target_word_count":       analytics.target_word_count,
+        "total_generation_time":   analytics.total_generation_time,
+        "completeness_score":      analytics.completeness_score,
+        "novelty_score":           analytics.novelty_score,
     }
 
 
-# ── Download as DOCX ──────────────────────────────────────────────────────────
+# ── Download ───────────────────────────────────────────────────────────────────
+#
+# Builds a .docx from the specification_json stored in the database.
+# specification_json shape (from research_spec.py / ProjectResult):
+# {
+#   "project_title": str,
+#   "field_of_study": str,
+#   "academic_level": str,
+#   "total_word_count": int,
+#   "abstract":              {"section_name": str, "content": str, "word_count": int},
+#   "justification_and_aim": {"section_name": str, "content": str, "word_count": int},
+#   "objectives":            {"section_name": str, "content": str, "word_count": int},
+#   "literature_review":     {"section_name": str, "content": str, "word_count": int},
+#   "methodology":           {"section_name": str, "content": str, "word_count": int},
+#   "work_plan":             {"section_name": str, "content": str, "word_count": int},
+#   "references":            [str, ...]
+# }
 
 @router.get("/{project_id}/download")
 async def download_project(
     project_id: int,
-    user=Depends(get_current_user),
-    db=Depends(get_db_session),
+    user = Depends(get_current_user),
+    db   = Depends(get_db_session),
 ):
     """
-    Generate and stream a formatted .docx specification file.
-    Uses python-docx to build the document from stored specification_json.
+    Download project specification as a formatted .docx file.
     """
+    # ── 1. Fetch project ───────────────────────────────────────────────────
     project = db.query(Project).filter(
-        Project.id == project_id, Project.user_id == user.id
+        Project.id      == project_id,
+        Project.user_id == user.id,
     ).first()
 
     if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(status_code=404, detail="Project not found")
 
     if not project.result or not project.result.specification_json:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Specification not ready yet",
+            status_code=404,
+            detail="Specification not ready yet. Please wait for generation to complete.",
         )
 
-    spec = project.result.specification_json
+    spec = project.result.specification_json  # already a dict (JSON column)
     review = project.result.final_review_json or {}
 
-    try:
-        docx_bytes = _build_docx(spec, review, project)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"DOCX generation failed: {e}")
+    # ── 2. Build .docx ─────────────────────────────────────────────────────
+    docx_bytes = _build_docx(spec, review, project)
 
-    safe_title = "".join(
-        c for c in (project.research_topic or project.field_of_study)
-        if c.isalnum() or c in " _-"
-    ).strip()[:60]
+    # ── 3. Safe filename ───────────────────────────────────────────────────
+    title = (spec.get("project_title") or project.research_topic or "specification")
+    safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in title)[:60].strip()
     filename = f"{safe_title}.docx"
 
     return StreamingResponse(
         io.BytesIO(docx_bytes),
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(docx_bytes)),
+        },
     )
 
 
-# ── DOCX Builder ──────────────────────────────────────────────────────────────
+# ── DOCX builder ───────────────────────────────────────────────────────────────
 
 def _build_docx(spec: dict, review: dict, project) -> bytes:
-    """Build a formatted .docx from specification_json using python-docx."""
-    from docx import Document as DocxDocument
-    from docx.shared import Inches, Pt, RGBColor
+    """Build a formatted Word document from specification_json."""
+    from docx import Document
+    from docx.shared import Pt, Inches, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.oxml.ns import qn
-    from docx.oxml import OxmlElement
-    import re
 
-    doc = DocxDocument()
+    doc = Document()
 
-    # ── Page margins ─────────────────────────────────────────────────────────
+    # ── Page margins ───────────────────────────────────────────────────────
     for section in doc.sections:
         section.top_margin    = Inches(1)
         section.bottom_margin = Inches(1)
         section.left_margin   = Inches(1.25)
         section.right_margin  = Inches(1.25)
 
-    # ── Helper: add a heading ─────────────────────────────────────────────────
-    def add_heading(text: str, level: int = 1):
-        para = doc.add_heading(text, level=level)
-        para.runs[0].font.color.rgb = RGBColor(0x66, 0x7e, 0xea)
-        return para
+    PURPLE = RGBColor(0x7C, 0x3A, 0xED)   # Tailwind purple-600
+    GRAY   = RGBColor(0x6B, 0x72, 0x80)   # Tailwind gray-500
 
-    # ── Helper: add body paragraph ────────────────────────────────────────────
-    def add_body(text: str):
-        if not text:
+    def heading1(text: str):
+        p = doc.add_heading(text, level=1)
+        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        run = p.runs[0] if p.runs else p.add_run(text)
+        run.font.color.rgb = PURPLE
+        run.font.size      = Pt(14)
+        run.bold           = True
+
+    def subtext(text: str):
+        p   = doc.add_paragraph()
+        run = p.add_run(text)
+        run.font.size      = Pt(9)
+        run.font.color.rgb = GRAY
+        run.italic         = True
+        p.paragraph_format.space_after = Pt(4)
+
+    def body(text: str):
+        if not text or not text.strip():
+            doc.add_paragraph("(No content)")
             return
-        # Split on double newlines for paragraph breaks
-        for block in re.split(r'\n{2,}', text.strip()):
-            p = doc.add_paragraph(block.strip())
-            p.paragraph_format.space_after = Pt(6)
+        for para in text.strip().split("\n"):
+            if para.strip():
+                doc.add_paragraph(para.strip())
 
-    # ── Title Page ────────────────────────────────────────────────────────────
-    title_para = doc.add_paragraph()
+    # ── Title page ─────────────────────────────────────────────────────────
+    title_para = doc.add_heading(spec.get("project_title", "Research Specification"), level=0)
     title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = title_para.add_run(spec.get("project_title", "Research Specification"))
-    run.font.size = Pt(20)
-    run.font.bold = True
-    run.font.color.rgb = RGBColor(0x66, 0x7e, 0xea)
+    if title_para.runs:
+        title_para.runs[0].font.size      = Pt(20)
+        title_para.runs[0].font.color.rgb = PURPLE
 
-    doc.add_paragraph()  # spacer
+    meta = doc.add_paragraph()
+    meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    meta.add_run(
+        f"{spec.get('academic_level', '')} · {spec.get('field_of_study', '')}"
+        f"   |   {spec.get('total_word_count', 0):,} words"
+    ).font.color.rgb = GRAY
 
-    meta_para = doc.add_paragraph()
-    meta_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    meta_lines = [
-        f"Level: {project.academic_level}",
-        f"Field: {project.field_of_study}",
-        f"Generated: {project.completed_at.strftime('%d %B %Y') if project.completed_at else ''}",
-    ]
-    if review.get("total_marks"):
-        meta_lines.append(f"Score: {review['total_marks']}/100 — {review.get('decision', '')}")
-    meta_para.add_run("\n".join(meta_lines)).font.size = Pt(11)
+    if review:
+        marks_para = doc.add_paragraph()
+        marks_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        marks_para.add_run(
+            f"Score: {review.get('total_marks', '–')}/100  ·  {review.get('decision', '')}"
+        ).bold = True
 
     doc.add_page_break()
 
-    # ── Sections ──────────────────────────────────────────────────────────────
-    sections_map = [
-        ("Abstract",                   "abstract"),
-        ("Justification and Overall Aim", "justification_and_aim"),
-        ("Objectives",                 "objectives"),
-        ("Review of Literature",       "literature_review"),
-        ("Methodology",                "methodology"),
-        ("Work Plan",                  "work_plan"),
+    # ── Ordered sections ───────────────────────────────────────────────────
+    SECTIONS = [
+        ("abstract",             "Abstract"),
+        ("justification_and_aim","Justification and Overall Aim"),
+        ("objectives",           "Objectives"),
+        ("literature_review",    "Review of Literature"),
+        ("methodology",          "Methodology"),
+        ("work_plan",            "Work Plan"),
     ]
 
-    for label, key in sections_map:
+    for key, label in SECTIONS:
         section_data = spec.get(key, {})
         if not section_data:
             continue
         content    = section_data.get("content", "")
-        word_count = section_data.get("word_count", 0)
+        word_count = section_data.get("word_count", len(content.split()))
 
-        add_heading(label, level=1)
+        heading1(label)
+        subtext(f"{word_count:,} words")
+        body(content)
+        doc.add_paragraph()  # spacing
 
-        # Word count subtitle
-        wc_para = doc.add_paragraph(f"({word_count} words)")
-        wc_para.runs[0].font.size = Pt(9)
-        wc_para.runs[0].font.color.rgb = RGBColor(0x9C, 0xA3, 0xAF)
-        wc_para.paragraph_format.space_after = Pt(4)
-
-        add_body(content)
-        doc.add_paragraph()  # spacer
-
-    # ── References ────────────────────────────────────────────────────────────
-    references = spec.get("references", [])
-    if references:
-        add_heading("References", level=1)
-        for i, ref in enumerate(references, 1):
-            p = doc.add_paragraph(style="List Number")
+    # ── References ─────────────────────────────────────────────────────────
+    refs = spec.get("references", [])
+    if refs:
+        heading1("References")
+        for i, ref in enumerate(refs, 1):
+            p   = doc.add_paragraph(style="List Number")
             p.add_run(ref)
 
-    # ── Review Summary (appendix) ─────────────────────────────────────────────
-    if review:
+    # ── Review appendix ────────────────────────────────────────────────────
+    if review and review.get("total_marks") is not None:
         doc.add_page_break()
-        add_heading("Professor Review Summary", level=1)
+        heading1("Professor Review (Appendix)")
 
-        if review.get("total_marks"):
-            score_para = doc.add_paragraph()
-            score_run = score_para.add_run(f"Score: {review['total_marks']}/100 — {review.get('decision', '')}")
-            score_run.font.bold = True
-            score_run.font.size = Pt(13)
+        doc.add_paragraph(
+            f"Score: {review.get('total_marks')}/100  |  Decision: {review.get('decision', '–')}"
+        )
 
-        for field, label in [
-            ("overall_strengths",       "Overall Strengths"),
-            ("critical_issues",         "Critical Issues"),
-            ("improvement_priorities",  "Improvement Priorities"),
-        ]:
-            items = review.get(field, [])
-            if items:
-                add_heading(label, level=2)
-                for item in items:
-                    p = doc.add_paragraph(item, style="List Bullet")
+        strengths = review.get("strengths", [])
+        if strengths:
+            doc.add_heading("Strengths", level=2)
+            for s in strengths:
+                doc.add_paragraph(s, style="List Bullet")
 
-    # ── Serialise to bytes ────────────────────────────────────────────────────
+        issues = review.get("critical_issues", [])
+        if issues:
+            doc.add_heading("Issues to Address", level=2)
+            for issue in issues:
+                doc.add_paragraph(issue, style="List Bullet")
+
+        priorities = review.get("improvement_priorities", [])
+        if priorities:
+            doc.add_heading("Improvement Priorities", level=2)
+            for i, p in enumerate(priorities, 1):
+                doc.add_paragraph(f"{i}. {p}")
+
+    # ── Serialise to bytes ─────────────────────────────────────────────────
     buf = io.BytesIO()
     doc.save(buf)
     buf.seek(0)

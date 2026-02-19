@@ -32,7 +32,7 @@ class EmailAdapter:
         # ── IMPORTANT: Resend free sandbox only allows sending FROM this address.
         # Once you verify your own domain, set FROM_EMAIL in backend/.env:
         #   FROM_EMAIL=Research Assistant <noreply@yourdomain.com>
-        self.from_email = os.getenv("FROM_EMAIL", "onboarding@resend.dev")
+        self.from_email = os.getenv("FROM_EMAIL", "research-assistant@help.dev")
         print(f"✅ Email adapter ready — from: {self.from_email}")
 
     # ─────────────────────────────────────────────────────────────────────────

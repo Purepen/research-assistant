@@ -13,88 +13,81 @@ interface Step2Props {
 }
 
 export function Step2FileUploads({ files, updateFiles }: Step2Props) {
-  const guidelinesRef = useRef<HTMLInputElement>(null)
+  const guidelinesRef   = useRef<HTMLInputElement>(null)
   const pastProjectsRef = useRef<HTMLInputElement>(null)
 
+  // ─── GUIDELINES ──────────────────────────────────────────────────────────
   const handleGuidelinesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      updateFiles({ guidelines: file })
-    }
-    
-    // Allow selecting the same file again on subsequent uploads
-    e.target.value = ''
+    if (file) updateFiles({ guidelines: file })
+    e.target.value = '' // allow re-selecting same file
   }
-  
-
-  const handlePastProjectsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newFiles = Array.from(e.target.files || [])
-    updateFiles({ pastProjects: [...files.pastProjects, ...newFiles] })
-    const existingKeys = new Set(
-      files.pastProjects.map(file => `${file.name}-${file.size}-${file.lastModified}`)
-    )
-
-    const uniqueNewFiles = newFiles.filter(
-      file => !existingKeys.has(`${file.name}-${file.size}-${file.lastModified}`)
-    )
-
-    updateFiles({ pastProjects: [...files.pastProjects, ...uniqueNewFiles] })
-
-    // Allow selecting the same files again after removal
-    e.target.value = ''
-  }
-
 
   const removeGuidelines = () => {
     updateFiles({ guidelines: undefined })
-    if (guidelinesRef.current) {
-      guidelinesRef.current.value = ''
-    }
+    if (guidelinesRef.current) guidelinesRef.current.value = ''
+  }
+
+  // ─── PAST PROJECTS ────────────────────────────────────────────────────────
+  const handlePastProjectsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const incoming = Array.from(e.target.files || [])
+    if (!incoming.length) return
+
+    // Deduplicate against already-added files
+    const existingKeys = new Set(
+      files.pastProjects.map(f => `${f.name}-${f.size}-${f.lastModified}`)
+    )
+    const unique = incoming.filter(
+      f => !existingKeys.has(`${f.name}-${f.size}-${f.lastModified}`)
+    )
+
+    // ✅ ONE updateFiles call only (was called TWICE before — caused double render)
+    updateFiles({ pastProjects: [...files.pastProjects, ...unique] })
+    e.target.value = '' // allow re-selecting same file
   }
 
   const removePastProject = (index: number) => {
-    const newFiles = files.pastProjects.filter((_, i) => i !== index)
-    updateFiles({ pastProjects: newFiles })
-    
-    if (pastProjectsRef.current) {
-      pastProjectsRef.current.value = ''
-    }
+    updateFiles({ pastProjects: files.pastProjects.filter((_, i) => i !== index) })
+    if (pastProjectsRef.current) pastProjectsRef.current.value = ''
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-white mb-2">
-          Upload Documents
-        </h2>
+        <h2 className="text-2xl font-bold text-white mb-2">Upload Documents</h2>
         <p className="text-gray-400">
           Upload your university guidelines and optional past projects
         </p>
       </div>
 
-      {/* Guidelines Upload */}
+      {/* ── Guidelines ────────────────────────────────────────────────────── */}
       <div>
         <label className="block text-sm font-medium text-white mb-3">
-          University Guidelines * <span className="text-gray-500">(.docx, .pdf)</span>
+          University Guidelines *{' '}
+          <span className="text-gray-500">(.docx, .pdf)</span>
         </label>
-        
+
         {!files.guidelines ? (
           <div
             onClick={() => guidelinesRef.current?.click()}
             className="border-2 border-dashed border-slate-700 rounded-xl p-8 text-center cursor-pointer hover:border-purple-500 transition-colors"
           >
             <Upload className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-            <p className="text-white font-medium mb-2">
-              Click to upload or drag and drop
-            </p>
-            <p className="text-sm text-gray-500">
-              DOCX or PDF (Max 10MB)
-            </p>
+            <p className="text-white font-medium mb-2">Click to upload or drag and drop</p>
+            <p className="text-sm text-gray-500">DOCX or PDF (Max 10MB)</p>
+
+            {/*
+              ✅ FIX: onClick e.stopPropagation() on the hidden <input> stops
+              the browser's native click event from bubbling back up to the
+              parent <div>, which would call ref.click() a second time and
+              open a duplicate file-picker dialog.
+            */}
             <input
               ref={guidelinesRef}
               type="file"
               accept=".docx,.pdf"
               onChange={handleGuidelinesUpload}
+              onClick={e => e.stopPropagation()}
               className="hidden"
             />
           </div>
@@ -119,7 +112,7 @@ export function Step2FileUploads({ files, updateFiles }: Step2Props) {
         )}
       </div>
 
-      {/* Past Projects Upload */}
+      {/* ── Past Projects ──────────────────────────────────────────────────── */}
       <div>
         <label className="block text-sm font-medium text-white mb-3">
           Past Projects <span className="text-gray-500">(Optional)</span>
@@ -133,18 +126,17 @@ export function Step2FileUploads({ files, updateFiles }: Step2Props) {
           className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center cursor-pointer hover:border-purple-500 transition-colors mb-4"
         >
           <Upload className="w-10 h-10 text-gray-500 mx-auto mb-3" />
-          <p className="text-white font-medium mb-1">
-            Upload past project files
-          </p>
-          <p className="text-sm text-gray-500">
-            DOCX, PDF, or TXT
-          </p>
+          <p className="text-white font-medium mb-1">Upload past project files</p>
+          <p className="text-sm text-gray-500">DOCX, PDF, or TXT</p>
+
+          {/* ✅ Same stopPropagation fix for past-projects input */}
           <input
             ref={pastProjectsRef}
             type="file"
             accept=".docx,.pdf,.txt"
             multiple
             onChange={handlePastProjectsUpload}
+            onClick={e => e.stopPropagation()}
             className="hidden"
           />
         </div>
@@ -153,7 +145,7 @@ export function Step2FileUploads({ files, updateFiles }: Step2Props) {
           <div className="space-y-2">
             {files.pastProjects.map((file, index) => (
               <div
-                key={index}
+                key={`${file.name}-${index}`}
                 className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">

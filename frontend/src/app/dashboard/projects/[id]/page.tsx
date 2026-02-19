@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Download, Trash2 } from 'lucide-react'
+import { ArrowLeft, Download, Trash2, RefreshCw, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { useProject, useProjectStatus, useProjectResult, useDeleteProject } from '@/hooks/useProjects'
@@ -12,18 +12,33 @@ import { ReviewView } from '@/components/results/ReviewView'
 import { SourcesView } from '@/components/results/SourcesView'
 import { getStatusColor, getMarksColor } from '@/lib/utils'
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+
+const ACTIVE = new Set(['queued', 'generating', 'reviewing'])
+const isActive = (s?: string) => !!s && ACTIVE.has(s)
 
 export default function ProjectDetailPage() {
-  const params = useParams()
-  const router = useRouter()
-  const projectId = parseInt(params.id as string)
-  
-  const [activeTab, setActiveTab] = useState<'specification' | 'review' | 'sources'>('specification')
-  
+  const params      = useParams()
+  const router      = useRouter()
+  const queryClient = useQueryClient()
+  const projectId   = parseInt(params.id as string)
+
+  const [activeTab,   setActiveTab]   = useState<'specification' | 'review' | 'sources'>('specification')
+  const [downloading, setDownloading] = useState(false)
+
   const { data: project, isLoading: projectLoading } = useProject(projectId)
-  const { data: status } = useProjectStatus(projectId, project?.status !== 'complete')
-  const { data: result } = useProjectResult(projectId)
+  const { data: statusData } = useProjectStatus(projectId, isActive(project?.status))
+  const { data: result, isLoading: resultLoading }  = useProjectResult(projectId, project?.status)
   const { mutateAsync: deleteProject, isPending: isDeleting } = useDeleteProject()
+
+  const liveProgress = statusData?.progress_percentage ?? project?.progress_percentage ?? 0
+  const livePhase    = statusData?.current_phase ?? project?.current_phase ?? project?.status ?? ''
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['project',        projectId] })
+    queryClient.invalidateQueries({ queryKey: ['project-status', projectId] })
+    queryClient.invalidateQueries({ queryKey: ['project-result', projectId] })
+  }
 
   const handleDelete = async () => {
     if (confirm('Are you sure you want to delete this project?')) {
@@ -32,11 +47,42 @@ export default function ProjectDetailPage() {
     }
   }
 
-  const handleDownload = () => {
-    // TODO: Implement download functionality
-    alert('Download functionality coming soon!')
+  // ─── DOWNLOAD ─────────────────────────────────────────────────────────────
+  // Uses native fetch with the auth token from localStorage.
+  // The backend streams a .docx file from /projects/{id}/download
+  const handleDownload = async () => {
+    setDownloading(true)
+    try {
+      const token   = localStorage.getItem('access_token')
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+      const res = await fetch(`${apiBase}/projects/${projectId}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Download failed' }))
+        alert(err.detail || 'Download failed')
+        return
+      }
+
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${(project?.research_topic || 'specification').slice(0, 60)}.docx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Download failed. Check your connection and try again.')
+    } finally {
+      setDownloading(false)
+    }
   }
 
+  // ─── LOADING / NOT FOUND ──────────────────────────────────────────────────
   if (projectLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -53,12 +99,14 @@ export default function ProjectDetailPage() {
     )
   }
 
-  const isGenerating = project.status === 'generating' || project.status === 'reviewing'
-  const isComplete = project.status === 'complete'
+  const isGenerating = isActive(project.status)
+  const isComplete   = project.status === 'complete'
+  const isFailed     = project.status === 'failed'
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* Header */}
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           <Button
@@ -69,7 +117,7 @@ export default function ProjectDetailPage() {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
-          
+
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl font-bold text-white">
@@ -81,9 +129,9 @@ export default function ProjectDetailPage() {
             </div>
             <p className="text-gray-400">
               {project.academic_level} • {project.field_of_study}
-              {project.total_marks && (
-                <span className={`ml-3 font-bold ${getMarksColor(project.total_marks)}`}>
-                  {project.total_marks}/100
+              {project.total_marks != null && (
+                <span className={`ml-2 font-bold ${getMarksColor(project.total_marks)}`}>
+                  {' '}• {project.total_marks}/100
                 </span>
               )}
             </p>
@@ -91,13 +139,21 @@ export default function ProjectDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {isComplete && (
-            <Button onClick={handleDownload}>
-              <Download className="w-4 h-4 mr-2" />
-              Download
+          {isGenerating && (
+            <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh">
+              <RefreshCw className="w-4 h-4" />
             </Button>
           )}
-          
+
+          {isComplete && (
+            <Button onClick={handleDownload} disabled={downloading}>
+              {downloading
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Downloading…</>
+                : <><Download className="w-4 h-4 mr-2" />Download DOCX</>
+              }
+            </Button>
+          )}
+
           <Button
             variant="danger"
             onClick={handleDelete}
@@ -108,32 +164,29 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* Progress Tracker (if generating) */}
-      {isGenerating && status && (
-        <ProgressTracker 
-          status={status.status}
-          progress={status.progress_percentage}
-          currentPhase={status.current_phase}
+      {/* ── Progress Tracker ────────────────────────────────────────────────── */}
+      {isGenerating && (
+        <ProgressTracker
+          status={project.status}
+          progress={liveProgress}
+          currentPhase={livePhase}
         />
       )}
 
-      {/* Content Tabs (if complete) */}
-      {isComplete && result && (
+      {/* ── Result Tabs ─────────────────────────────────────────────────────── */}
+      {isComplete && (
         <>
-          {/* Tabs */}
           <div className="flex gap-4 mb-6 border-b border-slate-800">
             {[
               { id: 'specification', label: 'Specification' },
-              { id: 'review', label: 'Review' },
-              { id: 'sources', label: 'Sources' },
+              { id: 'review',        label: 'Review'         },
+              { id: 'sources',       label: 'Sources'        },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`px-4 py-3 font-medium transition-colors relative ${
-                  activeTab === tab.id
-                    ? 'text-purple-400'
-                    : 'text-gray-400 hover:text-white'
+                  activeTab === tab.id ? 'text-purple-400' : 'text-gray-400 hover:text-white'
                 }`}
               >
                 {tab.label}
@@ -147,45 +200,57 @@ export default function ProjectDetailPage() {
             ))}
           </div>
 
-          {/* Tab Content */}
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            {activeTab === 'specification' && (
-              <SpecificationView specification={result.specification} />
-            )}
-            
-            {activeTab === 'review' && (
-              <ReviewView review={result.review} />
-            )}
-            
-            {activeTab === 'sources' && (
-              <SourcesView projectId={projectId} />
-            )}
-          </motion.div>
+          {resultLoading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
+            </div>
+          ) : result ? (
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {activeTab === 'specification' && (
+                result.specification
+                  ? <SpecificationView specification={result.specification} />
+                  : <Card><p className="text-gray-400 text-center py-8">Specification data unavailable.</p></Card>
+              )}
+              {activeTab === 'review' && (
+                result.review
+                  ? <ReviewView review={result.review} />
+                  : <Card><p className="text-gray-400 text-center py-8">Review data unavailable.</p></Card>
+              )}
+              {activeTab === 'sources' && <SourcesView projectId={projectId} />}
+            </motion.div>
+          ) : (
+            <Card>
+              <div className="text-center py-12">
+                <p className="text-gray-400 mb-4">Results are saving, check back in a moment.</p>
+                <Button onClick={handleRefresh}>
+                  <RefreshCw className="w-4 h-4 mr-2" />Refresh
+                </Button>
+              </div>
+            </Card>
+          )}
         </>
       )}
 
-      {/* Failed State */}
-      {project.status === 'failed' && (
+      {/* ── Failed ──────────────────────────────────────────────────────────── */}
+      {isFailed && (
         <Card>
           <div className="text-center py-12">
-            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Trash2 className="w-8 h-8 text-red-400" />
-            </div>
             <h3 className="text-xl font-bold text-white mb-2">Generation Failed</h3>
-            <p className="text-gray-400 mb-6">
-              An error occurred during generation. Please try again.
+            <p className="text-gray-400 mb-4">
+              {livePhase?.startsWith('Error:') ? livePhase.replace('Error:', '').trim() : 'An error occurred during generation.'}
             </p>
             <Button onClick={() => router.push('/dashboard/generate')}>
-              Create New Specification
+              Try Again
             </Button>
           </div>
         </Card>
       )}
+
     </div>
   )
 }

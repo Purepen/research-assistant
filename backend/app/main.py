@@ -5,10 +5,9 @@ FastAPI Main Application
 # ============================================================
 # CRITICAL: Load .env FIRST — before ANY other import
 # that might call os.getenv() at module load time
-# (e.g. adapters, auth_service, agent definitions)
 # ============================================================
 from dotenv import load_dotenv
-load_dotenv()  # reads backend/.env into os.environ immediately
+load_dotenv()
 # ============================================================
 
 from fastapi import FastAPI
@@ -30,7 +29,7 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS
+# ── CORS ──────────────────────────────────────────────────────────────────────
 origins = [
     "http://localhost:3000",
     "http://localhost:3001",
@@ -46,9 +45,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # ✅ ADDED: Without this the browser can't read the Content-Disposition
+    # header we set on download responses, so the file would be named
+    # something random instead of the project title.
+    expose_headers=["Content-Disposition"],
 )
 
-
+# ── Routes ────────────────────────────────────────────────────────────────────
 @app.get("/")
 async def root():
     return {
@@ -58,10 +61,9 @@ async def root():
         "docs": "/docs",
     }
 
-
 @app.get("/health")
 async def health_check():
-    openai_ok = bool(os.getenv("OPENAI_API_KEY"))
+    openai_ok    = bool(os.getenv("OPENAI_API_KEY"))
     anthropic_ok = bool(os.getenv("ANTHROPIC_API_KEY"))
     return {
         "status": "healthy",
@@ -69,12 +71,10 @@ async def health_check():
         "anthropic_key_loaded": anthropic_ok,
     }
 
-
 app.include_router(auth_router)
 app.include_router(research_router)
 app.include_router(projects_router)
 app.include_router(user_router)
-
 
 if __name__ == "__main__":
     import uvicorn
