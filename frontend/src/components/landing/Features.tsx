@@ -1,56 +1,107 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Brain, Zap, Target, CheckCircle } from 'lucide-react'
+import { Cpu, Zap, Globe, BookOpen, CheckCircle, Shield } from 'lucide-react'
 
 const features = [
   {
-    icon: Brain,
-    title: '22 AI Agents',
-    description: 'Specialized agents for each section - from literature review to methodology'
+    icon: Cpu,
+    title: '22 Specialized Agents',
+    description: 'Each section of your specification has a dedicated AI expert. Not one model doing everything — a coordinated team.',
+    color: '#0055cc',
+    bg: 'rgba(0,85,204,0.06)',
+    border: 'rgba(0,85,204,0.15)',
   },
   {
     icon: Zap,
-    title: 'Lightning Fast',
-    description: 'Generate complete specifications in 5-15 minutes, not days'
+    title: 'Under 15 Minutes',
+    description: 'What takes days of agonizing drafting is done while you have your morning coffee. Start to submission-ready.',
+    color: '#0ea5e9',
+    bg: 'rgba(14,165,233,0.06)',
+    border: 'rgba(14,165,233,0.15)',
   },
   {
-    icon: Target,
-    title: 'Field-Agnostic',
-    description: 'Works for any research field - CS, Biology, Engineering, Social Sciences'
+    icon: Globe,
+    title: 'Any Research Field',
+    description: 'Computer Science, Biomedical, Social Sciences, Engineering — the system adapts its knowledge to your exact domain.',
+    color: '#0055cc',
+    bg: 'rgba(0,85,204,0.06)',
+    border: 'rgba(0,85,204,0.15)',
+  },
+  {
+    icon: BookOpen,
+    title: 'Real Literature Review',
+    description: 'Discovers and synthesizes actual academic papers. Finds genuine research gaps and positions your contribution.',
+    color: '#0ea5e9',
+    bg: 'rgba(14,165,233,0.06)',
+    border: 'rgba(14,165,233,0.15)',
   },
   {
     icon: CheckCircle,
-    title: 'Professor Review',
-    description: 'Built-in AI professor reviews with iterative improvements'
-  }
+    title: 'Professor-Level Review',
+    description: 'A built-in AI examiner scores and critiques before you even submit. Iterative improvements until it passes.',
+    color: '#0055cc',
+    bg: 'rgba(0,85,204,0.06)',
+    border: 'rgba(0,85,204,0.15)',
+  },
+  {
+    icon: Shield,
+    title: 'Academic Integrity',
+    description: 'Generates a specification template and framework — helping you understand structure, not replacing your thinking.',
+    color: '#0ea5e9',
+    bg: 'rgba(14,165,233,0.06)',
+    border: 'rgba(14,165,233,0.15)',
+  },
 ]
 
 export function Features() {
   return (
-    <section className="py-20 px-4">
+    <section className="py-28 px-6" style={{ background: 'white' }} id="features">
       <div className="max-w-6xl mx-auto">
-        <motion.h2
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          className="text-5xl font-bold text-center mb-16 text-white"
+
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-16"
         >
-          Why Research Assistant?
-        </motion.h2>
-        
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {features.map((feature, index) => (
+          <p className="text-sm font-bold tracking-[0.2em] uppercase mb-4"
+             style={{ color: '#0055cc' }}>
+            Capabilities
+          </p>
+          <h2 className="hero-heading text-5xl md:text-6xl font-bold mb-5"
+              style={{ color: '#0f172a' }}>
+            Built different.{' '}
+            <span className="text-gradient-blue">Performs different.</span>
+          </h2>
+          <p className="text-lg max-w-xl mx-auto" style={{ color: '#64748b' }}>
+            Not a template filler. Not a chatbot wrapper.
+            A purpose-built academic research intelligence system.
+          </p>
+        </motion.div>
+
+        {/* Grid */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {features.map((f, i) => (
             <motion.div
-              key={feature.title}
-              initial={{ opacity: 0, y: 20 }}
+              key={f.title}
+              initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              whileHover={{ y: -10 }}
-              className="glass-dark p-6 rounded-2xl"
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.08 }}
+              className="card-white p-7 group"
             >
-              <feature.icon className="w-12 h-12 text-purple-400 mb-4" />
-              <h3 className="text-xl font-bold text-white mb-2">{feature.title}</h3>
-              <p className="text-gray-400">{feature.description}</p>
+              <div className="inline-flex p-3 rounded-xl mb-5"
+                   style={{ background: f.bg, border: `1px solid ${f.border}` }}>
+                <f.icon className="w-5 h-5" style={{ color: f.color }} />
+              </div>
+              <h3 className="text-lg font-bold mb-2.5" style={{ color: '#0f172a' }}>
+                {f.title}
+              </h3>
+              <p className="text-sm leading-relaxed" style={{ color: '#64748b' }}>
+                {f.description}
+              </p>
             </motion.div>
           ))}
         </div>

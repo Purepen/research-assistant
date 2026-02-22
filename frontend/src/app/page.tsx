@@ -1,24 +1,30 @@
 'use client'
 
 import { AnimatedBackground } from '@/components/landing/AnimatedBackground'
+import { Navbar } from '@/components/landing/Navbar'
 import { Hero } from '@/components/landing/Hero'
 import { Features } from '@/components/landing/Features'
 import { HowItWorks } from '@/components/landing/HowItWorks'
-import { Testimonials } from '@/components/landing/Testimonials'
-import { CTA } from '@/components/landing/CTA'
+import { Testimonials, CTA } from '@/components/landing/TestimonialsCTA'
 
 export default function Home() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <main style={{ background: 'white' }}>
       <AnimatedBackground />
-      
-      <div className="relative z-10">
-        <Hero />
-        <Features />
-        <HowItWorks />
-        <Testimonials />
-        <CTA />
-      </div>
+      <Navbar />
+      <Hero />
+      <div id="features"><Features /></div>
+      <div id="how-it-works"><HowItWorks /></div>
+      <Testimonials />
+      <CTA />
+
+      {/* Footer */}
+      <footer className="py-10 px-6 text-center"
+              style={{ background: '#020917', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
+          © 2026 Research Assistant · Built with 22 AI agents · All rights reserved
+        </p>
+      </footer>
     </main>
   )
 }
