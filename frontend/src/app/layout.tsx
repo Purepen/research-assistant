@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Research Assistant - AI-Powered Specification Generator',
-  description: 'Generate professional research specifications with AI',
+  title: 'ResearchAI — Generate Your Perfect Research Specification', 
+  description: 'AI-powered academic research specification generator. Built for MSc & PhD students.',
 }
 
 export default function RootLayout({

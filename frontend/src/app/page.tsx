@@ -1,30 +1,28 @@
-'use client'
+import { LandingNav }          from '@/components/landing/LandingNav'
+import { LandingHero }         from '@/components/landing/LandingHero'
+import { LandingLogos }        from '@/components/landing/LandingLogos'
+import { LandingStats }        from '@/components/landing/LandingStats'
+import { LandingFeatures }     from '@/components/landing/LandingFeatures'
+import { LandingHowItWorks }   from '@/components/landing/LandingHowItWorks'
+import { LandingTestimonials } from '@/components/landing/LandingTestimonials'
+import { LandingPricing }      from '@/components/landing/LandingPricing'
+import { LandingCTA }          from '@/components/landing/LandingCTA'
+import { LandingFooter }       from '@/components/landing/LandingFooter'
+import '@/components/landing/landing.css'
 
-import { AnimatedBackground } from '@/components/landing/AnimatedBackground'
-import { Navbar } from '@/components/landing/Navbar'
-import { Hero } from '@/components/landing/Hero'
-import { Features } from '@/components/landing/Features'
-import { HowItWorks } from '@/components/landing/HowItWorks'
-import { Testimonials, CTA } from '@/components/landing/TestimonialsCTA'
-
-export default function Home() {
+export default function HomePage() {
   return (
-    <main style={{ background: 'white' }}>
-      <AnimatedBackground />
-      <Navbar />
-      <Hero />
-      <div id="features"><Features /></div>
-      <div id="how-it-works"><HowItWorks /></div>
-      <Testimonials />
-      <CTA />
-
-      {/* Footer */}
-      <footer className="py-10 px-6 text-center"
-              style={{ background: '#020917', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
-          © 2026 Research Assistant · Built with 22 AI agents · All rights reserved
-        </p>
-      </footer>
-    </main>
+    <div className="rai-page">
+      <LandingNav />
+      <LandingHero />
+      <LandingLogos />
+      <LandingStats />
+      <LandingFeatures />
+      <LandingHowItWorks />
+      <LandingTestimonials />
+      <LandingPricing />
+      <LandingCTA />
+      <LandingFooter />
+    </div>
   )
 }
