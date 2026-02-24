@@ -11,9 +11,7 @@ declare global { interface Window { google: any } }
 
 const IconLayers = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-    <polyline points="2 17 12 22 22 17"/>
-    <polyline points="2 12 12 17 22 12"/>
+    <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
   </svg>
 )
 const IconMail = () => (
@@ -70,31 +68,32 @@ export default function SignInPage() {
   const [resending,       setResending]       = useState(false)
   const [resendSuccess,   setResendSuccess]   = useState(false)
   const [googleLoading,   setGoogleLoading]   = useState(false)
+  // Prevents showing the form while we verify the stored session
+  const [authChecked,     setAuthChecked]     = useState(false)
 
-  // ── FIX: verify the stored token is still valid before auto-redirecting ──
-  // Zustand persist restores isAuthenticated=true from localStorage even if
-  // the token has expired. We must call /auth/me to confirm it's live first.
-  const [authChecked, setAuthChecked] = useState(false)
-
+  // ── Session verification ─────────────────────────────────────────────────
+  // Run once on mount. If Zustand persist restored isAuthenticated=true,
+  // call /auth/me to confirm the token is still valid before redirecting.
+  // refreshUser() now re-throws on failure (fixed in useAuth.ts).
   useEffect(() => {
     const verifySession = async () => {
       if (isAuthenticated) {
         try {
-          await refreshUser()       // hits /auth/me — if token is valid, redirect
-          router.push('/dashboard')
+          await refreshUser()        // throws if token is invalid/expired
+          router.push('/dashboard')  // only reached if token is valid
         } catch {
-          signOut()                 // token expired — clear state and show the form
+          // Token invalid — refreshUser already cleared the store.
+          // Just show the sign-in form.
           setAuthChecked(true)
         }
       } else {
-        setAuthChecked(true)        // definitely not logged in — show form
+        setAuthChecked(true)
       }
     }
     verifySession()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  // Intentionally empty deps — run once on mount only, not reactive
 
-  // ── Load Google GSI ──────────────────────────────────────────────────────
+  // ── Google GSI ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!authChecked) return
     const scriptId = 'google-gsi-script'
@@ -120,16 +119,12 @@ export default function SignInPage() {
     }
   }
 
-  // Click the real hidden Google-rendered button — most reliable OAuth trigger
   const handleGoogleClick = () => {
     const realBtn = googleBtnRef.current?.querySelector('div[role="button"]') as HTMLElement
-    if (realBtn) {
-      realBtn.click()
-    } else {
-      window.google?.accounts.id.prompt()
-    }
+    if (realBtn) { realBtn.click() }
+    else { window.google?.accounts.id.prompt() }
     setGoogleLoading(true)
-    setTimeout(() => setGoogleLoading(false), 5000)
+    setTimeout(() => setGoogleLoading(false), 8000)
   }
 
   const handleGoogleResponse = async (response: any) => {
@@ -143,8 +138,10 @@ export default function SignInPage() {
     setError(''); setEmailUnverified(false); clearError()
     if (!email || !password) { setError('Please fill in all fields'); return }
     setIsLoading(true)
-    try { await signInWithEmail(email, password); router.push('/dashboard') }
-    catch (err: any) {
+    try {
+      await signInWithEmail(email, password)
+      router.push('/dashboard')
+    } catch (err: any) {
       const detail = err.response?.data?.detail || ''
       if (detail === 'EMAIL_NOT_VERIFIED') {
         setEmailUnverified(true)
@@ -162,7 +159,7 @@ export default function SignInPage() {
     finally { setResending(false) }
   }
 
-  // Show a minimal spinner while we verify the session — no flash, no redirect race
+  // Minimal spinner while verifying session — no flash, no redirect race
   if (!authChecked) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff' }}>
@@ -176,8 +173,7 @@ export default function SignInPage() {
 
       {/* ══ LEFT PANEL ══ */}
       <div className="auth-left">
-        <div className="auth-left-glow" />
-        <div className="auth-left-glow-2" />
+        <div className="auth-left-glow" /><div className="auth-left-glow-2" />
         <Link href="/" className="auth-left-logo">
           <div className="auth-left-logo-icon"><IconLayers /></div>
           <span className="auth-left-logo-text">Research<span>AI</span></span>
@@ -185,8 +181,7 @@ export default function SignInPage() {
         <div className="auth-left-content">
           <div className="auth-left-accent" />
           <h2 className="auth-left-heading">
-            Welcome back.<br />
-            Your next spec<br />is <em>8 minutes</em> away.
+            Welcome back.<br />Your next spec<br />is <em>8 minutes</em> away.
           </h2>
           <p className="auth-left-sub">
             Pick up where you left off. Your projects, your specifications, your research — all waiting for you.
@@ -230,7 +225,10 @@ export default function SignInPage() {
                     {resendSuccess
                       ? <span style={{ color: '#16a34a', fontSize: '0.80rem', fontWeight: 600 }}>✓ Verification email sent!</span>
                       : <button className="auth-resend-btn" onClick={handleResend} disabled={resending}>
-                          {resending ? <><span className="auth-spinner auth-spinner-green" />Sending…</> : <><IconRefresh />Resend verification email</>}
+                          {resending
+                            ? <><span className="auth-spinner auth-spinner-green" />Sending…</>
+                            : <><IconRefresh />Resend verification email</>
+                          }
                         </button>
                     }
                   </div>
@@ -239,12 +237,13 @@ export default function SignInPage() {
             </div>
           )}
 
-          {/* Custom Google button overlay — real hidden button underneath */}
+          {/* Custom Google button — clicks the real hidden Google-rendered button */}
           <div style={{ position: 'relative', marginBottom: 20 }}>
             <button className="auth-google-btn" type="button" onClick={handleGoogleClick} disabled={googleLoading} style={{ marginBottom: 0 }}>
               {googleLoading ? <span className="auth-spinner auth-spinner-green" /> : <GoogleIcon />}
               Continue with Google
             </button>
+            {/* Hidden real GSI button — provides the actual OAuth popup */}
             <div ref={googleBtnRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, pointerEvents: 'none', overflow: 'hidden' }} />
           </div>
 

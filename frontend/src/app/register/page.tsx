@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import Link from 'next/link'
@@ -80,36 +80,35 @@ export default function RegisterPage() {
   const [success,         setSuccess]         = useState(false)
   const [sentTo,          setSentTo]          = useState('')
   const [googleLoading,   setGoogleLoading]   = useState(false)
+  const googleBtnRef = useRef<HTMLDivElement>(null)
 
   const strength = getStrength(password)
   const strengthClass = ['', 'weak', 'fair', 'good', 'good'][strength.score]
 
-  // ── FIX: use useEffect (not useState) to load Google GSI ────────────────
+  // ── Load Google GSI ──────────────────────────────────────────────────────
   useEffect(() => {
     const scriptId = 'google-gsi-script'
-    const existing = document.getElementById(scriptId)
-    if (existing && (window as any).google) {
-      initGoogle()
-      return
-    }
-    if (!existing) {
-      const s = document.createElement('script')
-      s.id = scriptId
-      s.src = 'https://accounts.google.com/gsi/client'
-      s.async = true
-      s.defer = true
-      s.onload = initGoogle
-      document.head.appendChild(s)
-    }
+    if (document.getElementById(scriptId)) { initGoogle(); return }
+    const s = document.createElement('script')
+    s.id = scriptId; s.src = 'https://accounts.google.com/gsi/client'
+    s.async = true; s.defer = true; s.onload = initGoogle
+    document.head.appendChild(s)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const initGoogle = () => {
-    const w = window as any
-    if (!w.google || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) return
-    w.google.accounts.id.initialize({
+    if (!window.google || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) return
+    window.google.accounts.id.initialize({
       client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
       callback: handleGoogleResponse,
     })
+    // renderButton() uses an iframe — avoids the 403 origin check that prompt() triggers
+    if (googleBtnRef.current) {
+      window.google.accounts.id.renderButton(googleBtnRef.current, {
+        theme: 'outline', size: 'large',
+        width: googleBtnRef.current.offsetWidth || 400,
+        text: 'continue_with',
+      })
+    }
   }
 
   const handleGoogleResponse = async (response: any) => {
@@ -123,17 +122,13 @@ export default function RegisterPage() {
     }
   }
 
+  // Click the real hidden Google button — same approach as signin, avoids the 403
   const handleGoogleClick = () => {
-    const w = window as any
-    if (!w.google) return
+    const realBtn = googleBtnRef.current?.querySelector('div[role="button"]') as HTMLElement
+    if (realBtn) { realBtn.click() }
+    else { window.google?.accounts.id.prompt() }
     setGoogleLoading(true)
-    w.google.accounts.id.prompt((notification: any) => {
-      // prompt() can be suppressed if user dismissed it recently
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        setGoogleLoading(false)
-      }
-    })
-    setTimeout(() => setGoogleLoading(false), 5000)
+    setTimeout(() => setGoogleLoading(false), 8000)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -250,11 +245,15 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* Google button */}
-          <button className="auth-google-btn" type="button" onClick={handleGoogleClick} disabled={googleLoading}>
-            {googleLoading ? <span className="auth-spinner auth-spinner-green" /> : <GoogleIcon />}
-            Continue with Google
-          </button>
+          {/* Custom Google button with hidden real GSI button underneath */}
+          <div style={{ position: 'relative', marginBottom: 20 }}>
+            <button className="auth-google-btn" type="button" onClick={handleGoogleClick} disabled={googleLoading} style={{ marginBottom: 0 }}>
+              {googleLoading ? <span className="auth-spinner auth-spinner-green" /> : <GoogleIcon />}
+              Continue with Google
+            </button>
+            {/* Hidden real Google-rendered button — provides OAuth iframe flow, avoids 403 */}
+            <div ref={googleBtnRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, pointerEvents: 'none', overflow: 'hidden' }} />
+          </div>
 
           <div className="auth-divider">
             <div className="auth-divider-line" />
