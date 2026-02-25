@@ -1,256 +1,512 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
-import { ArrowLeft, Download, Trash2, RefreshCw, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { useProject, useProjectStatus, useProjectResult, useDeleteProject } from '@/hooks/useProjects'
-import { ProgressTracker } from '@/components/results/ProgressTracker'
-import { SpecificationView } from '@/components/results/SpecificationView'
-import { ReviewView } from '@/components/results/ReviewView'
-import { SourcesView } from '@/components/results/SourcesView'
-import { getStatusColor, getMarksColor } from '@/lib/utils'
 import { useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useProject, useProjectStatus, useProjectResult, useDeleteProject } from '@/hooks/useProjects'
 import { useQueryClient } from '@tanstack/react-query'
 
-const ACTIVE = new Set(['queued', 'generating', 'reviewing'])
+/* ─── Icons ─────────────────────────────────────────────────────────────── */
+const I = {
+  Back:     ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>,
+  Download: ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  Refresh:  ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
+  Trash:    ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  Spin:     ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+  Check:    ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  File:     ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
+  Star:     ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  Book:     ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
+  Link:     ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>,
+  Info:     ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
+  X:        ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  Chart:    ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+}
+
+const ACTIVE = new Set(['queued','generating','reviewing'])
 const isActive = (s?: string) => !!s && ACTIVE.has(s)
 
+const STATUS: Record<string, { color:string; bg:string; border:string; label:string; pulse?:boolean }> = {
+  complete:   { color:'#16a34a', bg:'#f0fdf4', border:'#bbf7d0', label:'Complete' },
+  generating: { color:'#2563eb', bg:'#eff6ff', border:'#bfdbfe', label:'Generating', pulse:true },
+  reviewing:  { color:'#d97706', bg:'#fffbeb', border:'#fde68a', label:'Reviewing',  pulse:true },
+  queued:     { color:'#6b7280', bg:'#f9fafb', border:'#e5e7eb', label:'Queued' },
+  failed:     { color:'#dc2626', bg:'#fef2f2', border:'#fecaca', label:'Failed' },
+  draft:      { color:'#7c3aed', bg:'#faf5ff', border:'#e9d5ff', label:'Draft' },
+}
+
+function Pill({ status }: { status:string }) {
+  const s = STATUS[status] || STATUS.draft
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'5px 12px', borderRadius:999, background:s.bg, border:`1.5px solid ${s.border}`, fontSize:'.8rem', fontWeight:700, color:s.color }}>
+      <span style={{ width:7, height:7, borderRadius:'50%', background:s.color, flexShrink:0, animation:s.pulse?'g-pulse 1.4s infinite':'none' }}/>
+      {s.label}
+    </span>
+  )
+}
+
+function scoreColor(n:number) { return n>=75?'#16a34a':n>=55?'#d97706':'#dc2626' }
+function scoreLabel(n:number) { return n>=75?'Excellent — supervisor-ready':n>=55?'Good — minor improvements needed':'Needs Work — consider revisions' }
+function scoreBg(n:number) { return n>=75?'#f0fdf4':n>=55?'#fffbeb':'#fef2f2' }
+function scoreBorder(n:number) { return n>=75?'#bbf7d0':n>=55?'#fde68a':'#fecaca' }
+
+/* ─── Progress Tracker ───────────────────────────────────────────────────── */
+function ProgressTracker({ progress, phase, status }: { progress:number; phase:string; status:string }) {
+  const phases = [
+    { key:'queued',     label:'Queued',           icon:<I.Info/> },
+    { key:'generating', label:'Researching',       icon:<I.Book/> },
+    { key:'reviewing',  label:'AI Review',         icon:<I.Star/> },
+    { key:'complete',   label:'Complete',          icon:<I.Check/> },
+  ]
+  const currentIdx = phases.findIndex(p => status.includes(p.key))
+  return (
+    <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:16, padding:'24px', marginBottom:20, boxShadow:'0 1px 3px rgba(0,0,0,.05)' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:10 }}>
+        <div>
+          <h2 style={{ margin:'0 0 4px', fontWeight:700, color:'#0f1f0f', fontSize:'1.05rem' }}>Generating your specification…</h2>
+          <p style={{ margin:0, fontSize:'.84rem', color:'#6b7280' }}>{phase || 'Processing…'}</p>
+        </div>
+        <div style={{ fontSize:'1.8rem', fontWeight:800, color:'#16a34a', fontFamily:'Fraunces,serif' }}>
+          {progress}%
+        </div>
+      </div>
+      {/* Progress bar */}
+      <div style={{ height:8, background:'#f3f4f6', borderRadius:999, overflow:'hidden', marginBottom:20 }}>
+        <motion.div initial={{ width:0 }} animate={{ width:`${progress}%` }} transition={{ duration:.5, ease:'easeOut' }}
+          style={{ height:'100%', background:'linear-gradient(90deg,#16a34a,#22c55e)', borderRadius:999 }}/>
+      </div>
+      {/* Phase steps */}
+      <div style={{ display:'flex', gap:0 }}>
+        {phases.map((ph, i) => {
+          const done = i < currentIdx
+          const active = i === currentIdx
+          return (
+            <div key={ph.key} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', position:'relative' }}>
+              {/* connector */}
+              {i < phases.length-1 && <div style={{ position:'absolute', top:14, left:'50%', width:'100%', height:2, background: done?'#16a34a':'#e5e7eb', zIndex:0 }}/>}
+              <div style={{ width:28, height:28, borderRadius:'50%', background: done?'#16a34a':active?'#dcfce7':'#f3f4f6', border:`2px solid ${done||active?'#16a34a':'#e5e7eb'}`, display:'flex', alignItems:'center', justifyContent:'center', color: done?'white':active?'#16a34a':'#9ca3af', zIndex:1, position:'relative', boxShadow:active?'0 0 0 4px rgba(22,163,74,.15)':'none', transition:'all .3s', flexShrink:0 }}>
+                {done ? <I.Check/> : ph.icon}
+              </div>
+              <span style={{ fontSize:'.68rem', fontWeight: active?700:500, color: done||active?'#16a34a':'#9ca3af', marginTop:6, textAlign:'center' }}>{ph.label}</span>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ marginTop:18, padding:'12px 14px', background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:10, display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ color:'#16a34a', animation:'g-spin 1.2s linear infinite', flexShrink:0 }}><I.Spin/></div>
+        <p style={{ margin:0, fontSize:'.82rem', color:'#374151' }}>You can safely leave this page — your spec will keep generating in the background.</p>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Score Card ─────────────────────────────────────────────────────────── */
+function ScoreCard({ marks, decision }: { marks:number; decision?:string }) {
+  const size=110, r=44
+  const c = 2*Math.PI*r
+  const col = scoreColor(marks)
+  return (
+    <div style={{ background:scoreBg(marks), border:`1.5px solid ${scoreBorder(marks)}`, borderRadius:14, padding:'18px', textAlign:'center' }}>
+      <p style={{ margin:'0 0 12px', fontSize:'.68rem', fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.1em' }}>AI Score</p>
+      <div style={{ position:'relative', width:size, height:size, margin:'0 auto 12px' }}>
+        <svg width={size} height={size} style={{ transform:'rotate(-90deg)' }}>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#e5e7eb" strokeWidth="8"/>
+          <motion.circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth="8" strokeLinecap="round"
+            strokeDasharray={c} initial={{ strokeDashoffset:c }}
+            animate={{ strokeDashoffset:c-(marks/100)*c }}
+            transition={{ duration:1.4, delay:.3, ease:[.22,1,.36,1] }}/>
+        </svg>
+        <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+          <span style={{ fontSize:'1.8rem', fontWeight:800, color:'#0f1f0f', fontFamily:'Fraunces,serif', lineHeight:1 }}>{marks}</span>
+          <span style={{ fontSize:'.6rem', color:'#9ca3af' }}>/100</span>
+        </div>
+      </div>
+      <p style={{ margin:'0 0 6px', fontSize:'.82rem', fontWeight:700, color:col }}>{scoreLabel(marks).split(' — ')[0]}</p>
+      <p style={{ margin:0, fontSize:'.76rem', color:'#6b7280', lineHeight:1.5 }}>{scoreLabel(marks).split(' — ')[1]}</p>
+      {decision && <div style={{ marginTop:10, padding:'4px 12px', borderRadius:999, display:'inline-block', background: decision==='APPROVED'?'#f0fdf4':'#fef2f2', border:`1px solid ${decision==='APPROVED'?'#bbf7d0':'#fecaca'}`, fontSize:'.72rem', fontWeight:700, color: decision==='APPROVED'?'#16a34a':'#dc2626' }}>{decision}</div>}
+    </div>
+  )
+}
+
+/* ─── Spec Section ───────────────────────────────────────────────────────── */
+function SpecSection({ label, data }: { label:string; data:any }) {
+  const [open, setOpen] = useState(true)
+  if (!data) return null
+  return (
+    <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+      <button onClick={()=>setOpen(!open)} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 20px', background:'none', border:'none', cursor:'pointer', borderBottom: open?'1px solid #f0f4f0':'none', transition:'background .15s' }}
+        onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f9fafb'}
+        onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='none'}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ width:28, height:28, borderRadius:8, background:'#f0fdf4', border:'1px solid #bbf7d0', display:'flex', alignItems:'center', justifyContent:'center', color:'#16a34a', flexShrink:0 }}><I.File/></div>
+          <span style={{ fontWeight:700, color:'#0f1f0f', fontSize:'.9rem' }}>{label}</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:'.72rem', color:'#9ca3af', background:'#f3f4f6', padding:'2px 8px', borderRadius:6 }}>{data.word_count} words</span>
+          <span style={{ color:'#9ca3af', fontSize:'.8rem', fontWeight:700 }}>{open?'↑':'↓'}</span>
+        </div>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} exit={{ height:0, opacity:0 }} transition={{ duration:.2 }}>
+            <div style={{ padding:'20px 22px' }}>
+              <p className="g-spec-content">{data.content}</p>
+              {data.key_points?.length>0 && (
+                <div style={{ marginTop:16, paddingTop:16, borderTop:'1px solid #f0f4f0' }}>
+                  <p style={{ fontSize:'.72rem', fontWeight:700, color:'#9ca3af', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:10 }}>Key Points</p>
+                  <ul style={{ listStyle:'none', padding:0, margin:0, display:'flex', flexDirection:'column', gap:6 }}>
+                    {data.key_points.map((pt:string, i:number) => (
+                      <li key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, fontSize:'.84rem', color:'#374151' }}>
+                        <span style={{ width:16, height:16, borderRadius:'50%', background:'#f0fdf4', border:'1px solid #bbf7d0', display:'flex', alignItems:'center', justifyContent:'center', color:'#16a34a', flexShrink:0, marginTop:1 }}><I.Check/></span>
+                        {pt}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+/* ─── Review Section ─────────────────────────────────────────────────────── */
+function ReviewView({ review, marks }: { review:any; marks?:number }) {
+  if (!review) return <div style={{ padding:40, textAlign:'center', color:'#9ca3af' }}>Review data unavailable</div>
+  const cats = review.section_scores || {}
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      {/* Overall */}
+      <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, padding:'20px', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+        <h3 style={{ margin:'0 0 6px', fontWeight:700, color:'#0f1f0f', fontSize:'.95rem' }}>Overall Assessment</h3>
+        <p style={{ margin:'0 0 14px', fontSize:'.88rem', color:'#374151', lineHeight:1.7 }}>{review.overall_feedback || review.strengths?.join('. ')}</p>
+        {marks && <div style={{ display:'flex', alignItems:'center', gap:8 }}><I.Star/><span style={{ fontWeight:800, color:scoreColor(marks), fontFamily:'Fraunces,serif', fontSize:'1.1rem' }}>{marks}/100</span><span style={{ fontSize:'.8rem', color:'#6b7280' }}>{scoreLabel(marks).split(' — ')[0]}</span></div>}
+      </div>
+      {/* Section scores */}
+      {Object.keys(cats).length>0 && (
+        <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, padding:'20px', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+          <h3 style={{ margin:'0 0 14px', fontWeight:700, color:'#0f1f0f', fontSize:'.95rem' }}>Section Scores</h3>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {Object.entries(cats).map(([k,v]:any) => (
+              <div key={k}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
+                  <span style={{ fontSize:'.82rem', fontWeight:600, color:'#374151', textTransform:'capitalize' }}>{k.replace(/_/g,' ')}</span>
+                  <span style={{ fontSize:'.82rem', fontWeight:700, color:scoreColor(v) }}>{v}/100</span>
+                </div>
+                <div style={{ height:5, background:'#f3f4f6', borderRadius:3, overflow:'hidden' }}>
+                  <motion.div initial={{ width:0 }} animate={{ width:`${v}%` }} transition={{ duration:1, ease:[.22,1,.36,1] }}
+                    style={{ height:'100%', background:`linear-gradient(90deg,${scoreColor(v)},${scoreColor(v)}99)`, borderRadius:3 }}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Feedback areas */}
+      {[{label:'Strengths', key:'strengths', color:'#16a34a', bg:'#f0fdf4', border:'#bbf7d0'},
+        {label:'Areas for Improvement', key:'improvement_priorities', color:'#d97706', bg:'#fffbeb', border:'#fde68a'},
+      ].map(s => review[s.key]?.length>0 && (
+        <div key={s.key} style={{ background:s.bg, border:`1px solid ${s.border}`, borderRadius:14, padding:'18px' }}>
+          <h3 style={{ margin:'0 0 10px', fontWeight:700, color:s.color, fontSize:'.88rem' }}>{s.label}</h3>
+          <ul style={{ listStyle:'none', padding:0, margin:0, display:'flex', flexDirection:'column', gap:6 }}>
+            {review[s.key].map((item:string, i:number) => (
+              <li key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, fontSize:'.84rem', color:'#374151' }}>
+                <span style={{ color:s.color, marginTop:2, flexShrink:0 }}>•</span>{item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* ─── Sources ────────────────────────────────────────────────────────────── */
+function SourcesView({ resources }: { resources:any }) {
+  if (!resources?.length) return (
+    <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, padding:'48px 24px', textAlign:'center', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+      <div style={{ color:'#9ca3af', fontSize:'.9rem' }}>No sources recorded for this specification</div>
+    </div>
+  )
+  return (
+    <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+      <div className="g-section-head">
+        <span style={{ fontWeight:700, color:'#0f1f0f', fontSize:'.9rem' }}>Discovered Resources</span>
+        <span style={{ fontSize:'.76rem', color:'#9ca3af' }}>{resources.length} sources</span>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', divide:'y' }}>
+        {resources.map((r:any, i:number) => (
+          <div key={i} style={{ padding:'13px 20px', borderBottom: i<resources.length-1?'1px solid #f0f4f0':'none', display:'flex', alignItems:'flex-start', gap:12 }}>
+            <div style={{ width:30, height:30, borderRadius:8, background:'#f0fdf4', border:'1px solid #bbf7d0', display:'flex', alignItems:'center', justifyContent:'center', color:'#16a34a', flexShrink:0, marginTop:1 }}><I.Link/></div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <p style={{ margin:'0 0 2px', fontWeight:600, color:'#0f1f0f', fontSize:'.86rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.title || r.url}</p>
+              {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ fontSize:'.74rem', color:'#16a34a', textDecoration:'none', display:'flex', alignItems:'center', gap:4 }}><I.Link/>{r.url.slice(0,60)}…</a>}
+              {r.description && <p style={{ margin:'4px 0 0', fontSize:'.76rem', color:'#6b7280', lineHeight:1.5 }}>{r.description}</p>}
+            </div>
+            {r.confidence_score && (
+              <div style={{ textAlign:'right', flexShrink:0 }}>
+                <span style={{ fontSize:'.7rem', fontWeight:700, color:r.confidence_score>=0.7?'#16a34a':'#d97706' }}>{Math.round(r.confidence_score*100)}%</span>
+                <p style={{ margin:0, fontSize:'.62rem', color:'#9ca3af' }}>confidence</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   MAIN PAGE
+════════════════════════════════════════════════════════════════════════════ */
 export default function ProjectDetailPage() {
-  const params      = useParams()
-  const router      = useRouter()
+  const params = useParams()
+  const router = useRouter()
   const queryClient = useQueryClient()
-  const projectId   = parseInt(params.id as string)
+  const projectId = parseInt(params.id as string)
 
-  const [activeTab,   setActiveTab]   = useState<'specification' | 'review' | 'sources'>('specification')
+  const [activeTab, setActiveTab] = useState<'specification'|'review'|'sources'>('specification')
   const [downloading, setDownloading] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  const { data: project, isLoading: projectLoading } = useProject(projectId)
-  const { data: statusData } = useProjectStatus(projectId, isActive(project?.status))
-  const { data: result, isLoading: resultLoading }  = useProjectResult(projectId, project?.status)
-  const { mutateAsync: deleteProject, isPending: isDeleting } = useDeleteProject()
+  const { data:project, isLoading:projectLoading } = useProject(projectId)
+  const { data:statusData } = useProjectStatus(projectId, isActive(project?.status))
+  const { data:result, isLoading:resultLoading } = useProjectResult(projectId, project?.status)
+  const { mutateAsync:deleteProject } = useDeleteProject()
 
   const liveProgress = statusData?.progress_percentage ?? project?.progress_percentage ?? 0
   const livePhase    = statusData?.current_phase ?? project?.current_phase ?? project?.status ?? ''
+  const isGenerating = isActive(project?.status)
+  const isComplete   = project?.status === 'complete'
+  const isFailed     = project?.status === 'failed'
 
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['project',        projectId] })
-    queryClient.invalidateQueries({ queryKey: ['project-status', projectId] })
-    queryClient.invalidateQueries({ queryKey: ['project-result', projectId] })
+    queryClient.invalidateQueries({ queryKey:['project', projectId] })
+    queryClient.invalidateQueries({ queryKey:['project-status', projectId] })
+    queryClient.invalidateQueries({ queryKey:['project-result', projectId] })
   }
 
   const handleDelete = async () => {
-    if (confirm('Are you sure you want to delete this project?')) {
-      await deleteProject(projectId)
-      router.push('/dashboard/projects')
-    }
+    if (!confirm('Delete this specification? This cannot be undone.')) return
+    setIsDeleting(true)
+    try { await deleteProject(projectId); router.push('/dashboard/projects') }
+    catch { setIsDeleting(false) }
   }
 
-  // ─── DOWNLOAD ─────────────────────────────────────────────────────────────
-  // Uses native fetch with the auth token from localStorage.
-  // The backend streams a .docx file from /projects/{id}/download
   const handleDownload = async () => {
     setDownloading(true)
     try {
-      const token   = localStorage.getItem('access_token')
+      const token = localStorage.getItem('access_token')
       const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-
-      const res = await fetch(`${apiBase}/projects/${projectId}/download`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Download failed' }))
-        alert(err.detail || 'Download failed')
-        return
-      }
-
+      const res = await fetch(`${apiBase}/projects/${projectId}/download`, { headers:{ Authorization:`Bearer ${token}` } })
+      if (!res.ok) { alert('Download failed'); return }
       const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `${(project?.research_topic || 'specification').slice(0, 60)}.docx`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch {
-      alert('Download failed. Check your connection and try again.')
-    } finally {
-      setDownloading(false)
-    }
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `${(project?.research_topic||'specification').slice(0,60)}.docx`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
+    } catch { alert('Download failed.') } finally { setDownloading(false) }
   }
 
-  // ─── LOADING / NOT FOUND ──────────────────────────────────────────────────
-  if (projectLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500" />
-      </div>
-    )
-  }
+  /* ── Loading ── */
+  if (projectLoading) return (
+    <div style={{ maxWidth:900, margin:'0 auto' }}>
+      <div className="g-sk" style={{ height:56, borderRadius:14, marginBottom:20 }}/>
+      <div className="g-sk" style={{ height:140, borderRadius:14, marginBottom:16 }}/>
+      <div className="g-sk" style={{ height:400, borderRadius:14 }}/>
+    </div>
+  )
+  if (!project) return (
+    <div style={{ maxWidth:900, margin:'0 auto', textAlign:'center', padding:'80px 20px' }}>
+      <p style={{ fontWeight:700, color:'#0f1f0f', fontSize:'1.1rem', marginBottom:8 }}>Project not found</p>
+      <button className="g-btn" onClick={()=>router.push('/dashboard/projects')}>Back to Projects</button>
+    </div>
+  )
 
-  if (!project) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">Project not found</p>
-      </div>
-    )
-  }
-
-  const isGenerating = isActive(project.status)
-  const isComplete   = project.status === 'complete'
-  const isFailed     = project.status === 'failed'
+  const spec = result?.specification
+  const sections = spec ? [
+    { label:'Abstract',                    data:spec.abstract },
+    { label:'Justification & Overall Aim', data:spec.justification_and_aim },
+    { label:'Objectives',                  data:spec.objectives },
+    { label:'Review of Literature',        data:spec.literature_review },
+    { label:'Methodology',                 data:spec.methodology },
+    { label:'Work Plan',                   data:spec.work_plan },
+  ] : []
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div style={{ maxWidth:1060 }}>
+      <style>{`@keyframes g-spin{to{transform:rotate(360deg)}} .spin{animation:g-spin 1s linear infinite}`}</style>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push('/dashboard/projects')}
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold text-white">
-                {project.research_topic || project.field_of_study}
-              </h1>
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
-                {project.status}
-              </span>
-            </div>
-            <p className="text-gray-400">
-              {project.academic_level} • {project.field_of_study}
-              {project.total_marks != null && (
-                <span className={`ml-2 font-bold ${getMarksColor(project.total_marks)}`}>
-                  {' '}• {project.total_marks}/100
-                </span>
-              )}
-            </p>
+      {/* ── Top bar ── */}
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:22, flexWrap:'wrap', gap:14 }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <button onClick={()=>router.push('/dashboard/projects')}
+            style={{ display:'inline-flex', alignItems:'center', gap:6, background:'none', border:'none', color:'#6b7280', cursor:'pointer', fontSize:'.8rem', fontWeight:600, padding:'0 0 12px', transition:'color .15s' }}
+            onMouseEnter={e=>(e.currentTarget as HTMLElement).style.color='#16a34a'}
+            onMouseLeave={e=>(e.currentTarget as HTMLElement).style.color='#6b7280'}>
+            <I.Back/> Back to Projects
+          </button>
+          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom:6 }}>
+            <Pill status={project.status}/>
+            <span style={{ fontSize:'.78rem', color:'#9ca3af' }}>ID #{project.id}</span>
+            {project.academic_level && <span style={{ fontSize:'.76rem', fontWeight:700, color:'#7c3aed', background:'#faf5ff', padding:'3px 8px', borderRadius:6 }}>{project.academic_level}</span>}
           </div>
+          <h1 style={{ margin:'0 0 4px', fontSize:'clamp(1.2rem,2vw,1.6rem)', fontWeight:800, color:'#0f1f0f', fontFamily:'Fraunces,serif', lineHeight:1.2 }}>
+            {project.research_topic || project.field_of_study}
+          </h1>
+          <p style={{ margin:0, fontSize:'.86rem', color:'#6b7280' }}>{project.field_of_study} · {project.effort_level} effort</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {isGenerating && (
-            <Button variant="ghost" size="sm" onClick={handleRefresh} title="Refresh">
-              <RefreshCw className="w-4 h-4" />
-            </Button>
-          )}
-
+        {/* Actions */}
+        <div style={{ display:'flex', gap:8, flexShrink:0, alignItems:'center' }}>
+          <button className="g-btn-outline" onClick={handleRefresh} style={{ padding:'8px 14px', fontSize:'.8rem' }}>
+            <I.Refresh/> Refresh
+          </button>
           {isComplete && (
-            <Button onClick={handleDownload} disabled={downloading}>
-              {downloading
-                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Downloading…</>
-                : <><Download className="w-4 h-4 mr-2" />Download DOCX</>
-              }
-            </Button>
+            <button className="g-btn" onClick={handleDownload} disabled={downloading} style={{ fontSize:'.82rem' }}>
+              {downloading ? <><span className="spin" style={{ display:'inline-block' }}><I.Spin/></span> Downloading…</> : <><I.Download/> Download DOCX</>}
+            </button>
           )}
-
-          <Button
-            variant="danger"
-            onClick={handleDelete}
-            isLoading={isDeleting}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          <button onClick={handleDelete} disabled={isDeleting}
+            style={{ width:36, height:36, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:9, border:'1.5px solid #fecaca', background:'#fef2f2', color:'#dc2626', cursor:'pointer', transition:'all .15s', flexShrink:0 }}
+            onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#fee2e2'}}
+            onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background='#fef2f2'}}>
+            <I.Trash/>
+          </button>
         </div>
       </div>
 
-      {/* ── Progress Tracker ────────────────────────────────────────────────── */}
-      {isGenerating && (
-        <ProgressTracker
-          status={project.status}
-          progress={liveProgress}
-          currentPhase={livePhase}
-        />
-      )}
+      {/* ── Progress tracker (generating) ── */}
+      {isGenerating && <ProgressTracker progress={liveProgress} phase={livePhase} status={project.status}/>}
 
-      {/* ── Result Tabs ─────────────────────────────────────────────────────── */}
-      {isComplete && (
-        <>
-          <div className="flex gap-4 mb-6 border-b border-slate-800">
-            {[
-              { id: 'specification', label: 'Specification' },
-              { id: 'review',        label: 'Review'         },
-              { id: 'sources',       label: 'Sources'        },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`px-4 py-3 font-medium transition-colors relative ${
-                  activeTab === tab.id ? 'text-purple-400' : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                {tab.label}
-                {activeTab === tab.id && (
-                  <motion.div
-                    layoutId="active-tab"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500"
-                  />
-                )}
-              </button>
-            ))}
-          </div>
-
-          {resultLoading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500" />
-            </div>
-          ) : result ? (
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              {activeTab === 'specification' && (
-                result.specification
-                  ? <SpecificationView specification={result.specification} />
-                  : <Card><p className="text-gray-400 text-center py-8">Specification data unavailable.</p></Card>
-              )}
-              {activeTab === 'review' && (
-                result.review
-                  ? <ReviewView review={result.review} />
-                  : <Card><p className="text-gray-400 text-center py-8">Review data unavailable.</p></Card>
-              )}
-              {activeTab === 'sources' && <SourcesView projectId={projectId} />}
-            </motion.div>
-          ) : (
-            <Card>
-              <div className="text-center py-12">
-                <p className="text-gray-400 mb-4">Results are saving, check back in a moment.</p>
-                <Button onClick={handleRefresh}>
-                  <RefreshCw className="w-4 h-4 mr-2" />Refresh
-                </Button>
-              </div>
-            </Card>
-          )}
-        </>
-      )}
-
-      {/* ── Failed ──────────────────────────────────────────────────────────── */}
+      {/* ── Failed state ── */}
       {isFailed && (
-        <Card>
-          <div className="text-center py-12">
-            <h3 className="text-xl font-bold text-white mb-2">Generation Failed</h3>
-            <p className="text-gray-400 mb-4">
-              {livePhase?.startsWith('Error:') ? livePhase.replace('Error:', '').trim() : 'An error occurred during generation.'}
-            </p>
-            <Button onClick={() => router.push('/dashboard/generate')}>
-              Try Again
-            </Button>
+        <div style={{ background:'#fef2f2', border:'1.5px solid #fecaca', borderRadius:14, padding:'20px', marginBottom:20 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:'#fee2e2', display:'flex', alignItems:'center', justifyContent:'center', color:'#dc2626' }}><I.X/></div>
+            <div>
+              <p style={{ margin:'0 0 3px', fontWeight:700, color:'#dc2626', fontSize:'.95rem' }}>Generation Failed</p>
+              <p style={{ margin:0, fontSize:'.82rem', color:'#6b7280' }}>
+                {project.current_phase?.startsWith('Error:') ? project.current_phase.replace('Error: ','') : 'Something went wrong. Try generating a new spec or contact support.'}
+              </p>
+            </div>
           </div>
-        </Card>
+        </div>
       )}
 
+      {/* ── Complete: 2-col layout ── */}
+      {isComplete && (
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 260px', gap:18, alignItems:'start' }}>
+
+          {/* Left: spec/review/sources */}
+          <div>
+            {/* Tab bar */}
+            <div style={{ display:'flex', gap:4, marginBottom:18, background:'white', border:'1px solid #e8ede8', borderRadius:11, padding:5, boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+              {([
+                { key:'specification', label:'Specification', icon:<I.File/> },
+                { key:'review',        label:'AI Review',     icon:<I.Star/> },
+                { key:'sources',       label:'Sources',       icon:<I.Link/> },
+              ] as const).map(t => (
+                <button key={t.key} onClick={()=>setActiveTab(t.key)} className={`g-tab ${activeTab===t.key?'active':''}`} style={{ flex:1, justifyContent:'center' }}>
+                  {t.icon}{t.label}
+                </button>
+              ))}
+            </div>
+
+            {resultLoading ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {[0,1,2].map(i=><div key={i} className="g-sk" style={{ height:120, borderRadius:14 }}/>)}
+              </div>
+            ) : result ? (
+              <AnimatePresence mode="wait">
+                <motion.div key={activeTab} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }} transition={{ duration:.2 }}>
+                  {activeTab==='specification' && spec ? (
+                    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                      {/* Title card */}
+                      <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, padding:'18px 20px', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+                        <h2 style={{ margin:'0 0 8px', fontSize:'1.15rem', fontWeight:800, color:'#0f1f0f', fontFamily:'Fraunces,serif' }}>{spec.project_title}</h2>
+                        <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+                          <span style={{ fontSize:'.76rem', color:'#6b7280', background:'#f3f4f6', padding:'2px 8px', borderRadius:6 }}>📝 {spec.total_word_count?.toLocaleString()} words</span>
+                          <span style={{ fontSize:'.76rem', color:'#6b7280', background:'#f3f4f6', padding:'2px 8px', borderRadius:6 }}>📚 {spec.references?.length} references</span>
+                        </div>
+                      </div>
+                      {sections.map(s => <SpecSection key={s.label} label={s.label} data={s.data}/>)}
+                      {/* References */}
+                      {spec.references?.length>0 && (
+                        <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+                          <div className="g-section-head">
+                            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                              <div style={{ width:28, height:28, borderRadius:8, background:'#eff6ff', border:'1px solid #bfdbfe', display:'flex', alignItems:'center', justifyContent:'center', color:'#2563eb' }}><I.Book/></div>
+                              <span style={{ fontWeight:700, color:'#0f1f0f', fontSize:'.9rem' }}>References</span>
+                            </div>
+                            <span style={{ fontSize:'.76rem', color:'#9ca3af' }}>{spec.references.length} sources</span>
+                          </div>
+                          <ol style={{ margin:0, padding:'14px 20px 14px 36px', display:'flex', flexDirection:'column', gap:6 }}>
+                            {spec.references.map((ref:string, i:number) => (
+                              <li key={i} style={{ fontSize:'.82rem', color:'#374151', lineHeight:1.6 }}>{ref}</li>
+                            ))}
+                          </ol>
+                        </div>
+                      )}
+                    </div>
+                  ) : activeTab==='review' ? (
+                    <ReviewView review={result.review} marks={result.total_marks}/>
+                  ) : (
+                    <SourcesView resources={result.discovered_resources}/>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            ) : (
+              <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, padding:'48px', textAlign:'center' }}>
+                <p style={{ color:'#9ca3af' }}>No result data available</p>
+              </div>
+            )}
+          </div>
+
+          {/* Right: score + metadata */}
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            {result?.total_marks!=null && <ScoreCard marks={result.total_marks} decision={result.decision}/>}
+
+            {/* Meta */}
+            <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+              <div style={{ padding:'13px 16px', borderBottom:'1px solid #f0f4f0' }}>
+                <span style={{ fontWeight:700, color:'#0f1f0f', fontSize:'.84rem' }}>Project Info</span>
+              </div>
+              {[
+                { label:'Field',         value:project.field_of_study },
+                { label:'Level',         value:project.academic_level },
+                { label:'Effort',        value:project.effort_level },
+                { label:'Created',       value:new Date(project.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) },
+                { label:'Completed',     value:project.completed_at ? new Date(project.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—' },
+              ].map((row, i, arr) => (
+                <div key={row.label} style={{ padding:'9px 14px', display:'flex', justifyContent:'space-between', borderBottom:i<arr.length-1?'1px solid #f9fafb':'none' }}>
+                  <span style={{ fontSize:'.76rem', color:'#9ca3af', fontWeight:600 }}>{row.label}</span>
+                  <span style={{ fontSize:'.78rem', color:'#0f1f0f', fontWeight:600, textAlign:'right', maxWidth:140, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{row.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Download CTA */}
+            {isComplete && (
+              <button className="g-btn" onClick={handleDownload} disabled={downloading} style={{ width:'100%', justifyContent:'center', fontSize:'.86rem', padding:'11px' }}>
+                {downloading ? 'Downloading…' : <><I.Download/> Download as DOCX</>}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Queued state ── */}
+      {project.status==='queued' && !isGenerating && (
+        <div style={{ background:'#f9fafb', border:'1px solid #e8ede8', borderRadius:14, padding:'52px', textAlign:'center' }}>
+          <div style={{ width:52, height:52, borderRadius:14, background:'#f0fdf4', border:'1px solid #bbf7d0', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px', color:'#16a34a' }}><I.Info/></div>
+          <p style={{ fontWeight:700, color:'#0f1f0f', marginBottom:6 }}>Queued for generation</p>
+          <p style={{ fontSize:'.86rem', color:'#6b7280', marginBottom:18 }}>Your spec is in the queue. It will begin generating shortly.</p>
+          <button className="g-btn-outline" onClick={handleRefresh}><I.Refresh/> Refresh status</button>
+        </div>
+      )}
     </div>
   )
 }

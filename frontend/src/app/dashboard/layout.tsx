@@ -6,44 +6,33 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { Sidebar } from '@/app/dashboard/Sidebar'
 import { Header } from '@/app/dashboard/Header'
+import '@/app/dashboard/dashboard.css'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1 } } })
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+function LoadingScreen() {
+  return (
+    <div style={{ minHeight:'100vh', background:'#f4f7f4', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16 }}>
+      <style>{`@keyframes sp{to{transform:rotate(360deg)}} @keyframes fi{from{opacity:0} to{opacity:1}}`}</style>
+      <div style={{ width:40, height:40, border:'3px solid #bbf7d0', borderTopColor:'#16a34a', borderRadius:'50%', animation:'sp .9s linear infinite' }}/>
+      <p style={{ fontSize:'.82rem', color:'#9ca3af', animation:'fi .5s ease .3s both', margin:0 }}>Loading workspace…</p>
+    </div>
+  )
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { isAuthenticated, isLoading } = useAuth()
-
-  useEffect(() => {
-    // Redirect to signin if not authenticated
-    if (!isLoading && !isAuthenticated) {
-      router.push('/signin')
-    }
-  }, [isAuthenticated, isLoading, router])
-
-  // Show loading state
-  if (isLoading || !isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500" />
-      </div>
-    )
-  }
+  useEffect(() => { if (!isLoading && !isAuthenticated) router.push('/signin') }, [isAuthenticated, isLoading, router])
+  if (isLoading || !isAuthenticated) return <LoadingScreen />
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-slate-900">
+      <div style={{ minHeight:'100vh', background:'var(--g-bg)' }}>
         <Sidebar />
-        
-        <div className="lg:pl-64">
+        <div style={{ paddingLeft:'var(--g-sidebar-w)' }}>
           <Header />
-          
-          <main className="py-8 px-4 sm:px-6 lg:px-8">
-            {children}
-          </main>
+          <main style={{ padding:'28px 32px 60px', maxWidth:1240, boxSizing:'border-box' }}>{children}</main>
         </div>
       </div>
     </QueryClientProvider>
