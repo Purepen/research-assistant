@@ -6,9 +6,17 @@ These are the carefully crafted prompts that define agent behavior.
 """
 
 # Phase 0: Setup
-from .phase0_guidelines import GUIDELINES_PARSER_INSTRUCTIONS
-from .phase0_topic import TOPIC_SUGGESTER_INSTRUCTIONS
+# from .phase0_guidelines import GUIDELINES_PARSER_INSTRUCTIONS
+# from .phase0_topic import TOPIC_SUGGESTER_INSTRUCTIONS
 
+# Phase 0:Topic Discovery Engine instructions
+from .phase0_topic_discovery import TOPIC_DISCOVERY_INSTRUCTIONS
+from .phase0_topic_advisor import (
+    TOPIC_ADVISOR_EXPLAIN_INSTRUCTIONS,
+    TOPIC_ADVISOR_QUESTIONS_INSTRUCTIONS,
+    TOPIC_ADVISOR_FEASIBILITY_INSTRUCTIONS,
+    TOPIC_ADVISOR_FINAL_INSTRUCTIONS,
+)
 # Phase 1: Resource Discovery
 from .phase1_resource_discovery import RESOURCE_FINDER_INSTRUCTIONS
 from .phase1_project_finder import PROJECT_FINDER_INSTRUCTIONS
@@ -40,8 +48,16 @@ from .phase6_email import EMAIL_AGENT_INSTRUCTIONS
 
 __all__ = [
     # Phase 0
-    "GUIDELINES_PARSER_INSTRUCTIONS",
-    "TOPIC_SUGGESTER_INSTRUCTIONS",
+    # "GUIDELINES_PARSER_INSTRUCTIONS",
+    # "TOPIC_SUGGESTER_INSTRUCTIONS",
+
+    # Phase 0
+    "TOPIC_DISCOVERY_INSTRUCTIONS",
+    "TOPIC_ADVISOR_EXPLAIN_INSTRUCTIONS",
+    "TOPIC_ADVISOR_QUESTIONS_INSTRUCTIONS",
+    "TOPIC_ADVISOR_FEASIBILITY_INSTRUCTIONS",
+    "TOPIC_ADVISOR_FINAL_INSTRUCTIONS",
+
     # Phase 1
     "RESOURCE_FINDER_INSTRUCTIONS",
     "PROJECT_FINDER_INSTRUCTIONS",

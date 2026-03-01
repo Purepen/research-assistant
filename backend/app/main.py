@@ -12,6 +12,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.routes import topics_router   # add to existing import line
 import os
 
 from app.api.routes import (
@@ -19,7 +20,6 @@ from app.api.routes import (
     research_router,
     projects_router,
     user_router,
-    topics_router, 
 )
 
 app = FastAPI(
@@ -76,7 +76,8 @@ app.include_router(auth_router)
 app.include_router(research_router)
 app.include_router(projects_router)
 app.include_router(user_router)
-app.include_router(topics_router)
+app.include_router(topics_router)          # add after existing include_router calls
+
 
 if __name__ == "__main__":
     import uvicorn

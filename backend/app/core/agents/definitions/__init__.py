@@ -5,10 +5,15 @@ All agent instantiations extracted from notebook cells 4-22.
 These define how agents are configured with instructions, models, and tools.
 """
 
-# Phase 0
+
+
+# Topic Discovery Engine (new — separate from spec generation pipeline)
 from .phase0_agents import (
-    guidelines_parser_agent,
-    topic_suggester_agent
+    topic_discovery_agent,
+    topic_advisor_explain_agent,
+    topic_advisor_questions_agent,
+    topic_advisor_feasibility_agent,
+    topic_advisor_final_agent,
 )
 
 # Phase 1
@@ -48,9 +53,16 @@ from .phase5_agents import professor_reviewer_agent
 from .phase6_agents import email_agent
 
 __all__ = [
-    # Phase 0
-    "guidelines_parser_agent",
-    "topic_suggester_agent",
+    # # Phase 0
+    # "guidelines_parser_agent",
+    # "topic_suggester_agent",
+
+    #Phase 0
+    "topic_discovery_agent",
+    "topic_advisor_explain_agent",
+    "topic_advisor_questions_agent",
+    "topic_advisor_feasibility_agent",
+    "topic_advisor_final_agent",
     # Phase 1
     "resource_finder_agent",
     "web_search_agent",

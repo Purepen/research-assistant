@@ -15,5 +15,5 @@ __all__ = [
     "research_router",
     "projects_router",
     "user_router",
-    "topics_router", 
+    "topics_router",
 ]
