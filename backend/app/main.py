@@ -19,6 +19,7 @@ from app.api.routes import (
     research_router,
     projects_router,
     user_router,
+    topics_router, 
 )
 
 app = FastAPI(
@@ -75,6 +76,7 @@ app.include_router(auth_router)
 app.include_router(research_router)
 app.include_router(projects_router)
 app.include_router(user_router)
+app.include_router(topics_router)
 
 if __name__ == "__main__":
     import uvicorn
