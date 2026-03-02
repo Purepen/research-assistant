@@ -1,20 +1,16 @@
 """
-Phase 0 Agent Definitions — UPDATED
-=====================================
+Phase 0 Agent Definitions — v4 UPDATE
+========================================
 File: backend/app/core/agents/definitions/phase0_agents.py
 
-REPLACES the existing phase0_agents.py entirely.
-Adds: topic_discovery_agent, topic_advisor_explain_agent,
-      topic_advisor_questions_agent, topic_advisor_feasibility_agent,
-      topic_advisor_final_agent
-
-Keeps: guidelines_parser_agent, topic_suggester_agent (unchanged — still used
-       internally in the spec generation pipeline)
+CHANGES:
+- Added topic_project_scout_agent (WebSearchTool — finds similar student projects)
+- topic_data_scout_agent and topic_project_scout_agent use TopicAdvisorOutput
+  (plain message field) since they return free-form JSON that we parse manually
+- All other agents unchanged
 """
 
-from agents import Agent
-
-# ── Existing models (unchanged) ────────────────────────────────────────────────
+from agents import Agent, WebSearchTool
 from app.models.guidelines import ProjectGuidelines
 from pydantic import BaseModel, Field
 from typing import List
@@ -28,15 +24,13 @@ class TopicSuggestion(BaseModel):
 class TopicSuggestions(BaseModel):
     suggestions: List[TopicSuggestion] = Field(description="5-7 suggested research topics")
 
-# ── New models (Topic Discovery Engine) ────────────────────────────────────────
 from app.models.topic_discovery import TopicDiscoveryOutput, TopicAdvisorOutput
 
-# ── Existing instructions (unchanged) ──────────────────────────────────────────
 from app.core.agents.instructions.phase0_guidelines import GUIDELINES_PARSER_INSTRUCTIONS
 from app.core.agents.instructions.phase0_topic import TOPIC_SUGGESTER_INSTRUCTIONS
-
-# ── New instructions (Topic Discovery Engine) ───────────────────────────────────
 from app.core.agents.instructions.phase0_topic_discovery import TOPIC_DISCOVERY_INSTRUCTIONS
+from app.core.agents.instructions.phase0_data_scout import TOPIC_DATA_SCOUT_INSTRUCTIONS
+from app.core.agents.instructions.phase0_project_scout import TOPIC_PROJECT_SCOUT_INSTRUCTIONS
 from app.core.agents.instructions.phase0_topic_advisor import (
     TOPIC_ADVISOR_EXPLAIN_INSTRUCTIONS,
     TOPIC_ADVISOR_QUESTIONS_INSTRUCTIONS,
@@ -46,10 +40,9 @@ from app.core.agents.instructions.phase0_topic_advisor import (
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# EXISTING AGENTS (unchanged — still used in spec generation pipeline)
+# EXISTING AGENTS (unchanged)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Guidelines Parser Agent (Cell 4)
 guidelines_parser_agent = Agent(
     name="GuidelinesParser",
     instructions=GUIDELINES_PARSER_INSTRUCTIONS,
@@ -57,7 +50,6 @@ guidelines_parser_agent = Agent(
     output_type=ProjectGuidelines,
 )
 
-# Topic Suggester Agent (Cell 5) — internal use in spec pipeline only
 topic_suggester_agent = Agent(
     name="TopicSuggester",
     instructions=TOPIC_SUGGESTER_INSTRUCTIONS,
@@ -67,11 +59,10 @@ topic_suggester_agent = Agent(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# NEW AGENTS — Topic Discovery Engine
-# These are SEPARATE from spec generation and serve /topics/* routes only
+# TOPIC DISCOVERY ENGINE AGENTS
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Stage 1: Generates 12 ranked, clustered topic suggestions from a student profile form
+# Stage 1: Generate 12 ranked topics
 topic_discovery_agent = Agent(
     name="TopicDiscovery",
     instructions=TOPIC_DISCOVERY_INSTRUCTIONS,
@@ -79,7 +70,26 @@ topic_discovery_agent = Agent(
     output_type=TopicDiscoveryOutput,
 )
 
-# Stage 2a: Explains a selected topic and asks the first feasibility question
+# Stage 1.5: Search for datasets/papers/tools (uses WebSearchTool)
+# Returns free-form JSON via message field — parsed manually in pipeline
+topic_data_scout_agent = Agent(
+    name="TopicDataScout",
+    instructions=TOPIC_DATA_SCOUT_INSTRUCTIONS,
+    model="gpt-4o",
+    tools=[WebSearchTool()],
+    output_type=TopicAdvisorOutput,  # message field carries the JSON
+)
+
+# Post-final: Find 2 similar student projects (uses WebSearchTool)
+topic_project_scout_agent = Agent(
+    name="TopicProjectScout",
+    instructions=TOPIC_PROJECT_SCOUT_INSTRUCTIONS,
+    model="gpt-4o",
+    tools=[WebSearchTool()],
+    output_type=TopicAdvisorOutput,  # message field carries the JSON
+)
+
+# Stage 2a: Explain + present data found
 topic_advisor_explain_agent = Agent(
     name="TopicAdvisorExplain",
     instructions=TOPIC_ADVISOR_EXPLAIN_INSTRUCTIONS,
@@ -87,7 +97,7 @@ topic_advisor_explain_agent = Agent(
     output_type=TopicAdvisorOutput,
 )
 
-# Stage 2b: Continues asking feasibility questions (called repeatedly)
+# Stage 2b: Feasibility questions
 topic_advisor_questions_agent = Agent(
     name="TopicAdvisorQuestions",
     instructions=TOPIC_ADVISOR_QUESTIONS_INSTRUCTIONS,
@@ -95,7 +105,7 @@ topic_advisor_questions_agent = Agent(
     output_type=TopicAdvisorOutput,
 )
 
-# Stage 3: Does the full feasibility assessment after all questions are answered
+# Stage 3: Feasibility assessment
 topic_advisor_feasibility_agent = Agent(
     name="TopicAdvisorFeasibility",
     instructions=TOPIC_ADVISOR_FEASIBILITY_INSTRUCTIONS,
@@ -103,7 +113,7 @@ topic_advisor_feasibility_agent = Agent(
     output_type=TopicAdvisorOutput,
 )
 
-# Stage 4: Produces the final structured refined topic output
+# Stage 4: Final refined topic
 topic_advisor_final_agent = Agent(
     name="TopicAdvisorFinal",
     instructions=TOPIC_ADVISOR_FINAL_INSTRUCTIONS,
