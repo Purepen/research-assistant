@@ -9,17 +9,17 @@ import { useUserStats } from '@/hooks/useUser'
 const IcoLayers  = () => <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
 const IcoGrid    = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
 const IcoFiles   = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
-const IcoCompass = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+const IcoFlask   = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 3h6m-6 0v6l-4 9a1 1 0 0 0 .9 1.5h12.2a1 1 0 0 0 .9-1.5L15 9V3M9 3H6m3 0h6"/></svg>
 const IcoPlus    = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 const IcoUser    = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
 const IcoOut     = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
 
 const NAV = [
-  { label:'Dashboard', href:'/dashboard',         icon:IcoGrid,    desc:'Overview',         accent:false },
-  { label:'Find Topic', href:'/dashboard/topics',  icon:IcoCompass, desc:'Topic Discovery',  accent:true  },  // ← NEW
-  { label:'Projects',  href:'/dashboard/projects', icon:IcoFiles,   desc:'All specs',        accent:false },
-  { label:'Generate',  href:'/dashboard/generate', icon:IcoPlus,    desc:'New spec',         accent:false },
-  { label:'Profile',   href:'/dashboard/profile',  icon:IcoUser,    desc:'Settings',         accent:false },
+  { label:'Dashboard', href:'/dashboard',         icon:IcoGrid,  desc:'Overview',        accent:false },
+  { label:'Topic Lab', href:'/dashboard/topics',  icon:IcoFlask, desc:'Find & refine',   accent:true  },
+  { label:'Projects',  href:'/dashboard/projects',icon:IcoFiles, desc:'All specs',        accent:false },
+  { label:'Generate',  href:'/dashboard/generate',icon:IcoPlus,  desc:'New spec',         accent:false },
+  { label:'Profile',   href:'/dashboard/profile', icon:IcoUser,  desc:'Settings',         accent:false },
 ]
 
 export function Sidebar() {
@@ -79,60 +79,55 @@ export function Sidebar() {
                   }}>
                     <item.icon/>
                   </div>
-                  <div style={{ flex:1 }}>
-                    <p className={item.accent?'sb-nav-text':''} style={{ margin:0,fontSize:'.84rem',fontWeight:active?700:500,lineHeight:1.2,transition:'color .15s',
-                      color:item.accent?undefined:(active?'#15803d':'#374151') }}>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div className={`sb-nav-text`} style={{ fontSize:'.83rem',fontWeight:active?700:500,color:active&&!item.accent?'#0f1f0f':'inherit',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>
                       {item.label}
-                    </p>
-                    <p style={{ margin:0,fontSize:'.66rem',color:'#9ca3af' }}>{item.desc}</p>
+                    </div>
+                    <div style={{ fontSize:'.66rem',color:'#9ca3af',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{item.desc}</div>
                   </div>
-                  {/* "NEW" badge on Find Topic */}
-                  {item.accent&&!active&&(
-                    <span style={{ fontSize:'.58rem',fontWeight:800,color:'#7c3aed',background:'#ede9fe',padding:'1px 6px',borderRadius:999,letterSpacing:'.05em',textTransform:'uppercase' }}>NEW</span>
+                  {/* NEW badge for Topic Lab */}
+                  {item.accent && (
+                    <span style={{ fontSize:'.55rem',fontWeight:800,letterSpacing:'.06em',background:'#7c3aed',color:'white',padding:'2px 6px',borderRadius:999,textTransform:'uppercase',flexShrink:0 }}>
+                      NEW
+                    </span>
                   )}
-                  {active&&<div style={{ width:5,height:5,borderRadius:'50%',background:item.accent?'#7c3aed':'#16a34a',flexShrink:0 }}/>}
                 </motion.div>
               </Link>
             )
           })}
         </div>
+      </div>
 
-        {/* Divider + tip */}
-        <div style={{ height:1,background:'#f0f4f0',margin:'12px 8px 10px' }}/>
-        <div style={{ padding:'10px 10px',background:'#faf5ff',border:'1px solid #e9d5ff',borderRadius:10,margin:'0 2px' }}>
-          <p style={{ margin:'0 0 3px',fontSize:'.72rem',fontWeight:700,color:'#7c3aed' }}>💡 New to research?</p>
-          <p style={{ margin:0,fontSize:'.69rem',color:'#6b7280',lineHeight:1.5 }}>Try "Find Topic" first — our AI will guide you from confusion to a clear research direction.</p>
+      <div style={{ height:1,background:'#f0f4f0',margin:'0 16px' }}/>
+
+      {/* Usage tier */}
+      <div style={{ padding:'12px 16px' }}>
+        <div style={{ background:'#f9fafb',borderRadius:12,padding:'12px 14px',border:'1px solid #f0f4f0' }}>
+          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6 }}>
+            <span style={{ fontSize:'.72rem',fontWeight:700,color:'#374151' }}>Free tier</span>
+            <span style={{ fontSize:'.72rem',fontWeight:700,color: pct>=100?'#dc2626':'#16a34a' }}>{used}/{freeLimit} specs</span>
+          </div>
+          <div style={{ height:5,background:'#e8ede8',borderRadius:999,overflow:'hidden',marginBottom:5 }}>
+            <motion.div initial={{width:0}} animate={{width:`${pct}%`}} transition={{duration:.6,ease:'easeOut'}}
+              style={{ height:'100%',borderRadius:999,background: pct>=100?'#dc2626':'linear-gradient(90deg,#16a34a,#22c55e)' }}/>
+          </div>
+          {pct>=100&&<p style={{ margin:0,fontSize:'.66rem',color:'#dc2626',fontWeight:600 }}>Free limit reached</p>}
         </div>
       </div>
 
-      {/* Bottom */}
-      <div style={{ padding:'12px 14px',borderTop:'1px solid #f0f4f0' }}>
-        {/* Usage meter */}
-        <div style={{ background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:10,padding:'10px 12px',marginBottom:10 }}>
-          <div style={{ display:'flex',justifyContent:'space-between',marginBottom:6 }}>
-            <span style={{ fontSize:'.7rem',fontWeight:700,color:'#16a34a' }}>Free tier</span>
-            <span style={{ fontSize:'.7rem',fontWeight:700,color:pct>=100?'#d97706':'#6b7280' }}>{used}/{freeLimit} specs</span>
-          </div>
-          <div style={{ height:4,background:'#dcfce7',borderRadius:2,overflow:'hidden' }}>
-            <motion.div initial={{width:0}} animate={{width:`${pct}%`}} transition={{duration:1,delay:.4,ease:[.22,1,.36,1]}}
-              style={{ height:'100%',background:pct>=100?'#f59e0b':'#16a34a',borderRadius:2 }}/>
-          </div>
-          {pct>=100&&<p style={{ fontSize:'.67rem',color:'#d97706',marginTop:5,fontWeight:600 }}>Free limit reached</p>}
-        </div>
-
-        {/* User info */}
-        <div style={{ display:'flex',alignItems:'center',gap:9,marginBottom:8 }}>
-          <div style={{ width:32,height:32,borderRadius:9,background:'linear-gradient(135deg,#16a34a,#22c55e)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.72rem',fontWeight:800,color:'white',flexShrink:0 }}>
+      {/* User */}
+      <div style={{ padding:'10px 12px 16px' }}>
+        <div style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 8px',borderRadius:10,transition:'all .15s' }}>
+          <div style={{ width:34,height:34,borderRadius:10,background:'linear-gradient(135deg,#16a34a,#22c55e)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontSize:'.78rem',fontWeight:800,flexShrink:0 }}>
             {initials}
           </div>
           <div style={{ flex:1,minWidth:0 }}>
-            <p style={{ margin:0,fontSize:'.8rem',fontWeight:700,color:'#0f1f0f',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{user?.full_name||'Researcher'}</p>
-            <p style={{ margin:0,fontSize:'.67rem',color:'#9ca3af',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{user?.email}</p>
+            <div style={{ fontSize:'.8rem',fontWeight:700,color:'#0f1f0f',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{user?.full_name||'Researcher'}</div>
+            <div style={{ fontSize:'.66rem',color:'#9ca3af',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{user?.email||''}</div>
           </div>
         </div>
-
         <button className="sb-logout" onClick={signOut}
-          style={{ display:'flex',alignItems:'center',gap:8,padding:'7px 9px',borderRadius:8,color:'#9ca3af',fontSize:'.8rem',fontWeight:500 }}>
+          style={{ display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,color:'#6b7280',fontSize:'.78rem',fontWeight:600,marginTop:2 }}>
           <IcoOut/> Sign out
         </button>
       </div>

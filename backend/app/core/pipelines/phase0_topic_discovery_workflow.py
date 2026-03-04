@@ -1,19 +1,22 @@
 """
-Phase 0 Topic Discovery Workflow — v4 UPDATE
-=============================================
+Phase 0 Topic Discovery Workflow — v5 (Phase 2 Vetter Addition)
+================================================================
 File: backend/app/core/pipelines/phase0_topic_discovery_workflow.py
 
-CHANGES:
-- run_data_scout() now returns structured TopicScoutOutput (with URLs per item)
-- Added run_project_scout() — finds 2 similar real student projects after topic finalised
-- Scout adapts: literature-based projects get paper/author search, not dataset search
-- parse_scout_json() helper extracts structured data from agent's JSON response
+CHANGES from v4:
+  - Added VetTopicOutput dataclass (local, not a DB model — just pipeline output)
+  - Added run_topic_vet() — runs topic_vetter_agent and parses the structured
+    plain-text response into a clean VetTopicOutput object.
+  - Added parse_vet_result() helper — mirrors parse_final_topic() structure.
+  - All existing functions (run_topic_discovery, run_data_scout, run_project_scout,
+    run_topic_advisor, parse_final_topic) are COMPLETELY UNCHANGED.
 """
 
 from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import List, Optional, Literal
 
 from agents import Runner
@@ -31,6 +34,7 @@ from app.core.agents.definitions.phase0_agents import (
     topic_discovery_agent,
     topic_data_scout_agent,
     topic_project_scout_agent,
+    topic_vetter_agent,
     topic_advisor_explain_agent,
     topic_advisor_questions_agent,
     topic_advisor_feasibility_agent,
@@ -39,7 +43,29 @@ from app.core.agents.definitions.phase0_agents import (
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Stage 1 — Topic Discovery (unchanged)
+# Vetter Output (local dataclass — not persisted directly, used by /vet route)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class VetTopicOutput:
+    """
+    Structured result from the topic vetter agent.
+    Returned by run_topic_vet() and serialised by the /topics/vet endpoint.
+    """
+    verdict:          str          # "STRONG" | "REFINED" | "PIVOTED"
+    your_take:        str          # 2-3 sentence honest reaction
+    strengths:        List[str]    # 2-3 specific strengths
+    concerns:         List[str]    # 0-2 specific concerns
+    original_title:   str          # verbatim original topic
+    refined_title:    str          # improved title (or same if STRONG)
+    refined_rationale:str          # why the refined version is better
+    one_liner:        str          # ≤20-word project description
+    closing:          str          # warm one-sentence closing
+    ai_message:       str          # full raw message for display fallback
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Stage 1 — Topic Discovery (UNCHANGED)
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def run_topic_discovery(
@@ -91,7 +117,7 @@ Group into 3-4 thematic clusters. Sort by suitability score descending.
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Stage 1.5 — Data / Literature Scout (UPDATED — returns structured output)
+# Stage 1.5 — Data / Literature Scout (UNCHANGED)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _parse_scout_json(raw: str, project_type: str) -> TopicScoutOutput:
@@ -99,14 +125,12 @@ def _parse_scout_json(raw: str, project_type: str) -> TopicScoutOutput:
     Parses the JSON returned by the scout agent into a TopicScoutOutput.
     Falls back gracefully if the agent returns malformed JSON.
     """
-    # Strip any markdown fences the agent might add despite instructions
     cleaned = re.sub(r"```(?:json)?", "", raw).strip()
     cleaned = cleaned.strip("`").strip()
 
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError:
-        # Best-effort: return a minimal output with the raw text
         print(f"   ⚠️  Scout JSON parse failed, using raw text fallback")
         return TopicScoutOutput(
             scout_type="dataset" if project_type != "research-based" else "literature",
@@ -125,7 +149,7 @@ def _parse_scout_json(raw: str, project_type: str) -> TopicScoutOutput:
             access=d.get("access", "Free"),
         )
         for d in data.get("datasets", [])
-        if d.get("url")  # only include if URL present
+        if d.get("url")
     ]
 
     papers = [
@@ -173,7 +197,7 @@ async def run_data_scout(
     topic_title:  str,
     field:        str,
     degree_level: str,
-    project_type: str = "mixed",  # used to decide dataset vs literature mode
+    project_type: str = "mixed",
 ) -> TopicScoutOutput:
     """
     Stage 1.5: Searches for resources for a selected topic.
@@ -206,7 +230,6 @@ Return ONLY the JSON structure as specified in your instructions.
     )
 
     raw_output = result.final_output
-    # Agent returns TopicAdvisorOutput (message field) since we need free-form JSON
     raw_text = raw_output.message if hasattr(raw_output, 'message') else str(raw_output)
 
     structured = _parse_scout_json(raw_text, project_type)
@@ -218,7 +241,7 @@ Return ONLY the JSON structure as specified in your instructions.
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Post-Final Stage — Similar Projects Scout (NEW)
+# Post-Final Stage — Similar Projects Scout (UNCHANGED)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _parse_project_scout_json(raw: str) -> ProjectScoutOutput:
@@ -296,7 +319,166 @@ Return ONLY the JSON structure as specified.
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Stages 2-4 — Topic Advisor (updated — passes structured scout context)
+# NEW: Topic Vetter — "I already have a topic" path
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _extract_vet_section(text: str, label: str, next_labels: List[str]) -> str:
+    """
+    Extracts the content under a plain-text section label from the vetter's output.
+    Same approach as parse_final_topic() — label-based extraction, no regex magic.
+    """
+    pattern = re.compile(
+        rf"{re.escape(label)}\s*\n(.*?)(?={'|'.join(re.escape(l) for l in next_labels)}|$)",
+        re.DOTALL | re.IGNORECASE,
+    )
+    m = pattern.search(text)
+    return m.group(1).strip() if m else ""
+
+
+def _parse_numbered_list(raw: str) -> List[str]:
+    """Parse a numbered list from plain text — returns list of items without numbering."""
+    items = []
+    for line in raw.split("\n"):
+        line = line.strip()
+        if line and re.match(r"^\d+\.", line):
+            items.append(re.sub(r"^\d+\.\s*", "", line).strip())
+    return items
+
+
+def parse_vet_result(raw_message: str, original_topic: str) -> VetTopicOutput:
+    """
+    Parses the topic vetter agent's structured plain-text response into
+    a VetTopicOutput dataclass.
+
+    Expected section labels (from phase0_topic_vetter.py instructions):
+      VERDICT:
+      YOUR TAKE:
+      WHAT'S WORKING:
+      WHAT NEEDS ATTENTION:
+      ORIGINAL TITLE:
+      REFINED TITLE:
+      REFINED RATIONALE:
+      ONE LINER:
+      CLOSING:
+    """
+
+    all_labels = [
+        "VERDICT:",
+        "YOUR TAKE:",
+        "WHAT'S WORKING:",
+        "WHAT NEEDS ATTENTION:",
+        "ORIGINAL TITLE:",
+        "REFINED TITLE:",
+        "REFINED RATIONALE:",
+        "ONE LINER:",
+        "CLOSING:",
+    ]
+
+    def _get(label: str) -> str:
+        idx    = all_labels.index(label)
+        nexts  = all_labels[idx + 1:]
+        return _extract_vet_section(raw_message, label, nexts)
+
+    # ── Verdict (normalise to uppercase) ─────────────────────────────────────
+    verdict_raw = _get("VERDICT:").strip().upper()
+    if "REFINED" in verdict_raw:
+        verdict = "REFINED"
+    elif "PIVOTED" in verdict_raw:
+        verdict = "PIVOTED"
+    else:
+        verdict = "STRONG"
+
+    # ── Strengths & Concerns (numbered lists) ─────────────────────────────────
+    strengths_raw = _get("WHAT'S WORKING:")
+    concerns_raw  = _get("WHAT NEEDS ATTENTION:")
+
+    strengths = _parse_numbered_list(strengths_raw)
+    concerns  = _parse_numbered_list(concerns_raw)
+
+    # ── Titles ────────────────────────────────────────────────────────────────
+    original_title = _get("ORIGINAL TITLE:") or original_topic
+    refined_title  = _get("REFINED TITLE:")  or original_topic
+
+    # ── Narrative sections ────────────────────────────────────────────────────
+    your_take         = _get("YOUR TAKE:")
+    refined_rationale = _get("REFINED RATIONALE:")
+    one_liner         = _get("ONE LINER:")
+    closing           = _get("CLOSING:")
+
+    # ── Fallbacks for robustness ──────────────────────────────────────────────
+    if not strengths:
+        strengths = ["Topic is within your field of study", "Clear research focus identified"]
+    if not one_liner:
+        one_liner = f"A research project exploring {original_topic.lower()}."
+    if not closing:
+        closing = "Both options are viable — choose whichever feels right."
+
+    print(f"   Verdict: {verdict}")
+    print(f"   Original: {original_title[:50]}")
+    print(f"   Refined:  {refined_title[:50]}")
+
+    return VetTopicOutput(
+        verdict=verdict,
+        your_take=your_take,
+        strengths=strengths,
+        concerns=concerns,
+        original_title=original_title,
+        refined_title=refined_title,
+        refined_rationale=refined_rationale,
+        one_liner=one_liner,
+        closing=closing,
+        ai_message=raw_message,
+    )
+
+
+async def run_topic_vet(
+    original_topic:   str,
+    field:            str,
+    degree_level:     str,
+    project_type:     str   = "mixed",
+    geographic_focus: str   = "none",
+    ambition_level:   str   = "impressive",
+) -> VetTopicOutput:
+    """
+    Vets a student's existing topic idea.
+
+    Runs the topic_vetter_agent against the student's context and returns
+    a structured VetTopicOutput with verdict, strengths, concerns,
+    and an optionally refined topic title.
+
+    Called by: POST /topics/vet
+    """
+
+    print(f"\n🔬 TOPIC VETTER — evaluating student's topic")
+    print(f"   Original: {original_topic[:60]}")
+    print(f"   Field: {field} | Level: {degree_level}")
+    print("-" * 80)
+
+    result = await Runner.run(
+        starting_agent=topic_vetter_agent,
+        input=f"""
+ORIGINAL TOPIC: {original_topic}
+FIELD: {field}
+DEGREE LEVEL: {degree_level}
+PROJECT TYPE: {project_type.replace('-', ' ').title()}
+GEOGRAPHIC FOCUS: {geographic_focus.title()}
+AMBITION LEVEL: {ambition_level}
+
+Evaluate this topic and produce the structured plain-text output as instructed.
+""",
+    )
+
+    raw_output = result.final_output
+    raw_text   = raw_output.message if hasattr(raw_output, 'message') else str(raw_output)
+
+    vet_result = parse_vet_result(raw_text, original_topic)
+
+    print(f"✅ Vetting complete — verdict: {vet_result.verdict}")
+    return vet_result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Stages 2-4 — Topic Advisor (UNCHANGED)
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def run_topic_advisor(
@@ -392,7 +574,7 @@ Produce the final refined topic output using the exact plain-text format.
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Utility: Parse final topic
+# Utility — Parse final topic (UNCHANGED)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def parse_final_topic(raw_message: str, fallback_title: str) -> FinalTopicOutput:
@@ -404,7 +586,7 @@ def parse_final_topic(raw_message: str, fallback_title: str) -> FinalTopicOutput
         m = pattern.search(text)
         return m.group(1).strip() if m else ""
 
-    labels = ["FINAL TOPIC TITLE:", "DESCRIPTION:", "NEXT STEPS:", "READY MESSAGE:"]
+    labels    = ["FINAL TOPIC TITLE:", "DESCRIPTION:", "NEXT STEPS:", "READY MESSAGE:"]
     title       = _extract(raw_message, labels[0], labels[1:]) or fallback_title
     description = _extract(raw_message, labels[1], labels[2:])
     steps_raw   = _extract(raw_message, labels[2], labels[3:])

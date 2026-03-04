@@ -1,8 +1,9 @@
 /**
  * API Client
- * 
- * Change: Added projectsApi.downloadProject(id)
- * The detail page uses this to stream the .docx file from the backend.
+ *
+ * Changes (Phase 1 — Mar 2026):
+ *   - Added topicsApi with history(), linkProject(), deleteSession()
+ *   - downloadProject already present, kept intact
  */
 
 import axios from 'axios'
@@ -133,13 +134,46 @@ export const projectsApi = {
     return response.data
   },
 
-  // ✅ NEW: Download project as .docx
-  // Uses responseType:'blob' so axios handles binary data correctly.
-  // Auth token is attached automatically by the request interceptor above.
   downloadProject: async (projectId: number): Promise<Blob> => {
     const response = await api.get(`/projects/${projectId}/download`, {
       responseType: 'blob',
     })
+    return response.data
+  },
+}
+
+// ── Topics API ────────────────────────────────────────────────────────────────
+export const topicsApi = {
+  /**
+   * Fetch the current user's topic history (newest first).
+   * Returns { total: number, topics: TopicHistoryItem[] }
+   */
+  getHistory: async (params?: { skip?: number; limit?: number }) => {
+    const response = await api.get('/topics/history', { params })
+    return response.data as {
+      total: number
+      topics: TopicHistoryItem[]
+    }
+  },
+
+  /**
+   * Link a completed TopicSession to a generated Project.
+   * Called by the generate page after /research/generate succeeds,
+   * when the user navigated from Topic Lab with a topic_session_id.
+   */
+  linkProject: async (topicSessionId: number, projectId: number) => {
+    const response = await api.post('/topics/link-project', {
+      topic_session_id: topicSessionId,
+      project_id:       projectId,
+    })
+    return response.data
+  },
+
+  /**
+   * Remove a single topic session from the user's history.
+   */
+  deleteSession: async (sessionId: number) => {
+    const response = await api.delete(`/topics/history/${sessionId}`)
     return response.data
   },
 }
@@ -165,6 +199,21 @@ export const userApi = {
     const response = await api.delete('/user/account')
     return response.data
   },
+}
+
+// ── Shared Types ──────────────────────────────────────────────────────────────
+export interface TopicHistoryItem {
+  id:                number
+  final_topic:       string
+  description:       string | null
+  field:             string
+  degree_level:      string
+  project_type:      string | null
+  ambition_level:    string | null
+  origin:            'discovered' | 'vetted' | 'provided'
+  original_topic:    string | null
+  linked_project_id: number | null
+  created_at:        string  // ISO-8601
 }
 
 export default api
