@@ -25,6 +25,8 @@ const I = {
   Flask:   ()=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 3h6m-6 0v6l-4 9a1 1 0 0 0 .9 1.5h12.2a1 1 0 0 0 .9-1.5L15 9V3M9 3H6m3 0h6"/></svg>,
   FlaskSm: ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 3h6m-6 0v6l-4 9a1 1 0 0 0 .9 1.5h12.2a1 1 0 0 0 .9-1.5L15 9V3M9 3H6m3 0h6"/></svg>,
   Rocket:  ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>,
+  Swap:    ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 16V4m0 0L3 8m4-4 4 4"/><path d="M17 8v12m0 0 4-4m-4 4-4-4"/></svg>,
+  Info:    ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
 }
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -85,6 +87,21 @@ type Stage = 'gateway'|'vet'|'vet-loading'|'vet-result'|'form'|'loading'|'result
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const authHeaders = ()=>({ Authorization:`Bearer ${localStorage.getItem('access_token')}` })
+
+// Safely extract a string message from axios errors — handles FastAPI 422 Pydantic arrays
+function extractError(e: any, fallback: string): string {
+  const detail = e?.response?.data?.detail
+  if (!detail) return fallback
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail.map((d: any) => {
+      const loc = Array.isArray(d.loc) ? d.loc.filter((l: any) => l !== 'body').join(' → ') : ''
+      return loc ? `${loc}: ${d.msg}` : d.msg
+    }).join('; ')
+  }
+  if (typeof detail === 'object') return JSON.stringify(detail)
+  return fallback
+}
 const COMPLEXITY_COLORS: Record<string,string> = { Low:'#16a34a', Medium:'#d97706', High:'#dc2626' }
 const COMPLEXITY_BGS:    Record<string,string> = { Low:'#f0fdf4', Medium:'#fffbeb', High:'#fef2f2' }
 
@@ -467,24 +484,54 @@ const Q_OPTIONS: Record<string,any[]> = {
   project_type:       [{value:'research-based',label:'Research-based',sub:'Literature & theory'},{value:'practical',label:'Practical',sub:'Build / implement'},{value:'mixed',label:'Mixed',sub:'Both'},{value:'not-sure',label:'Not sure',sub:'Let AI decide'}],
   preferred_activity: ['Problem-solving','Building','Data Analysis','Studying People','Theory','Unsure'],
   interest_areas:     ['Technology','Business','Health','Education','Environment','Agriculture','Social Issues','Policy','Psychology','Engineering','Media','Open to anything'],
-  geographic_focus:   [{value:'university',label:'My University',sub:'Campus'},{value:'city',label:'City/Region',sub:'Urban'},{value:'country',label:'My Country',sub:'National'},{value:'africa',label:'Africa',sub:'Pan-African'},{value:'europe',label:'Europe',sub:'European'},{value:'global',label:'Global',sub:'Worldwide'},{value:'none',label:'No focus',sub:'Agnostic'}],
+  geographic_focus:   [{value:'university',label:'My University',sub:'Campus'},{value:'city',label:'City/Region',sub:'Urban'},{value:'country',label:'My Country',sub:'National'},{value:'nigeria',label:'🇳🇬 Nigeria',sub:'Nigerian'},{value:'africa',label:'Africa',sub:'Pan-African'},{value:'europe',label:'Europe',sub:'European'},{value:'global',label:'Global',sub:'Worldwide'},{value:'none',label:'No focus',sub:'Agnostic'}],
   ambition_level:     [{value:'manageable',label:'Manageable',sub:'Safe, low stress'},{value:'impressive',label:'Impressive',sub:'Strong novel angle'},{value:'distinction',label:'Distinction',sub:'Top grade'},{value:'cv-strong',label:'CV-Strong',sub:'Industry-ready'}],
   confidence_level:   [{value:'very-confused',label:'Very Confused',sub:'No idea'},{value:'somewhat-unsure',label:'Somewhat Unsure',sub:'Area known'},{value:'rough-direction',label:'Rough Direction',sub:'Need narrowing'},{value:'have-idea',label:'Have an Idea',sub:'Need validation'}],
 }
 const RADIO_IDS = ['degree_level','project_type','geographic_focus','ambition_level','confidence_level']
 
 function FormStage({ onSubmit }:{ onSubmit:(d:FormData)=>void }) {
-  const [q,setQ]       = useState(0)
-  const [form,setForm] = useState<FormData>({degree_level:'',field:'',project_type:'',preferred_activity:[],interest_areas:[],geographic_focus:'',ambition_level:'',confidence_level:''})
+  const [q,setQ]         = useState(0)
+  const [form,setForm]   = useState<FormData>({degree_level:'',field:'',project_type:'',preferred_activity:[],interest_areas:[],geographic_focus:'',ambition_level:'',confidence_level:''})
+  const [customGeo,setCustomGeo] = useState('')
   const update   = (k:keyof FormData,v:any) => setForm(p=>({...p,[k]:v}))
   const toggleArr= (k:'preferred_activity'|'interest_areas',v:string) => { const a=form[k] as string[]; update(k,a.includes(v)?a.filter(x=>x!==v):[...a,v]) }
   const canNext  = () => { const v=form[QUESTIONS[q].id as keyof FormData]; return Array.isArray(v)?v.length>0:!!(v&&v!=='') }
   const isLast   = q===QUESTIONS.length-1
   const next     = () => { if(!canNext())return; if(isLast){onSubmit(form);return}; setQ(p=>p+1) }
+
+  const PREDEFINED_GEO = ['university','city','country','nigeria','africa','europe','global','none']
+  const geoIsCustom = !!form.geographic_focus && !PREDEFINED_GEO.includes(form.geographic_focus)
+
   const renderQ  = () => {
     const qid=QUESTIONS[q].id
     if(qid==='field') return <input value={form.field} onChange={e=>update('field',e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&canNext())next()}} placeholder="e.g. Computer Science, Public Health…" className="g-input" style={{ fontSize:'1rem',padding:'14px 16px' }}/>
     if(qid==='preferred_activity'||qid==='interest_areas'){ const isInt=qid==='interest_areas'; return <ChipSelect options={Q_OPTIONS[qid] as string[]} selected={form[qid] as string[]} onToggle={v=>toggleArr(qid as any,v)} color={isInt?'#16a34a':'#7c3aed'} bg={isInt?'#f0fdf4':'#faf5ff'} border={isInt?'#bbf7d0':'#e9d5ff'}/> }
+    if(qid==='geographic_focus') return (
+      <div>
+        <RadioCards
+          options={Q_OPTIONS.geographic_focus}
+          selected={geoIsCustom ? '' : form.geographic_focus}
+          onSelect={v=>{ setCustomGeo(''); update('geographic_focus',v); setTimeout(()=>next(),200) }}
+          color='#7c3aed' bg='#faf5ff' border='#e9d5ff'/>
+        <div style={{ marginTop:14 }}>
+          <p style={{ margin:'0 0 8px',fontSize:'.78rem',fontWeight:600,color:'#6b7280' }}>Or type your specific location:</p>
+          <input
+            value={customGeo}
+            onChange={e=>{
+              const val = e.target.value
+              setCustomGeo(val)
+              update('geographic_focus', val.trim() || '')
+            }}
+            onKeyDown={e=>{if(e.key==='Enter'&&canNext())next()}}
+            placeholder="e.g. Lagos, South Africa, Kenya…"
+            style={{ width:'100%',padding:'10px 13px',border:`1.5px solid ${geoIsCustom?'#7c3aed':'#e8ede8'}`,borderRadius:10,fontSize:'.87rem',color:'#0f1f0f',outline:'none',transition:'border .2s',boxSizing:'border-box' }}
+            onFocus={e=>(e.target as HTMLElement).style.borderColor='#7c3aed'}
+            onBlur={e=>(e.target as HTMLElement).style.borderColor=geoIsCustom?'#7c3aed':'#e8ede8'}/>
+          {geoIsCustom&&<p style={{ margin:'4px 0 0',fontSize:'.72rem',color:'#7c3aed',fontWeight:600 }}>✓ Using: {form.geographic_focus}</p>}
+        </div>
+      </div>
+    )
     const isGreen=['ambition_level','confidence_level'].includes(qid)
     return <RadioCards options={Q_OPTIONS[qid]} selected={form[qid as keyof FormData] as string} onSelect={v=>{update(qid as keyof FormData,v);if(RADIO_IDS.includes(qid))setTimeout(()=>next(),200)}} color={isGreen?'#16a34a':'#7c3aed'} bg={isGreen?'#f0fdf4':'#faf5ff'} border={isGreen?'#bbf7d0':'#e9d5ff'}/>
   }
@@ -695,8 +742,8 @@ function ScoutCard({ data, isLiterature }:{ data:ScoutData; isLiterature:boolean
 }
 
 /* ─── Chat stage ─────────────────────────────────────────────────────────── */
-function ChatStage({ topic, formData, scoutData, onFinal }:
-  { topic:Topic; formData:FormData; scoutData:ScoutData|null; onFinal:(t:string,d:string)=>void }) {
+function ChatStage({ topic, formData, scoutData, onFinal, onChangeTopic }:
+  { topic:Topic; formData:FormData; scoutData:ScoutData|null; onFinal:(t:string,d:string)=>void; onChangeTopic:()=>void }) {
   const [messages,setMessages]           = useState<ChatMsg[]>([])
   const [input,setInput]                 = useState('')
   const [loading,setLoading]             = useState(false)
@@ -750,12 +797,20 @@ function ChatStage({ topic, formData, scoutData, onFinal }:
     <div style={{ maxWidth:720,margin:'0 auto' }}>
       {scoutData&&<ScoutCard data={scoutData} isLiterature={isLiterature}/>}
 
-      <div style={{ background:'#faf5ff',border:'1.5px solid #e9d5ff',borderRadius:14,padding:'12px 18px',marginBottom:14,display:'flex',alignItems:'flex-start',gap:10 }}>
-        <div style={{ width:36,height:36,borderRadius:10,background:'#7c3aed',display:'flex',alignItems:'center',justifyContent:'center',color:'white',flexShrink:0 }}><I.Chat/></div>
-        <div>
-          <p style={{ margin:'0 0 2px',fontSize:'.7rem',fontWeight:700,color:'#7c3aed',textTransform:'uppercase',letterSpacing:'.08em' }}>AI Advisor · Exploring</p>
-          <p style={{ margin:0,fontWeight:700,color:'#0f1f0f',fontSize:'.9rem',lineHeight:1.3 }}>{topic.title}</p>
+      <div style={{ background:'#faf5ff',border:'1.5px solid #e9d5ff',borderRadius:14,padding:'12px 18px',marginBottom:14,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12 }}>
+        <div style={{ display:'flex',alignItems:'flex-start',gap:10,flex:1,minWidth:0 }}>
+          <div style={{ width:36,height:36,borderRadius:10,background:'#7c3aed',display:'flex',alignItems:'center',justifyContent:'center',color:'white',flexShrink:0 }}><I.Chat/></div>
+          <div style={{ minWidth:0 }}>
+            <p style={{ margin:'0 0 2px',fontSize:'.7rem',fontWeight:700,color:'#7c3aed',textTransform:'uppercase',letterSpacing:'.08em' }}>AI Advisor · Exploring</p>
+            <p style={{ margin:0,fontWeight:700,color:'#0f1f0f',fontSize:'.9rem',lineHeight:1.3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{topic.title}</p>
+          </div>
         </div>
+        <button onClick={onChangeTopic}
+          style={{ display:'flex',alignItems:'center',gap:5,padding:'7px 12px',borderRadius:9,border:'1.5px solid #e9d5ff',background:'white',color:'#7c3aed',fontSize:'.76rem',fontWeight:700,cursor:'pointer',transition:'all .15s',flexShrink:0,whiteSpace:'nowrap' }}
+          onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.background='#faf5ff';el.style.borderColor='#c4b5fd'}}
+          onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.background='white';el.style.borderColor='#e9d5ff'}}>
+          <I.Swap/> Change Topic
+        </button>
       </div>
 
       <div style={{ background:'white',border:'1px solid #e8ede8',borderRadius:16,overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,.05)' }}>
@@ -827,7 +882,7 @@ function FinalStage({ topic, description, field, level, degree }:
     try {
       const res=await axios.post(`${API}/topics/find-projects`,{topic_title:topic,field,degree_level:degree},{headers:authHeaders()})
       setProjects(res.data.projects||[]); setSearchNote(res.data.search_note||'')
-    } catch(e:any) { setProjectError(e.response?.data?.detail||'Search failed. Please try again.') }
+    } catch(e:any) { setProjectError(extractError(e,'Search failed. Please try again.')) }
     finally { setFindingProjects(false) }
   }
 
@@ -887,6 +942,16 @@ function FinalStage({ topic, description, field, level, degree }:
                     </div>
                   </div>
                 ))}
+                {/* Amber download instruction note */}
+                <div style={{ background:'#fffbeb',border:'1.5px solid #fde68a',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'flex-start',gap:10,marginTop:4 }}>
+                  <div style={{ color:'#d97706',flexShrink:0,marginTop:1 }}><I.Info/></div>
+                  <div>
+                    <p style={{ margin:'0 0 4px',fontWeight:700,color:'#92400e',fontSize:'.82rem' }}>How to use these in your specification</p>
+                    <p style={{ margin:0,fontSize:'.78rem',color:'#78350f',lineHeight:1.65 }}>
+                      Download each project using the "View Project" button above and save them to your device. When you reach the <strong>Past Projects</strong> step in the spec generator, upload them manually — the AI will analyse them and use them to strengthen your specification.
+                    </p>
+                  </div>
+                </div>
               </div>
           }
         </div>
@@ -924,17 +989,26 @@ export default function TopicsPage() {
   const [scoutData,setScoutData]             = useState<ScoutData|null>(null)
   const [finalTopic,setFinalTopic]           = useState<{topic:string;description:string}|null>(null)
   const [error,setError]                     = useState<string|null>(null)
+  const [flowOrigin,setFlowOrigin]           = useState<'vet'|'discovery'>('discovery')
 
   const stageNum = (stage==='results') ? 2 : (stage==='scouting'||stage==='chat') ? 3 : stage==='final' ? 4 : 1
   const isLiterature = formData?.project_type==='research-based'
 
   /* ── Discovery path ─────────────────────────────────────────────────── */
   const handleFormSubmit=async(data:FormData)=>{
-    setFormData(data); setStage('loading'); setError(null)
+    setFormData(data); setStage('loading'); setError(null); setFlowOrigin('discovery')
     try {
-      const res=await axios.post(`${API}/topics/discover`,{...data},{headers:authHeaders()})
+      const KNOWN_GEO = ['university','city','country','nigeria','africa','europe','global','none']
+      const geoVal = data.geographic_focus || 'none'
+      const apiGeo = KNOWN_GEO.includes(geoVal) ? geoVal : 'none'
+      const geoContext = KNOWN_GEO.includes(geoVal) ? undefined : geoVal
+      const res=await axios.post(`${API}/topics/discover`,{
+        ...data,
+        geographic_focus: apiGeo,
+        ...(geoContext ? { geo_context: geoContext } : {})
+      },{headers:authHeaders()})
       setDiscoveryResult(res.data); setStage('results')
-    } catch(e:any) { setError(e.response?.data?.detail||'Failed to generate topics.'); setStage('form') }
+    } catch(e:any) { setError(extractError(e,'Failed to generate topics.')); setStage('form') }
   }
 
   const handleTopicSelect=async(topic:Topic)=>{
@@ -949,14 +1023,19 @@ export default function TopicsPage() {
     setStage('chat')
   }
 
-  const handleFinal=(topic:string,desc:string)=>{
-    setFinalTopic({topic,description:desc})
+  const handleChangeTopic=()=>{
+    setSelectedTopic(null); setScoutData(null)
+    if(flowOrigin==='vet') setStage('vet')
+    else setStage('results')
+  }
+
+  const handleFinal=(topic:string,desc:string)=>{    setFinalTopic({topic,description:desc})
     setTimeout(()=>setStage('final'),1200)
   }
 
   /* ── Vet path ────────────────────────────────────────────────────────── */
   const handleVetSubmit=async(input:VetInput)=>{
-    setVetInput(input); setStage('vet-loading'); setError(null)
+    setVetInput(input); setStage('vet-loading'); setError(null); setFlowOrigin('vet')
     try {
       const res=await axios.post(`${API}/topics/vet`,{
         original_topic: input.original_topic,
@@ -968,7 +1047,7 @@ export default function TopicsPage() {
       },{headers:authHeaders()})
       setVetResult(res.data); setStage('vet-result')
     } catch(e:any) {
-      setError(e.response?.data?.detail||'Vetting failed. Please try again.')
+      setError(extractError(e,'Vetting failed. Please try again.'))
       setStage('vet')
     }
   }
@@ -1088,7 +1167,7 @@ export default function TopicsPage() {
           )}
 
           {stage==='chat'       && selectedTopic && formData && (
-            <ChatStage topic={selectedTopic} formData={formData} scoutData={scoutData} onFinal={handleFinal}/>
+            <ChatStage topic={selectedTopic} formData={formData} scoutData={scoutData} onFinal={handleFinal} onChangeTopic={handleChangeTopic}/>
           )}
 
           {stage==='final'      && finalTopic && formData && (

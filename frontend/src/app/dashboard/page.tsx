@@ -103,12 +103,12 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Two Hero Action Cards ── */}
-      <motion.div {...fu(.12)} style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:28 }}>
+      <motion.div {...fu(.12)} style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:28,alignItems:'stretch' }}>
 
         {/* Card 1: Topic Lab */}
         <Link href="/dashboard/topics" style={{ textDecoration:'none' }}>
           <motion.div whileHover={{ y:-3,boxShadow:'0 12px 32px rgba(124,58,237,.15)' }}
-            style={{ background:'linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)',borderRadius:18,padding:'24px 26px',cursor:'pointer',position:'relative',overflow:'hidden',transition:'all .2s',minHeight:160,display:'flex',flexDirection:'column',justifyContent:'space-between' }}>
+            style={{ background:'linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)',borderRadius:18,padding:'24px 26px',cursor:'pointer',position:'relative',overflow:'hidden',transition:'all .2s',minHeight:180,height:'100%',display:'flex',flexDirection:'column',justifyContent:'space-between',boxSizing:'border-box' }}>
             <div style={{ position:'absolute',top:-20,right:-20,width:120,height:120,borderRadius:'50%',background:'rgba(255,255,255,.08)',pointerEvents:'none' }}/>
             <div style={{ position:'absolute',bottom:-30,left:60,width:80,height:80,borderRadius:'50%',background:'rgba(255,255,255,.05)',pointerEvents:'none' }}/>
             <div>
@@ -137,7 +137,7 @@ export default function DashboardPage() {
         {/* Card 2: Generate Spec */}
         <Link href="/dashboard/generate" style={{ textDecoration:'none' }}>
           <motion.div whileHover={{ y:-3,boxShadow:'0 12px 32px rgba(22,163,74,.18)' }}
-            style={{ background:'linear-gradient(135deg,#16a34a 0%,#22c55e 100%)',borderRadius:18,padding:'24px 26px',cursor:'pointer',position:'relative',overflow:'hidden',transition:'all .2s',minHeight:160,display:'flex',flexDirection:'column',justifyContent:'space-between' }}>
+            style={{ background:'linear-gradient(135deg,#16a34a 0%,#22c55e 100%)',borderRadius:18,padding:'24px 26px',cursor:'pointer',position:'relative',overflow:'hidden',transition:'all .2s',minHeight:180,height:'100%',display:'flex',flexDirection:'column',justifyContent:'space-between',boxSizing:'border-box' }}>
             <div style={{ position:'absolute',top:-20,right:-20,width:120,height:120,borderRadius:'50%',background:'rgba(255,255,255,.08)',pointerEvents:'none' }}/>
             <div style={{ position:'absolute',bottom:-30,left:60,width:80,height:80,borderRadius:'50%',background:'rgba(255,255,255,.05)',pointerEvents:'none' }}/>
             <div>
@@ -272,7 +272,7 @@ export default function DashboardPage() {
                     </span>
                     {t.linked_project_id
                       ? <span style={{ fontSize:'.68rem',fontWeight:700,color:'#16a34a',background:'#f0fdf4',padding:'2px 8px',borderRadius:999 }}>→ Spec</span>
-                      : <Link href="/dashboard/generate" style={{ fontSize:'.68rem',fontWeight:700,color:'#7c3aed',background:'#faf5ff',padding:'2px 8px',borderRadius:999,textDecoration:'none',border:'1px solid #e9d5ff' }}>Use it</Link>
+                      : <Link href={`/dashboard/generate?topic=${encodeURIComponent(t.final_topic||'')}&field=${encodeURIComponent(t.field||'')}&level=${encodeURIComponent(t.degree_level||'')}&topic_session_id=${t.id}&from_topics=true`} style={{ fontSize:'.68rem',fontWeight:700,color:'#7c3aed',background:'#faf5ff',padding:'2px 8px',borderRadius:999,textDecoration:'none',border:'1px solid #e9d5ff' }}>Use it</Link>
                     }
                   </div>
                 </motion.div>
