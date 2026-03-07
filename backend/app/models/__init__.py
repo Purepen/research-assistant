@@ -1,8 +1,7 @@
 """
-Pydantic Models Package
+Pydantic Models Package — UPDATED v2
 
-All data models extracted from notebook cells 1-3.
-These define the structure of data throughout the system.
+Added: locked_requirements module exports
 """
 
 from .config import SpecificationConfig, DEFAULT_CONFIG
@@ -12,20 +11,30 @@ from .resources import (
     DiscoveredMethod,
     DiscoveredTool,
     DiscoveredPaper,
-    DiscoveredResources
+    DiscoveredResources,
 )
 from .synthesis import (
     ProjectGap,
     StrategicDifferentiationPoint,
     NovelContributionClaim,
-    StrategicSynthesis
+    StrategicSynthesis,
 )
 from .specification import SpecificationSection, ProjectSpecification
 from .review import SectionReview, OverallReview
 from .projects import (
     ProjectDatasetDetails,
     ProjectMethodologyDetails,
-    AnalyzedProjectSpecSections
+    AnalyzedProjectSpecSections,
+)
+from .locked_requirements import (
+    VerifiedPaper,
+    LockedDataset,
+    LockedBaseline,
+    SimilarProjectEntry,
+    EvaluationFramework,
+    EthicsStatement,
+    LockedRequirementsA,
+    LockedRequirementsB,
 )
 
 __all__ = [
@@ -56,4 +65,13 @@ __all__ = [
     "ProjectDatasetDetails",
     "ProjectMethodologyDetails",
     "AnalyzedProjectSpecSections",
+    # Locked Requirements (NEW)
+    "VerifiedPaper",
+    "LockedDataset",
+    "LockedBaseline",
+    "SimilarProjectEntry",
+    "EvaluationFramework",
+    "EthicsStatement",
+    "LockedRequirementsA",
+    "LockedRequirementsB",
 ]

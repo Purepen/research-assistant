@@ -1,75 +1,72 @@
 """
-Phase 3 Agent Definitions
+Phase 3 Agent Definitions — UPDATED
 
-Extracted from: Notebook Cells 15-18
-Purpose: Define 8 specialist agents that write specification sections
+All agents now import from redesigned instruction files.
+Every agent is plain text output — formatting into ProjectSpecification
+is handled by phase4 formatter after phase3 sections are assembled.
 """
 
 from agents import Agent
-from app.core.agents.instructions.phase3_justification import JUSTIFICATION_AIM_INSTRUCTIONS
-from app.core.agents.instructions.phase3_objectives import OBJECTIVES_ARCHITECT_INSTRUCTIONS
-from app.core.agents.instructions.phase3_feasibility import FEASIBILITY_ANALYST_INSTRUCTIONS
-from app.core.agents.instructions.phase3_literature import LITERATURE_STRATEGIST_INSTRUCTIONS
-from app.core.agents.instructions.phase3_methodology import METHODOLOGY_DESIGNER_INSTRUCTIONS
-from app.core.agents.instructions.phase3_timeline import TIMELINE_VALIDATOR_INSTRUCTIONS
-from app.core.agents.instructions.phase3_references import REFERENCES_COMPILER_INSTRUCTIONS
-from app.core.agents.instructions.phase3_abstract import ABSTRACT_SPECIALIST_INSTRUCTIONS
+from app.core.agents.instructions.phase3_justification  import JUSTIFICATION_AIM_INSTRUCTIONS
+from app.core.agents.instructions.phase3_objectives     import OBJECTIVES_ARCHITECT_INSTRUCTIONS
+from app.core.agents.instructions.phase3_literature     import LITERATURE_STRATEGIST_INSTRUCTIONS
+from app.core.agents.instructions.phase3_methodology    import METHODOLOGY_DESIGNER_INSTRUCTIONS
+from app.core.agents.instructions.phase3_timeline       import TIMELINE_VALIDATOR_INSTRUCTIONS
+from app.core.agents.instructions.phase3_references     import REFERENCES_COMPILER_INSTRUCTIONS
+from app.core.agents.instructions.phase3_abstract       import ABSTRACT_SPECIALIST_INSTRUCTIONS
 
 
-# Justification & Aim Agent (Cell 15)
+# ── Section writers — all plain-text output ───────────────────────────────────
+# These agents receive a focused locked-context prompt and return prose.
+# The formatter in phase4 assembles them into a ProjectSpecification object.
+
 justification_specialist = Agent(
     name="JustificationSpecialist",
     instructions=JUSTIFICATION_AIM_INSTRUCTIONS,
-    model="gpt-4o"
+    model="gpt-4o",
 )
 
-# Objectives Agent (Cell 15)
 objectives_architect = Agent(
     name="ObjectivesArchitect",
     instructions=OBJECTIVES_ARCHITECT_INSTRUCTIONS,
-    model="gpt-4o"
+    model="gpt-4o",
 )
 
-# Feasibility Analyst (Cell 16) - uses tools
-# Note: Tools (check_timeline_feasibility, validate_resource_access, assess_scope_realism) defined in workflows
-feasibility_analyst = Agent(
-    name="FeasibilityAnalyst",
-    instructions=FEASIBILITY_ANALYST_INSTRUCTIONS,
-    model="gpt-4o-mini"
-    # tools added dynamically in workflow
-)
-
-# Literature Strategist (Cell 16)
 literature_strategist = Agent(
     name="LiteratureStrategist",
     instructions=LITERATURE_STRATEGIST_INSTRUCTIONS,
-    model="gpt-4o"
+    model="gpt-4o",
 )
 
-# Methodology Designer (Cell 17)
 methodology_designer = Agent(
     name="MethodologyDesigner",
     instructions=METHODOLOGY_DESIGNER_INSTRUCTIONS,
-    model="gpt-4o"
+    model="gpt-4o",
 )
 
-# Timeline Validator (Cell 17)
 timeline_validator = Agent(
     name="TimelineValidator",
     instructions=TIMELINE_VALIDATOR_INSTRUCTIONS,
-    model="gpt-4o"
+    model="gpt-4o",
 )
 
-# References Compiler (Cell 18)
 references_compiler = Agent(
     name="ReferencesCompiler",
     instructions=REFERENCES_COMPILER_INSTRUCTIONS,
-    model="gpt-4o"
+    model="gpt-4o",
 )
 
-# Abstract Specialist (Cell 18)
 abstract_specialist = Agent(
     name="AbstractSpecialist",
     instructions=ABSTRACT_SPECIALIST_INSTRUCTIONS,
-    model="gpt-4o"
+    model="gpt-4o",
+)
+
+# ── Kept for backwards compatibility (feasibility analyst still imported elsewhere) ──
+from app.core.agents.instructions.phase3_feasibility import FEASIBILITY_ANALYST_INSTRUCTIONS  # type: ignore
+
+feasibility_analyst = Agent(
+    name="FeasibilityAnalyst",
+    instructions=FEASIBILITY_ANALYST_INSTRUCTIONS,
+    model="gpt-4o-mini",
 )

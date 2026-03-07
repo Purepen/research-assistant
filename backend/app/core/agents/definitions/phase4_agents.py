@@ -22,6 +22,6 @@ specification_orchestrator = Agent(
 specification_formatter = Agent(
     name="SpecificationFormatter",
     instructions=FORMATTER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=ProjectSpecification
 )

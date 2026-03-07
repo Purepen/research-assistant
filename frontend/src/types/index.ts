@@ -1,164 +1,173 @@
-/**
- * TypeScript Type Definitions
- * 
- * Shared types across the application
- */
+// types/index.ts — UPDATED v2
+// Added: dataset fields, step-3 answer fields, track type
 
-// User types
-export interface User {
-  id: number
-  email: string
-  full_name: string
-  created_at: string
-  picture?: string
+export type AcademicLevel     = 'BSc' | 'MSc' | 'PhD'
+export type EffortLevel       = 'low' | 'medium' | 'high'
+export type PastProjectsMode  = 'user_provided' | 'auto_discover' | 'hybrid'
+export type DatasetSource     = 'uploaded' | 'public' | 'scout' | 'self_collected'
+export type DataSensitivity   = 'public' | 'self_collected' | 'sensitive'
+export type ProjectTrack      = 'A' | 'B'
+
+export type ProjectStatus =
+  | 'draft' | 'queued' | 'generating' | 'reviewing' | 'complete' | 'failed'
+
+// ── Config sent to /research/generate ─────────────────────────────────────────
+
+export interface GenerationConfig {
+  // Step 1
+  field_of_study:   string
+  research_topic?:  string
+  academic_level:   AcademicLevel
+  effort_level:     EffortLevel
+
+  // Step 2 — dataset
+  dataset_source:       DatasetSource
+  dataset_name?:        string
+  dataset_url?:         string
+  dataset_description?: string
+  dataset_size?:        string
+
+  // Step 3 — Track A
+  data_sensitivity:          DataSensitivity
+  student_success_statement?: string
+
+  // Step 3 — Track B
+  theoretical_framework?: string
+  central_argument?:      string
+  primary_source_focus?:  string
+
+  // Configure
+  past_projects_mode:          PastProjectsMode
+  num_auto_projects_target?:   number
+  min_auto_projects_required?: number
+  max_auto_projects_accepted?: number
+  deduplicate_auto_vs_user?:   boolean
+  max_iterations?:             number
+  num_web_searches?:           number
+  notification_email?:         string
 }
 
-// Project types
-export type ProjectStatus = 
-  | 'draft' 
-  | 'queued' 
-  | 'generating' 
-  | 'reviewing' 
-  | 'complete' 
-  | 'failed'
-
-export type AcademicLevel = 'BSc' | 'MSc' | 'PhD'
-export type EffortLevel = 'low' | 'medium' | 'high'
-export type PastProjectsMode = 'user_provided' | 'auto_discover' | 'hybrid'
+// ── Project (DB row) ──────────────────────────────────────────────────────────
 
 export interface Project {
-  id: number
-  field_of_study: string
-  research_topic?: string
-  academic_level: AcademicLevel
-  effort_level: EffortLevel
-  past_projects_mode: PastProjectsMode
-  status: ProjectStatus
+  id:                  number
+  user_id:             number
+  field_of_study:      string
+  research_topic:      string
+  academic_level:      AcademicLevel
+  effort_level:        EffortLevel
+  status:              ProjectStatus
   progress_percentage: number
-  current_phase?: string
-  created_at: string
-  started_at?: string
-  completed_at?: string
-  has_results: boolean
-  total_marks?: number
-  decision?: string
+  current_phase:       string
+  created_at:          string
+  updated_at:          string
+  completed_at?:       string
+  started_at?:         string
 }
 
-export interface ProjectListItem {
-  id: number
-  field_of_study: string
-  research_topic?: string
-  academic_level: AcademicLevel
-  status: ProjectStatus
-  progress_percentage: number
-  created_at: string
-  completed_at?: string
-  total_marks?: number
-  decision?: string
-}
+// ── Specification ─────────────────────────────────────────────────────────────
 
-// Specification types
 export interface SpecificationSection {
   section_name: string
-  content: string
-  word_count: number
-  key_points: string[]
+  content:      string
+  word_count:   number
 }
 
-export interface Specification {
-  project_title: string
-  abstract: SpecificationSection
-  justification_and_aim: SpecificationSection
-  objectives: SpecificationSection
-  literature_review: SpecificationSection
-  methodology: SpecificationSection
-  work_plan: SpecificationSection
-  references: string[]
-  total_word_count: number
+export interface ProjectSpecification {
+  project_title:          string
+  abstract:               SpecificationSection
+  justification_and_aim:  SpecificationSection
+  objectives:             SpecificationSection
+  literature_review:      SpecificationSection
+  methodology:            SpecificationSection
+  work_plan:              SpecificationSection
+  references:             string[]
+  total_word_count:       number
 }
 
-// Review types
+// ── Review ────────────────────────────────────────────────────────────────────
+
 export interface SectionReview {
-  section_name: string
-  marks_awarded: number
-  marks_possible: number
-  strengths: string[]
-  weaknesses: string[]
+  section_name:    string
+  marks:           number
+  max_marks:       number
+  strengths:       string[]
+  weaknesses:      string[]
   recommendations: string[]
 }
 
-export interface Review {
-  decision: 'APPROVED' | 'REVISIONS REQUIRED' | 'MAJOR REVISIONS'
-  total_marks: number
-  section_reviews: SectionReview[]
-  overall_strengths: string[]
-  critical_issues: string[]
+export interface OverallReview {
+  total_marks:          number
+  decision:             'APPROVED' | 'REVISIONS REQUIRED' | 'MAJOR REVISIONS' | 'REJECTED'
+  section_reviews:      SectionReview[]
+  overall_strengths:    string[]
+  critical_issues:      string[]
   improvement_priorities: string[]
-  supervisor_comments: string
+  supervisor_comments:  string
 }
 
-// Generation config types
-export interface GenerationConfig {
-  field_of_study: string
-  research_topic?: string
-  academic_level: AcademicLevel
-  effort_level: EffortLevel
-  past_projects_mode: PastProjectsMode
-  num_auto_projects_target?: number
-  min_auto_projects_required?: number
-  max_auto_projects_accepted?: number
-  deduplicate_auto_vs_user?: boolean
-  max_iterations?: number
-  num_web_searches?: number
-  notification_email?: string
-}
+// ── API responses ─────────────────────────────────────────────────────────────
 
-// Analytics types
-export interface ProjectAnalytics {
+export interface GenerateResponse {
+  success:    boolean
   project_id: number
-  num_iterations: number
-  num_web_searches: number
-  num_auto_projects_found: number
-  num_user_projects_analyzed: number
-  final_word_count: number
-  target_word_count: number
-  total_generation_time: number
-  completeness_score: number
-  novelty_score: number
+  message:    string
+  status:     string
 }
 
-// User stats types
+export interface StatusResponse {
+  project_id:          number
+  status:              ProjectStatus
+  progress_percentage: number
+  current_phase:       string
+  is_complete:         boolean
+}
+
+export interface ResultResponse {
+  success:       boolean
+  project_id:    number
+  specification: ProjectSpecification
+  review:        OverallReview
+  word_count:    number
+  marks:         number
+  decision:      string
+  track:         ProjectTrack
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export interface ProjectAnalytics {
+  project_id:                  number
+  num_iterations:              number
+  num_web_searches:            number
+  num_auto_projects_found:     number
+  num_user_projects_analyzed:  number
+  final_word_count:            number
+  target_word_count:           number
+  total_generation_time:       number
+  completeness_score:          number
+  novelty_score:               number
+}
+
 export interface UserStats {
-  total_projects: number
-  status_breakdown: Record<ProjectStatus, number>
-  completed_projects: number
-  average_marks: number
-  total_generation_time_seconds: number
-  total_generation_time_hours: number
+  total_projects:                  number
+  status_breakdown:                Record<ProjectStatus, number>
+  completed_projects:              number
+  average_marks:                   number
+  total_generation_time_seconds:   number
+  total_generation_time_hours:     number
 }
 
-// API response types
 export interface ApiResponse<T = any> {
   success: boolean
-  data?: T
-  error?: string
+  data?:   T
+  error?:  string
   message?: string
 }
 
 export interface PaginatedResponse<T> {
   items: T[]
   total: number
-  skip: number
+  skip:  number
   limit: number
-}
-
-// Form types
-export interface SignInFormData {
-  id_token: string
-}
-
-export interface GenerationFormData {
-  config: GenerationConfig
-  guidelines_file: File
-  past_project_files?: File[]
 }

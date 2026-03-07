@@ -1,14 +1,13 @@
 """
-Agent Definitions Package
+Agent Definitions Package — UPDATED v2
 
-All agent instantiations.
-Phase 2 Addition: topic_vetter_agent added.
+Added: paper_abstract_fetcher_agent
 """
 
 # Phase 0: Topic Discovery Engine
 from .phase0_agents import (
     topic_discovery_agent,
-    topic_vetter_agent,                    # NEW Phase 2
+    topic_vetter_agent,
     topic_advisor_explain_agent,
     topic_advisor_questions_agent,
     topic_advisor_feasibility_agent,
@@ -23,6 +22,9 @@ from .phase1_agents import (
     project_analyzer_agent,
     past_projects_spec_analyzer_agent,
 )
+
+# Phase 1: Paper Abstract Fetcher (NEW)
+from .phase1_paper_fetcher import paper_abstract_fetcher_agent
 
 # Phase 2: Strategic Synthesis
 from .phase2_agents import strategic_synthesizer_agent
@@ -54,7 +56,7 @@ from .phase6_agents import email_agent
 __all__ = [
     # Phase 0
     "topic_discovery_agent",
-    "topic_vetter_agent",                  # NEW Phase 2
+    "topic_vetter_agent",
     "topic_advisor_explain_agent",
     "topic_advisor_questions_agent",
     "topic_advisor_feasibility_agent",
@@ -65,6 +67,7 @@ __all__ = [
     "project_finder_agent",
     "project_analyzer_agent",
     "past_projects_spec_analyzer_agent",
+    "paper_abstract_fetcher_agent",
     # Phase 2
     "strategic_synthesizer_agent",
     # Phase 3

@@ -1,23 +1,21 @@
 """
-Phase 4 Workflows — FIXED
+Phase 4 Workflows — UPDATED v2
 
-Problem: Generated specs were ~848 words instead of the 3000-word target.
-Root cause: The orchestrator instruction said "Check word count?" but no
-  enforcement existed. The formatter accepted whatever was given.
+Key change: when a LockedRequirements object is present (new flow),
+generation is routed through the 7 individual phase3 section agents
+(generate_specification_sections) rather than the monolithic orchestrator.
 
-Fix:
-  1. create_context_for_agents() now includes EXPLICIT per-section word count
-     targets with concrete minimum floors.
-  2. generate_specification() validates total word count after formatting.
-     If total < 70% of target, it runs a single expansion pass where each
-     short section is explicitly expanded via the formatter again.
-  3. The formatter prompt is strengthened with a strict MINIMUM word count
-     requirement per section.
+The formatter still assembles the final ProjectSpecification object either way.
+
+Legacy path (no locked object): orchestrator → formatter (unchanged)
+New path    (locked object):    7 specialists → formatter
 """
 
 from __future__ import annotations
 
+from typing import Optional, Union
 from agents import Runner
+
 from app.models.specification import ProjectSpecification
 from app.models.guidelines import ProjectGuidelines
 from app.models.synthesis import StrategicSynthesis
@@ -27,6 +25,17 @@ from app.core.agents.definitions.phase4_agents import (
     specification_formatter,
 )
 
+try:
+    from app.models.locked_requirements import LockedRequirementsA, LockedRequirementsB
+    from app.core.pipelines.phase3_workflow import generate_specification_sections
+    _LOCKED_AVAILABLE = True
+except ImportError:
+    _LOCKED_AVAILABLE = False
+
+LockedRequirements = Union["LockedRequirementsA", "LockedRequirementsB", None]
+
+
+# ─── Context builder (legacy path) ────────────────────────────────────────────
 
 def create_context_for_agents(
     research_topic: str,
@@ -35,14 +44,10 @@ def create_context_for_agents(
     strategic_synthesis: StrategicSynthesis,
     feasibility_calibration=None,
 ) -> str:
-    """Create comprehensive context string — includes strict word count targets."""
-
-    # Build per-section word count table from guidelines
     section_targets = "\n".join(
         f"  • {s.section_name}: MINIMUM {s.word_count} words (write MORE if needed)"
         for s in guidelines.sections
     )
-
     context = f"""
 RESEARCH TOPIC: {research_topic}
 
@@ -88,58 +93,156 @@ Papers ({len(discovered_resources.papers)}):
     return context
 
 
+# ─── Formatter helper ─────────────────────────────────────────────────────────
+
+async def _format_sections_into_spec(
+    research_topic: str,
+    sections: dict,
+    guidelines: ProjectGuidelines,
+) -> ProjectSpecification:
+    """
+    Takes the raw section text dict from phase3 specialists and
+    formats it into a structured ProjectSpecification via the formatter agent.
+    """
+    section_mins = "\n".join(
+        f"  • {s.section_name}: AT LEAST {s.word_count} words"
+        for s in guidelines.sections
+    )
+
+    # Build a combined content block for the formatter
+    sections_text = f"""
+ABSTRACT:
+{sections.get('abstract', '')}
+
+JUSTIFICATION AND AIM:
+{sections.get('justification', '')}
+
+OBJECTIVES:
+{sections.get('objectives', '')}
+
+REVIEW OF LITERATURE:
+{sections.get('literature_review', '')}
+
+METHODOLOGY:
+{sections.get('methodology', '')}
+
+WORK PLAN:
+{sections.get('work_plan', '')}
+
+REFERENCES (one per line):
+{sections.get('references', '')}
+"""
+
+    formatter_input = f"""
+Research Topic (use EXACTLY as project_title): {research_topic}
+
+Specialist Content:
+{sections_text}
+
+MANDATORY WORD COUNT MINIMUMS:
+{section_mins}
+Total minimum: {guidelines.target_word_count} words
+
+RULES:
+1. project_title must be EXACTLY: {research_topic}
+2. Every section.content must contain the full text from Specialist Content above.
+   Do NOT summarise or shorten — copy the section content verbatim.
+3. word_count field = actual word count of the content.
+4. references = list of strings, one per citation entry.
+5. total_word_count = sum of all section word_counts.
+6. If any section is below its minimum — expand it, do not truncate.
+
+Format into a complete ProjectSpecification object with all fields populated.
+"""
+
+    result = await Runner.run(
+        starting_agent=specification_formatter,
+        input=formatter_input,
+    )
+    return result.final_output
+
+
+# ─── Main generation function ─────────────────────────────────────────────────
+
 async def generate_specification(
     research_topic: str,
     guidelines: ProjectGuidelines,
     strategic_synthesis: StrategicSynthesis,
     discovered_resources: DiscoveredResources,
     feasibility_calibration=None,
-    previous_feedback: str = None,
+    previous_feedback: Optional[str] = None,
+    locked: LockedRequirements = None,
 ) -> ProjectSpecification:
     """
     Generate or revise a specification.
 
-    Includes a post-generation word-count check: if the result is <70% of the
-    target total, runs one expansion pass to flesh out short sections.
+    New path  (locked is not None): calls 7 individual phase3 specialists,
+                                     then formats via formatter.
+    Legacy path (locked is None):   calls orchestrator then formatter (unchanged).
+
+    In both paths, if total word count < 70% of target, an expansion pass runs.
     """
 
     print("\n📝 GENERATING SPECIFICATION")
+    print(f"   Path: {'locked-context specialists' if locked else 'legacy orchestrator'}")
     print("-" * 80)
 
-    agent_context = create_context_for_agents(
-        research_topic=research_topic,
-        guidelines=guidelines,
-        discovered_resources=discovered_resources,
-        strategic_synthesis=strategic_synthesis,
-        feasibility_calibration=feasibility_calibration,
-    )
+    specification: Optional[ProjectSpecification] = None
 
-    if previous_feedback:
-        agent_context += f"\n\nPREVIOUS PROFESSOR FEEDBACK (incorporate all suggestions):\n{previous_feedback}"
+    # ── NEW PATH: Individual specialists with locked context ──────────────────
+    if locked is not None and _LOCKED_AVAILABLE:
+        try:
+            sections = await generate_specification_sections(
+                research_topic=research_topic,
+                guidelines=guidelines,
+                synthesis=strategic_synthesis,
+                locked=locked,
+            )
 
-    # ── Step 1: Orchestrator coordinates specialists ──────────────────────────
-    print("   Coordinating specialist agents…")
-    try:
+            if previous_feedback:
+                # Append feedback as a note to each short section
+                for key in sections:
+                    if sections[key]:
+                        sections[key] = sections[key] + (
+                            f"\n\n[REVISION NOTE: {previous_feedback[:500]}]"
+                        )
+
+            specification = await _format_sections_into_spec(
+                research_topic=research_topic,
+                sections=sections,
+                guidelines=guidelines,
+            )
+            print(f"   ✅ Specialists path complete: {specification.total_word_count} words")
+
+        except Exception as exc:
+            print(f"   ⚠️  Specialists path failed ({exc}) — falling back to legacy")
+            specification = None
+
+    # ── LEGACY PATH: Orchestrator → Formatter ────────────────────────────────
+    if specification is None:
+        agent_context = create_context_for_agents(
+            research_topic=research_topic,
+            guidelines=guidelines,
+            discovered_resources=discovered_resources,
+            strategic_synthesis=strategic_synthesis,
+            feasibility_calibration=feasibility_calibration,
+        )
+        if previous_feedback:
+            agent_context += f"\n\nPREVIOUS PROFESSOR FEEDBACK:\n{previous_feedback}"
+
+        print("   Coordinating legacy orchestrator…")
         orchestrator_result = await Runner.run(
             starting_agent=specification_orchestrator,
             input=agent_context,
         )
         print("   ✅ Orchestration complete")
-    except Exception as exc:
-        print(f"   ❌ Orchestration failed: {exc}")
-        raise
 
-    # ── Step 2: Formatter structures output into ProjectSpecification ─────────
-    print("   Formatting specification…")
-
-    # Build per-section minimum table for the formatter
-    section_mins = "\n".join(
-        f"  • {s.section_name}: AT LEAST {s.word_count} words"
-        for s in guidelines.sections
-    )
-
-    formatter_input = f"""
-Research Topic (use EXACTLY as project_title, word for word): {research_topic}
+        section_mins = "\n".join(
+            f"  • {s.section_name}: AT LEAST {s.word_count} words"
+            for s in guidelines.sections
+        )
+        formatter_input = f"""
+Research Topic (use EXACTLY as project_title): {research_topic}
 
 Specialist Content:
 {orchestrator_result.final_output}
@@ -149,87 +252,71 @@ MANDATORY WORD COUNT MINIMUMS:
 Total minimum: {guidelines.target_word_count} words
 
 RULES:
-1. project_title must be EXACTLY: {research_topic}
-2. Every section.content must be full academic prose — NO bullet-point summaries.
-3. word_count field must equal the ACTUAL word count of the content string.
-4. If any section is below its minimum, EXPAND IT before returning.
+1. project_title = EXACTLY: {research_topic}
+2. Every section.content = full academic prose, NO bullet-point summaries.
+3. word_count = ACTUAL word count of content string.
+4. Expand any short section before returning.
 5. total_word_count = sum of all section word_counts.
-
-Format into a complete ProjectSpecification object with all fields populated.
 """
-
-    try:
         formatter_result = await Runner.run(
             starting_agent=specification_formatter,
             input=formatter_input,
         )
         specification = formatter_result.final_output
-        print(f"   ✅ Specification formatted — {specification.total_word_count} words")
-    except Exception as exc:
-        print(f"   ❌ Formatting failed: {exc}")
-        raise
+        print(f"   ✅ Legacy path complete: {specification.total_word_count} words")
 
-    # ── Step 3: Word count enforcement — expand if still too short ────────────
-    target = guidelines.target_word_count
-    if specification.total_word_count < int(target * 0.70):
-        print(f"   ⚠️  Word count {specification.total_word_count} < 70% of {target} target — running expansion pass…")
+    # ── Word count expansion pass ─────────────────────────────────────────────
+    target = guidelines.target_word_count or 3000
+    if specification.total_word_count < target * 0.70:
+        print(f"   ⚠️  {specification.total_word_count} words < 70% of {target} — running expansion")
 
         short_sections = []
-        section_map = {
-            "Abstract":                    ("abstract",               specification.abstract),
-            "Justification and Overall Aim":("justification_and_aim", specification.justification_and_aim),
-            "Objectives":                  ("objectives",              specification.objectives),
-            "Review of Literature":        ("literature_review",       specification.literature_review),
-            "Methodology":                 ("methodology",             specification.methodology),
-            "Work Plan":                   ("work_plan",               specification.work_plan),
-        }
-        for req in guidelines.sections:
-            key_field, section_obj = section_map.get(req.section_name, (None, None))
-            if section_obj and section_obj.word_count < req.word_count:
+        for s in guidelines.sections:
+            sec = getattr(specification, _section_attr(s.section_name), None)
+            if sec and sec.word_count < int(s.word_count * 0.80):
                 short_sections.append(
-                    f"  • {req.section_name}: currently {section_obj.word_count} words, "
-                    f"need at least {req.word_count} — current content:\n{section_obj.content[:500]}…"
+                    f"• {s.section_name}: currently {sec.word_count} words, "
+                    f"need {s.word_count} words minimum\n  Content:\n{sec.content[:400]}..."
                 )
 
-        expand_input = f"""
-The specification is too short ({specification.total_word_count}/{target} words).
+        if short_sections:
+            expand_input = f"""
 Expand these short sections with detailed academic content:
 
 {chr(10).join(short_sections)}
 
-Original context:
-{orchestrator_result.final_output}
-
+All context about the research topic and locked requirements remains the same.
 Return a COMPLETE ProjectSpecification with ALL sections at or above their minimums.
 project_title MUST be EXACTLY: {research_topic}
 """
-        try:
-            expand_result = await Runner.run(
-                starting_agent=specification_formatter,
-                input=expand_input,
-            )
-            specification = expand_result.final_output
-            print(f"   ✅ After expansion: {specification.total_word_count} words")
-        except Exception as exc:
-            print(f"   ⚠️  Expansion pass failed: {exc} — using original")
+            try:
+                expand_result = await Runner.run(
+                    starting_agent=specification_formatter,
+                    input=expand_input,
+                )
+                specification = expand_result.final_output
+                print(f"   ✅ After expansion: {specification.total_word_count} words")
+            except Exception as exc:
+                print(f"   ⚠️  Expansion failed: {exc} — using original")
 
     return specification
 
 
-# ── Context builder (kept for imports from phase5_workflow) ───────────────────
+def _section_attr(section_name: str) -> str:
+    """Map section name to ProjectSpecification attribute name."""
+    mapping = {
+        "Abstract":                  "abstract",
+        "Justification and Aim":     "justification_and_aim",
+        "Justification and Overall Aim": "justification_and_aim",
+        "Objectives":                "objectives",
+        "Review of Literature":      "literature_review",
+        "Literature Review":         "literature_review",
+        "Methodology":               "methodology",
+        "Work Plan":                 "work_plan",
+    }
+    return mapping.get(section_name, section_name.lower().replace(" ", "_"))
 
-def create_context_for_agents_simple(
-    research_topic: str,
-    guidelines: ProjectGuidelines,
-    discovered_resources: DiscoveredResources,
-    strategic_synthesis: StrategicSynthesis,
-    feasibility_calibration=None,
-) -> str:
-    """Alias — some modules import this name."""
-    return create_context_for_agents(
-        research_topic=research_topic,
-        guidelines=guidelines,
-        discovered_resources=discovered_resources,
-        strategic_synthesis=strategic_synthesis,
-        feasibility_calibration=feasibility_calibration,
-    )
+
+# ── Alias for imports ──────────────────────────────────────────────────────────
+def create_context_for_agents_simple(*args, **kwargs) -> str:
+    return create_context_for_agents(*args, **kwargs)

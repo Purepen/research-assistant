@@ -1,28 +1,37 @@
 """
-Phase 5 Workflows
+Phase 5 Workflows — UPDATED
 
-Extracted from: Notebook Cell 20-21
-Purpose: Professor review loop with iteration tracking
+Key change: SpecValidationLayer runs BEFORE professor_reviewer_agent.
+The ValidationReport is prepended to the review input as ground truth.
+The reviewer cannot approve if blockers are present.
 """
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import Optional, Union
 from agents import Runner
+
 from app.models.specification import ProjectSpecification
 from app.models.review import OverallReview
 from app.models.guidelines import ProjectGuidelines
 from app.models.synthesis import StrategicSynthesis
 from app.models.resources import DiscoveredResources
 from app.models.config import SpecificationConfig
+from app.models.locked_requirements import LockedRequirementsA, LockedRequirementsB
+
 from app.core.agents.definitions.phase5_agents import professor_reviewer_agent
-from app.core.pipelines.phase4_workflow import (
-    generate_specification,
-    create_context_for_agents
+from app.core.pipelines.phase4_workflow import generate_specification, create_context_for_agents
+from app.core.validation.spec_validator import (
+    validate_specification,
+    format_report_for_reviewer,
+    ValidationReport,
 )
+
+LockedRequirements = Union[LockedRequirementsA, LockedRequirementsB]
 
 
 def format_specification_for_review(spec: ProjectSpecification) -> str:
-    """Format specification for professor review"""
-    
+    """Format specification for professor review."""
     return f"""
 PROJECT TITLE:
 {spec.project_title}
@@ -42,7 +51,7 @@ REVIEW OF LITERATURE ({spec.literature_review.word_count} words):
 METHODOLOGY ({spec.methodology.word_count} words):
 {spec.methodology.content}
 
-WORK PLAN:
+WORK PLAN ({spec.work_plan.word_count} words):
 {spec.work_plan.content}
 
 REFERENCES ({len(spec.references)} citations):
@@ -55,31 +64,62 @@ TOTAL WORD COUNT: {spec.total_word_count}
 async def review_specification(
     specification: ProjectSpecification,
     guidelines: ProjectGuidelines,
-    iteration: int,
-    iteration_history: list = None
+    locked: Optional[LockedRequirements] = None,
+    iteration: int = 1,
+    iteration_history: list = None,
 ) -> OverallReview:
     """
-    Review specification with professor agent
-    
-    Args:
-        specification: Complete specification
-        guidelines: Project guidelines
-        iteration: Current iteration number
-        iteration_history: Previous iterations
-        
-    Returns:
-        OverallReview with marks and feedback
+    Review specification with professor agent.
+    ValidationReport runs first — reviewer cannot override it.
     """
-    
+
     print(f"\n👨‍🏫 PROFESSOR REVIEW (Iteration {iteration})")
     print("-" * 80)
-    
-    # Format specification
+
+    # ── Step 1: Run ValidationLayer ───────────────────────────────────────────
+    print("   Running SpecValidationLayer...")
+
+    # Build section word targets from guidelines
+    section_word_targets = {}
+    for s in guidelines.sections:
+        section_word_targets[s.section_name] = s.word_count
+
+    # Determine track and XAI flag
+    track = "A"
+    xai_claimed = False
+    if locked:
+        track = locked.track
+        if locked.track == "A":
+            xai_claimed = bool(
+                getattr(locked, "xai_techniques", None)
+            )
+
+    validation_report: ValidationReport = validate_specification(
+        spec=specification,
+        section_word_targets=section_word_targets,
+        track=track,
+        xai_claimed=xai_claimed,
+    )
+
+    report_text = format_report_for_reviewer(validation_report)
+
+    print(f"   Validation: {'✅ PASSED' if validation_report.passes_all else '❌ BLOCKERS FOUND'}")
+    if validation_report.blockers:
+        for b in validation_report.blockers[:3]:
+            print(f"   🔴 {b[:80]}")
+
+    # ── Step 2: Prepare review input with report prepended ───────────────────
     spec_text = format_specification_for_review(specification)
-    
-    # Prepare review context
+
+    history_text = ""
+    if iteration_history and len(iteration_history) > 0:
+        history_text = "\n\nITERATION HISTORY:\n" + "\n".join(
+            f"Iteration {it['iteration']}: {it['marks']}/100 - {it['review'].decision}"
+            for it in iteration_history
+        )
+
     review_input = f"""
-ITERATION: {iteration}
+{report_text}
 
 {spec_text}
 
@@ -88,33 +128,28 @@ GUIDELINES:
 - Timeline: {guidelines.timeline_weeks} weeks
 - Target Word Count: {guidelines.target_word_count}
 - Required Sections: {', '.join(s.section_name for s in guidelines.sections)}
-"""
-    
-    # Add iteration history if available
-    if iteration_history and len(iteration_history) > 0:
-        review_input += f"""
+- Citation Style: {guidelines.citation_style}
+- ITERATION: {iteration}
+{history_text}
 
-ITERATION HISTORY:
-{chr(10).join(f"Iteration {it['iteration']}: {it['marks']}/100 - {it['review'].decision}" for it in iteration_history)}
+REMINDER: The ValidationReport above is ground truth.
+You cannot award APPROVED if any blocker is present.
+Your qualitative commentary explains WHY failures matter — it does not replace the facts.
 """
-    
-    # Get professor review
+
+    # ── Step 3: Run professor reviewer ───────────────────────────────────────
     try:
         result = await Runner.run(
             starting_agent=professor_reviewer_agent,
-            input=review_input
+            input=review_input,
         )
-        
         review = result.final_output
-        
-        print(f"   ✅ Review complete")
-        print(f"   Marks: {review.total_marks}/100")
-        print(f"   Decision: {review.decision}")
-        
+
+        print(f"   ✅ Review complete — {review.total_marks}/100 — {review.decision}")
         return review
-        
-    except Exception as e:
-        print(f"   ❌ Review failed: {e}")
+
+    except Exception as exc:
+        print(f"   ❌ Review failed: {exc}")
         raise
 
 
@@ -123,116 +158,132 @@ async def run_specification_with_review_loop(
     strategic_synthesis: StrategicSynthesis,
     discovered_resources: DiscoveredResources,
     guidelines: ProjectGuidelines,
-    feasibility_calibration: Optional[any],
+    locked: Optional[LockedRequirements],
+    feasibility_calibration: Optional[object],
     config: SpecificationConfig,
-    max_iterations: int = 3
+    _progress_callback=None,
 ) -> dict:
     """
-    Generate specification with iterative professor review
-    Tracks ALL iterations and returns the BEST one (highest marks)
-    
-    Returns:
-        dict with final_specification, final_review, all_iterations, best_iteration_number
+    Full specification generation + review loop.
+    Now accepts LockedRequirements and passes it to phase3 and the reviewer.
     """
-    
-    print("\n" + "=" * 80)
-    print("SPECIFICATION GENERATION WITH REVIEW LOOP")
-    print("=" * 80)
-    
-    # Track ALL iterations
+
+    async def _progress(pct: int, msg: str):
+        if _progress_callback:
+            await _progress_callback(pct, msg)
+
+    max_iterations = config.max_iterations
     all_iterations = []
     current_specification = None
-    iteration = 0
-    
-    while iteration < max_iterations:
-        iteration += 1
-        
+
+    for iteration in range(1, max_iterations + 1):
         print(f"\n{'=' * 80}")
         print(f"ITERATION {iteration}/{max_iterations}")
-        print(f"{'=' * 80}")
-        
-        # Generate or revise specification
-        print(f"\n📝 {'Generating' if iteration == 1 else 'Revising'} specification...")
-        
+        print("=" * 80)
+
+        await _progress(
+            50 + (iteration - 1) * 10,
+            f"Generating specification (iteration {iteration})..."
+        )
+
+        # ── Generate ──────────────────────────────────────────────────────────
         try:
-            if iteration == 1:
-                # First iteration: generate from scratch
-                current_specification = await generate_specification(
-                    research_topic=research_topic,
-                    guidelines=guidelines,
-                    strategic_synthesis=strategic_synthesis,
-                    discovered_resources=discovered_resources,
-                    feasibility_calibration=feasibility_calibration
-                )
-            else:
-                # Subsequent iterations: revise based on feedback
-                previous_review = all_iterations[-1]['review']
-                
-                feedback = f"""
-PREVIOUS REVIEW:
-Marks: {previous_review.total_marks}/100
-Decision: {previous_review.decision}
-
-CRITICAL ISSUES:
-{chr(10).join(f"- {issue}" for issue in previous_review.critical_issues)}
-
-IMPROVEMENT PRIORITIES:
-{chr(10).join(f"{i+1}. {p}" for i, p in enumerate(previous_review.improvement_priorities))}
-"""
-                
+            if iteration == 1 or current_specification is None:
                 current_specification = await generate_specification(
                     research_topic=research_topic,
                     guidelines=guidelines,
                     strategic_synthesis=strategic_synthesis,
                     discovered_resources=discovered_resources,
                     feasibility_calibration=feasibility_calibration,
-                    previous_feedback=feedback
+                    previous_feedback=None,
+                    locked=locked,
                 )
-        
-        except Exception as e:
-            print(f"❌ Generation failed: {e}")
+            else:
+                # Build feedback from previous review
+                prev = all_iterations[-1]
+                previous_review = prev["review"]
+                prev_validation = prev.get("validation_report")
+
+                feedback_parts = []
+                if prev_validation and prev_validation.blockers:
+                    feedback_parts.append(
+                        "VALIDATION FAILURES TO FIX:\n" +
+                        "\n".join(f"  - {b}" for b in prev_validation.blockers)
+                    )
+                feedback_parts.append(
+                    "PROFESSOR FEEDBACK:\n" +
+                    "\n".join(
+                        f"  {i+1}. {p}"
+                        for i, p in enumerate(previous_review.improvement_priorities)
+                    )
+                )
+                feedback = "\n\n".join(feedback_parts)
+
+                current_specification = await generate_specification(
+                    research_topic=research_topic,
+                    guidelines=guidelines,
+                    strategic_synthesis=strategic_synthesis,
+                    discovered_resources=discovered_resources,
+                    feasibility_calibration=feasibility_calibration,
+                    previous_feedback=feedback,
+                    locked=locked,
+                )
+
+        except Exception as exc:
+            print(f"❌ Generation failed: {exc}")
             raise
-        
-        # Review specification
+
+        await _progress(
+            60 + (iteration - 1) * 10,
+            f"Reviewing specification (iteration {iteration})..."
+        )
+
+        # ── Review (with ValidationReport) ───────────────────────────────────
         review = await review_specification(
             specification=current_specification,
             guidelines=guidelines,
+            locked=locked,
             iteration=iteration,
-            iteration_history=all_iterations
+            iteration_history=all_iterations,
         )
-        
-        # Record iteration
+
+        # Grab the validation report from the reviewer step for feedback next iteration
+        section_word_targets = {s.section_name: s.word_count for s in guidelines.sections}
+        val_report = validate_specification(
+            spec=current_specification,
+            section_word_targets=section_word_targets,
+            track=locked.track if locked else "A",
+            xai_claimed=bool(getattr(locked, "xai_techniques", None)) if locked else False,
+        )
+
         all_iterations.append({
-            'iteration': iteration,
-            'specification': current_specification,
-            'review': review,
-            'marks': review.total_marks
+            "iteration":          iteration,
+            "specification":      current_specification,
+            "review":             review,
+            "marks":              review.total_marks,
+            "validation_report":  val_report,
         })
-        
-        print(f"\n📊 Iteration {iteration} Results:")
-        print(f"   Marks: {review.total_marks}/100")
-        print(f"   Decision: {review.decision}")
-        
-        # Check if approved
+
+        print(f"\n📊 Iteration {iteration}: {review.total_marks}/100 — {review.decision}")
+
         if review.decision == "APPROVED":
             print(f"\n✅ APPROVED on iteration {iteration}!")
             break
-        
+
         if iteration == max_iterations:
-            print(f"\n⚠️ Max iterations reached ({max_iterations})")
-    
-    # Select best iteration (highest marks)
-    best_iteration = max(all_iterations, key=lambda x: x['marks'])
-    
+            print(f"\n⚠️  Max iterations ({max_iterations}) reached.")
+
+    # Return best iteration
+    best = max(all_iterations, key=lambda x: x["marks"])
+
     print(f"\n{'=' * 80}")
-    print(f"REVIEW LOOP COMPLETE")
-    print(f"{'=' * 80}")
-    print(f"Best iteration: {best_iteration['iteration']} ({best_iteration['marks']}/100)")
-    
+    print(f"LOOP COMPLETE — Best: iteration {best['iteration']} ({best['marks']}/100)")
+    print("=" * 80)
+
     return {
-        'final_specification': best_iteration['specification'],
-        'final_review': best_iteration['review'],
-        'all_iterations': all_iterations,
-        'best_iteration_number': best_iteration['iteration'],
-        'iterations_completed': iteration
+        "final_specification":     best["specification"],
+        "final_review":            best["review"],
+        "all_iterations":          all_iterations,
+        "best_iteration_number":   best["iteration"],
+        "iterations_completed":    iteration,
     }
