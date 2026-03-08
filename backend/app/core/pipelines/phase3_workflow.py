@@ -253,6 +253,7 @@ DATASET:
   Size: {la.confirmed_dataset.size or 'see source'}
   Public: {'Yes' if la.confirmed_dataset.is_public else 'No'}
   Citation: {la.confirmed_dataset.harvard_citation}
+{('\nVERIFIED DATASET PROFILE (from uploaded file — use these EXACT figures):\n' + la.confirmed_dataset.full_profile_text) if la.confirmed_dataset.profiled and la.confirmed_dataset.full_profile_text else ''}
 
 BASELINE:
   Paper: {la.baseline.paper_title}

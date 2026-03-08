@@ -1,11 +1,12 @@
 """
-Phase 1 Workflows — FIXED
+Phase 1 Workflows
 
-Changes:
-  analyze_user_dumps()        — was `pass`, now reads each file and runs the
-                                 PastProjectsSpecAnalyzer agent on it.
-  find_and_analyze_projects() — was `pass`, now runs ProjectFinder (web search)
-                                 then ProjectAnalyzer on each URL found.
+Changes in this version:
+  discover_resources() — accepts dataset_source param.
+                         If dataset_source != 'scout', the dataset search query
+                         is skipped entirely — saves 1 web search call + cost.
+  analyze_user_dumps()        — reads each file and runs PastProjectsSpecAnalyzer.
+  find_and_analyze_projects() — runs ProjectFinder then ProjectAnalyzer per URL.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from __future__ import annotations
 import os
 from typing import List
 
-from agents import Agent, Runner, WebSearchTool
+from agents import Runner
 from docx import Document
 
 from app.models.guidelines import ProjectGuidelines
@@ -33,10 +34,7 @@ from app.core.agents.definitions.phase1_agents import (
 # ---------------------------------------------------------------------------
 
 def _read_file_text(path: str, max_chars: int = 20_000) -> str:
-    """
-    Read text from a .docx or plain-text file.
-    Returns up to `max_chars` characters so we don't blow the context window.
-    """
+    """Read text from a .docx or plain-text file, up to max_chars."""
     try:
         if path.lower().endswith(".docx"):
             doc = Document(path)
@@ -51,29 +49,41 @@ def _read_file_text(path: str, max_chars: int = 20_000) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Stream 3 — Web Resource Discovery (unchanged, already working)
+# Stream 3 — Web Resource Discovery
 # ---------------------------------------------------------------------------
 
 async def discover_resources(
     research_topic: str,
     guidelines: ProjectGuidelines,
     num_searches: int = 5,
+    dataset_source: str = "scout",
 ) -> DiscoveredResources:
-    """Discover datasets, methods, tools, and papers via adaptive web search."""
+    """
+    Discover papers, methods, tools, and (optionally) datasets via web search.
 
+    dataset_source:
+      'scout'          → AI searches for a dataset (adds a search call)
+      anything else    → dataset search is SKIPPED — student already has one
+    """
     print("\n🔍 RESOURCE DISCOVERY (Adaptive)")
     print("-" * 80)
     print(f"   Project type: {guidelines.project_type}")
+    print(f"   Dataset source: {dataset_source} "
+          f"{'→ will search for dataset' if dataset_source == 'scout' else '→ dataset search SKIPPED'}")
 
     search_queries: List[str] = []
     search_queries.append(f"{research_topic} recent research papers 2024 2025")
 
-    if guidelines.requires_dataset and num_searches > 1:
+    # Only search for a dataset if the student wants AI to find one
+    if guidelines.requires_dataset and num_searches > 1 and dataset_source == "scout":
         search_queries.append(f"{research_topic} datasets Kaggle UCI")
+    elif dataset_source != "scout":
+        print(f"   ⏭️  Dataset search skipped — student provided own dataset ({dataset_source})")
+
     if guidelines.requires_methods and num_searches > 3:
-        search_queries.append(f"{research_topic} methods techniques")
+        search_queries.append(f"{research_topic} methods techniques algorithms")
     if guidelines.requires_tools and num_searches > 4:
-        search_queries.append(f"{research_topic} tools libraries frameworks")
+        search_queries.append(f"{research_topic} tools libraries frameworks Python")
 
     search_queries = search_queries[:num_searches]
     search_results = []
@@ -107,9 +117,7 @@ Extract and structure all relevant resources found in these search results.
 
         resources = extraction_result.final_output
         print(f"\n✅ Resource discovery complete")
-        print(
-            f"   Datasets: {len(resources.datasets)}, Methods: {len(resources.methods)}"
-        )
+        print(f"   Datasets: {len(resources.datasets)}, Methods: {len(resources.methods)}")
         print(f"   Tools: {len(resources.tools)}, Papers: {len(resources.papers)}")
         return resources
 
@@ -125,7 +133,7 @@ Extract and structure all relevant resources found in these search results.
 
 
 # ---------------------------------------------------------------------------
-# Stream 1 — User-Provided Dumps  (FIXED — was `pass`)
+# Stream 1 — User-Provided Dumps
 # ---------------------------------------------------------------------------
 
 async def analyze_user_dumps(
@@ -133,13 +141,9 @@ async def analyze_user_dumps(
     research_topic: str,
 ) -> List[AnalyzedProjectSpecSections]:
     """
-    Analyse user-uploaded past project files using the
-    PastProjectsSpecAnalyzer agent.
-
-    Each file is read, truncated to 20 000 chars, and sent to the agent
-    which extracts it into AnalyzedProjectSpecSections format.
+    Analyse user-uploaded past project files using PastProjectsSpecAnalyzer.
+    Each file is read, truncated to 20,000 chars, and sent to the agent.
     """
-
     print(f"\n📂 Analysing {len(dump_files)} user-provided file(s)…")
     results: List[AnalyzedProjectSpecSections] = []
 
@@ -178,7 +182,7 @@ DOCUMENT CONTENT:
 
 
 # ---------------------------------------------------------------------------
-# Stream 2 — Auto-Discovery  (FIXED — was `pass`)
+# Stream 2 — Auto-Discovery
 # ---------------------------------------------------------------------------
 
 async def find_and_analyze_projects(
@@ -188,14 +192,12 @@ async def find_and_analyze_projects(
 ) -> List[AnalyzedProjectSpecSections]:
     """
     Auto-discover and analyse similar student projects via web search.
-
-    Step 1: ProjectFinder agent searches the web for project URLs.
-    Step 2: For each URL, ProjectAnalyzer agent fetches and analyses it.
+    Step 1: ProjectFinder searches for URLs.
+    Step 2: ProjectAnalyzer fetches and analyses each URL.
     """
-
     print(f"\n🤖 Auto-discovering up to {num_projects} similar project(s)…")
 
-    # --- Step 1: Find candidate URLs ---
+    # Step 1: Find candidate URLs
     try:
         finder_result = await Runner.run(
             starting_agent=project_finder_agent,
@@ -208,70 +210,39 @@ Search for MSc/BSc theses, dissertations, and detailed project reports.
 Return a list of URLs with confidence ratings.
 """,
         )
-        urls_raw: str = str(finder_result.final_output)
-        print(f"   ProjectFinder output:\n{urls_raw[:500]}…")
-
+        candidate_urls = finder_result.final_output
+        if not candidate_urls or not candidate_urls.project_urls:
+            print("   ⚠️  No project URLs found")
+            return []
+        print(f"   Found {len(candidate_urls.project_urls)} candidate URL(s)")
     except Exception as exc:
-        print(f"   ❌ ProjectFinder failed: {exc}")
+        print(f"   ❌ Project finder failed: {exc}")
         return []
 
-    # Extract URLs from the finder output (simple line scan)
-    candidate_urls: List[str] = []
-    for line in urls_raw.splitlines():
-        line = line.strip()
-        if line.startswith("http://") or line.startswith("https://"):
-            candidate_urls.append(line.split()[0])  # take first token (the URL)
-        elif "http" in line:
-            # Try to pull URL out of a prose sentence
-            for token in line.split():
-                if token.startswith("http"):
-                    candidate_urls.append(token.rstrip(".,)>\"'"))
-                    break
-
-    # Deduplicate and limit
-    seen: set[str] = set()
-    unique_urls: List[str] = []
-    for u in candidate_urls:
-        if u not in seen:
-            seen.add(u)
-            unique_urls.append(u)
-    unique_urls = unique_urls[: num_projects + 2]
-
-    if not unique_urls:
-        print("   ⚠️  No valid URLs extracted from ProjectFinder output")
-        return []
-
-    print(f"   Found {len(unique_urls)} candidate URL(s) to analyse")
-
-    # --- Step 2: Analyse each URL ---
-    analyzed_projects: List[AnalyzedProjectSpecSections] = []
-
-    for idx, url in enumerate(unique_urls, 1):
-        if len(analyzed_projects) >= num_projects:
+    # Step 2: Analyse each URL
+    analyzed: List[AnalyzedProjectSpecSections] = []
+    for url_entry in candidate_urls.project_urls[:num_projects + 2]:
+        if len(analyzed) >= num_projects:
             break
-
-        print(f"\n   🔎 [{idx}/{len(unique_urls)}] Analysing: {url[:80]}…")
-
         try:
-            result = await Runner.run(
+            url = url_entry.url if hasattr(url_entry, "url") else str(url_entry)
+            print(f"   🔍 Analysing: {url[:80]}...")
+            analysis_result = await Runner.run(
                 starting_agent=project_analyzer_agent,
                 input=f"""
-Fetch and analyse this project document.
-
+Fetch and analyse this student project:
 URL: {url}
-Research Topic Context: {research_topic}
-Source Stream: auto_discovered
+RESEARCH TOPIC: {research_topic}
 
-Extract all information into AnalyzedProjectSpecSections format.
-Pay special attention to: methodology, datasets, limitations, future work.
+Extract all available information into AnalyzedProjectSpecSections format.
+Stream: auto_discovered
 """,
             )
-            analyzed: AnalyzedProjectSpecSections = result.final_output
-            analyzed_projects.append(analyzed)
-            print(f"      ✅ {analyzed.project_title[:60]}")
-
+            project = analysis_result.final_output
+            analyzed.append(project)
+            print(f"      ✅ {project.project_title[:60]}")
         except Exception as exc:
-            print(f"      ❌ Analysis failed: {exc}")
+            print(f"      ❌ Failed to analyse {url[:60]}: {exc}")
 
-    print(f"\n✅ Stream 2 complete: {len(analyzed_projects)} project(s) analysed")
-    return analyzed_projects
+    print(f"\n✅ Stream 2 complete: {len(analyzed)} project(s) analysed")
+    return analyzed

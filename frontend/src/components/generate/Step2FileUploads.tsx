@@ -177,10 +177,10 @@ export function Step2FileUploads({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <Database size={16} color="#374151" />
             <span style={{ fontWeight: 700, fontSize: '.87rem', color: '#0f1f0f' }}>Dataset</span>
-            <span style={{ fontSize: '.73rem', color: '#9ca3af', background: '#f3f4f6', borderRadius: 6, padding: '2px 7px' }}>Optional</span>
+            <span style={{ fontSize: '.73rem', color: 'white', background: '#dc2626', borderRadius: 6, padding: '2px 7px', fontWeight: 700 }}>Required</span>
           </div>
           <p style={{ margin: '0 0 14px', fontSize: '.78rem', color: '#6b7280', lineHeight: 1.5 }}>
-            Tell us about your data. If you're not sure yet, the AI will scout one based on your topic.
+            Your spec needs real dataset facts — not invented ones. Upload your CSV, name a public dataset, or let AI scout one if you don't have it yet.
           </p>
 
           {/* Mode selection */}
@@ -268,8 +268,11 @@ export function Step2FileUploads({
 
           {datasetState.mode === 'scout' && (
             <div style={{ padding: '11px 13px', background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: 9 }}>
-              <p style={{ margin: 0, fontSize: '.8rem', color: '#7c3aed', lineHeight: 1.5 }}>
-                ✨ The AI will find a suitable public dataset for your topic during generation.
+              <p style={{ margin: '0 0 6px', fontSize: '.8rem', color: '#7c3aed', lineHeight: 1.5, fontWeight: 600 }}>
+                ✨ AI will search for a dataset during generation.
+              </p>
+              <p style={{ margin: 0, fontSize: '.75rem', color: '#9ca3af', lineHeight: 1.5 }}>
+                Tip: Using Topic Lab to find and identify a dataset first — then uploading it here — gives better results and costs less.
               </p>
             </div>
           )}

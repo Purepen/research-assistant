@@ -213,7 +213,17 @@ export default function GeneratePage() {
   // ── canProceed per step ────────────────────────────────────────────────────
   const canProceed = () => {
     if (step === 1) return !!(formData.field_of_study.trim() && formData.academic_level)
-    if (step === 2) return true // everything optional
+    if (step === 2) {
+      if (track === 'A') {
+        // Track A: must pick a dataset mode
+        if (!datasetState.mode) return false
+        // If uploaded mode, must have actual file
+        if (datasetState.mode === 'uploaded' && !files.datasetFile) return false
+        // If public mode, must have a name
+        if (datasetState.mode === 'public' && !datasetState.name?.trim()) return false
+      }
+      return true
+    }
     if (step === 3) return track === 'A' ? !!answersA.data_sensitivity : !!answersB.central_argument.trim()
     return true
   }

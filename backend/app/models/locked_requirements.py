@@ -39,7 +39,8 @@ class VerifiedPaper(BaseModel):
 # ─── Confirmed Dataset ────────────────────────────────────────────────────────
 
 class LockedDataset(BaseModel):
-    """Dataset confirmed by the student or scouted and accepted."""
+    """Dataset confirmed by the student. Profile fields are populated from the
+    real uploaded file by DatasetProfiler — never invented by agents."""
     name: str
     source: str             # "UCI", "Kaggle", "user_uploaded", "self_collected"
     access_url: Optional[str] = None
@@ -47,6 +48,20 @@ class LockedDataset(BaseModel):
     size: Optional[str] = None
     is_public: bool = True
     harvard_citation: str   # Pre-formatted dataset citation
+
+    # ── Real profile (populated by dataset_profiler.py) ───────────────────
+    row_count: Optional[int] = None
+    column_count: Optional[int] = None
+    column_names: List[str] = Field(default_factory=list)
+    column_dtypes: dict = Field(
+        default_factory=dict,
+        description="col_name → dtype string (integer/float/categorical/binary/text)"
+    )
+    missing_value_summary: Optional[str] = None   # e.g. "trestbps: 2.1% missing"
+    duplicate_rows: Optional[int] = None
+    data_quality_notes: Optional[str] = None
+    full_profile_text: Optional[str] = None       # Full _build_summary() output for agents
+    profiled: bool = False                        # True only when real file was read
 
 
 # ─── Named Baseline ───────────────────────────────────────────────────────────

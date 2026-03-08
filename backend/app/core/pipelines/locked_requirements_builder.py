@@ -21,6 +21,7 @@ from typing import List, Optional, Union
 from app.models.guidelines import ProjectGuidelines
 from app.models.projects import AnalyzedProjectSpecSections
 from app.models.synthesis import StrategicSynthesis
+from app.core.pipelines.dataset_profiler import DatasetProfile
 from app.models.locked_requirements import (
     VerifiedPaper,
     LockedDataset,
@@ -327,23 +328,28 @@ def build_locked_requirements(
 
     # Step 2 data
     dataset_source: str,            # "uploaded" | "public" | "scout" | "self_collected"
-    dataset_name: Optional[str],
-    dataset_url: Optional[str],
-    dataset_description: Optional[str],
-    dataset_size: Optional[str],
-
-    # Step 3 data
     data_sensitivity: str,          # "public" | "self_collected" | "sensitive"
-    student_success_statement: Optional[str],   # Track A Q1
-    theoretical_framework: Optional[str],        # Track B Q1
-    central_argument: Optional[str],             # Track B Q2
-    primary_source_focus: Optional[str],         # Track B Q3
 
     # Derived data
     citation_pool: List[VerifiedPaper],
     analyzed_projects: List[AnalyzedProjectSpecSections],
     guidelines: ProjectGuidelines,
+
+    # Optional Step 2 data
+    dataset_name: Optional[str] = None,
+    dataset_url: Optional[str] = None,
+    dataset_description: Optional[str] = None,
+    dataset_size: Optional[str] = None,
+
+    # Optional Step 3 data
+    student_success_statement: Optional[str] = None,   # Track A Q1
+    theoretical_framework: Optional[str] = None,        # Track B Q1
+    central_argument: Optional[str] = None,             # Track B Q2
+    primary_source_focus: Optional[str] = None,         # Track B Q3
+
+    # Optional derived
     synthesis: Optional[StrategicSynthesis] = None,
+    dataset_profile: Optional["DatasetProfile"] = None,  # from dataset_profiler.py
 
 ) -> Union[LockedRequirementsA, LockedRequirementsB]:
     """
@@ -365,17 +371,53 @@ def build_locked_requirements(
     # ── Track A ───────────────────────────────────────────────────────────────
     if track == "A":
 
-        # Dataset
+        # Dataset — enriched with real profile if available
+        _has_profile = dataset_profile is not None and not dataset_profile.is_fallback
+        _size_str = (
+            f"{dataset_profile.row_count:,} rows × {dataset_profile.column_count} columns"
+            if _has_profile else dataset_size
+        )
+        _desc_str = dataset_description or f"Dataset for {research_topic} research"
+
+        # Build missing value summary from profile
+        _missing_summary = None
+        _quality_notes = None
+        if _has_profile:
+            high_missing = [
+                f"{c.name}: {c.missing_pct}%"
+                for c in dataset_profile.columns
+                if c.missing_pct > 5
+            ]
+            _missing_summary = "; ".join(high_missing) if high_missing else "No significant missing values"
+            _quality_notes = (
+                f"{dataset_profile.duplicate_row_count} duplicate rows detected"
+                if dataset_profile.duplicate_row_count > 0
+                else "No duplicate rows detected"
+            )
+            if _has_profile:
+                print(f"   ✅ Dataset profile injected: {dataset_profile.row_count:,} rows, "
+                      f"{dataset_profile.column_count} columns")
+
         confirmed_dataset = LockedDataset(
             name=dataset_name or "To be confirmed during data acquisition phase",
             source=dataset_source,
             access_url=dataset_url,
-            description=dataset_description or f"Dataset for {research_topic} research",
-            size=dataset_size,
+            description=_desc_str,
+            size=_size_str,
             is_public=(data_sensitivity == "public" or dataset_source == "public"),
             harvard_citation=_build_dataset_citation(
                 dataset_name or "Dataset", dataset_url, dataset_source
             ),
+            # Real profile fields
+            row_count=dataset_profile.row_count if _has_profile else None,
+            column_count=dataset_profile.column_count if _has_profile else None,
+            column_names=[c.name for c in dataset_profile.columns] if _has_profile else [],
+            column_dtypes={c.name: c.dtype for c in dataset_profile.columns} if _has_profile else {},
+            missing_value_summary=_missing_summary,
+            duplicate_rows=dataset_profile.duplicate_row_count if _has_profile else None,
+            data_quality_notes=_quality_notes,
+            full_profile_text=dataset_profile.summary_for_agents if _has_profile else None,
+            profiled=_has_profile,
         )
 
         # Baseline

@@ -20,6 +20,7 @@ from app.core.pipelines.phase2_workflow import create_strategic_synthesis
 from app.core.pipelines.phase5_workflow import run_specification_with_review_loop
 from app.core.agents.definitions.phase1_paper_fetcher import build_verified_citation_pool
 from app.core.pipelines.locked_requirements_builder import build_locked_requirements, detect_track
+from app.core.pipelines.dataset_profiler import profile_dataset, DatasetProfile
 
 ProgressCallback = Callable[[int, str], Awaitable[None]]
 
@@ -49,6 +50,7 @@ async def run_complete_specification_system(
     guidelines_file: Optional[Document],
     past_project_files: Optional[List[str]] = None,
     progress_callback: Optional[ProgressCallback] = None,
+    dataset_file_path: Optional[str] = None,
 ) -> dict:
 
     async def _progress(pct: int, phase: str):
@@ -72,6 +74,17 @@ async def run_complete_specification_system(
         guidelines = _DEFAULT_GUIDELINES
         print("   ℹ️  No guidelines uploaded — using standard defaults")
 
+    # PHASE 0.5: Dataset Profiling (if file uploaded)
+    dataset_profile: Optional[DatasetProfile] = None
+    if dataset_file_path:
+        await _progress(8, "Profiling uploaded dataset")
+        dataset_profile = profile_dataset(dataset_file_path)
+        if dataset_profile.is_fallback:
+            print(f"   ⚠️  Dataset profiling failed: {dataset_profile.error_message}")
+        else:
+            print(f"   ✅ Dataset: {dataset_profile.row_count:,} rows × "
+                  f"{dataset_profile.column_count} cols — {dataset_profile.filename}")
+
     # PHASE 1: Topic Handling
     await _progress(10, "Resolving research topic")
     final_topic = await handle_topic(
@@ -82,11 +95,14 @@ async def run_complete_specification_system(
     )
 
     # PHASE 2: Resource Discovery + Paper Abstract Fetching
+    # Skip dataset search if student already has a dataset (saves cost)
+    _dataset_source = getattr(config, "dataset_source", "scout") or "scout"
     await _progress(15, "Discovering resources via web search")
     discovered_resources = await discover_resources(
         research_topic=final_topic,
         guidelines=guidelines,
         num_searches=config.num_web_searches,
+        dataset_source=_dataset_source,
     )
 
     await _progress(22, "Fetching paper abstracts and verifying citations")
@@ -150,6 +166,7 @@ async def run_complete_specification_system(
         dataset_url=getattr(config, "dataset_url", None),
         dataset_description=getattr(config, "dataset_description", None),
         dataset_size=getattr(config, "dataset_size", None),
+        dataset_profile=dataset_profile,
         data_sensitivity=getattr(config, "data_sensitivity", "public"),
         student_success_statement=getattr(config, "student_success_statement", None),
         theoretical_framework=getattr(config, "theoretical_framework", None),

@@ -63,6 +63,7 @@ class ResearchService:
         project: Project,
         config: SpecificationConfig,
         db_session=None,
+        dataset_file_path: Optional[str] = None,
     ) -> Dict:
 
         project.status = ProjectStatus.QUEUED
@@ -109,6 +110,7 @@ class ResearchService:
                 guidelines_file=guidelines_doc,
                 past_project_files=project.user_dumps_paths or [],
                 progress_callback=_progress,
+                dataset_file_path=dataset_file_path,
             )
 
             duration = (datetime.utcnow() - start_time).total_seconds()

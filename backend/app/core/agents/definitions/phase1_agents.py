@@ -1,8 +1,12 @@
 """
 Phase 1 Agent Definitions
 
-Extracted from: Notebook Cells 6, 9, 11, 12
-Purpose: Define agents for 3-stream resource discovery pipeline
+Model assignments:
+  gpt-4o-mini  →  web_search_agent (simple search)
+                  project_finder_agent (just finds URLs — no complex reasoning needed)
+  gpt-4o       →  resource_finder_agent (structured extraction from raw results)
+                  project_analyzer_agent (deep analysis of project documents)
+                  past_projects_spec_analyzer_agent (deep analysis of user uploads)
 """
 
 from agents import Agent, WebSearchTool
@@ -14,15 +18,7 @@ from app.core.agents.instructions.phase1_project_analyzer import PROJECT_ANALYZE
 from app.core.agents.instructions.phase1_past_projects import PAST_PROJECTS_SPEC_ANALYZER_INSTRUCTIONS
 
 
-# Resource Finder Agent (Cell 6)
-resource_finder_agent = Agent(
-    name="ResourceFinder",
-    instructions=RESOURCE_FINDER_INSTRUCTIONS,
-    model="gpt-4o",
-    output_type=DiscoveredResources
-)
-
-# Web Search Agent (Cell 6 - helper agent)
+# Web Search Agent — mini: just performs searches
 web_search_agent = Agent(
     name="WebSearcher",
     instructions="Perform web searches to find relevant resources.",
@@ -30,15 +26,23 @@ web_search_agent = Agent(
     tools=[WebSearchTool()]
 )
 
-# Project Finder Agent (Cell 9)
+# Resource Finder Agent — gpt-4o: structured extraction across multiple result types
+resource_finder_agent = Agent(
+    name="ResourceFinder",
+    instructions=RESOURCE_FINDER_INSTRUCTIONS,
+    model="gpt-4o",
+    output_type=DiscoveredResources
+)
+
+# Project Finder Agent — mini: just finds and returns project URLs
 project_finder_agent = Agent(
     name="ProjectFinder",
     instructions=PROJECT_FINDER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     tools=[WebSearchTool()]
 )
 
-# Project Analyzer Agent (Cell 11)
+# Project Analyzer Agent — gpt-4o: deep extraction of project details
 project_analyzer_agent = Agent(
     name="ProjectAnalyzer",
     instructions=PROJECT_ANALYZER_INSTRUCTIONS,
@@ -46,7 +50,7 @@ project_analyzer_agent = Agent(
     output_type=AnalyzedProjectSpecSections
 )
 
-# Past Projects Spec Analyzer Agent (Cell 12)
+# Past Projects Spec Analyzer Agent — gpt-4o: deep analysis of user-uploaded docs
 past_projects_spec_analyzer_agent = Agent(
     name="PastProjectsSpecAnalyzer",
     instructions=PAST_PROJECTS_SPEC_ANALYZER_INSTRUCTIONS,

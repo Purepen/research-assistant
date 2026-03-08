@@ -1,19 +1,22 @@
 """
-Research Routes — FIXED
+Research Routes — UPDATED v2
 
-Changes from broken version:
-  1. Generation is actually triggered via FastAPI BackgroundTasks
-  2. Background task creates its own DB session (original is closed after response)
-  3. Project status is set to QUEUED immediately before response is sent
-  4. Errors in background are caught and written as FAILED status to DB
+Changes:
+  1. guidelines_file is now OPTIONAL (File(None)) — system uses defaults if absent
+  2. dataset_file upload supported (CSV for Track A projects)
+  3. All new SpecificationConfig fields flow through from form submission
+  4. Storage handles optional guidelines gracefully
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, UploadFile, File, Form
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from __future__ import annotations
+
+from fastapi import (
+    APIRouter, BackgroundTasks, Depends, HTTPException,
+    status, UploadFile, File, Form,
+)
 from pydantic import BaseModel
-from typing import Annotated, Optional, List
+from typing import List, Optional
 import json
-import asyncio
 
 from app.services.research_service import ResearchService
 from app.services.auth_service import AuthService
@@ -23,42 +26,35 @@ from app.models.database import Project, ProjectStatus
 from app.api.dependencies import get_db_session, get_current_user, SessionLocal
 
 router = APIRouter(prefix="/research", tags=["Research"])
-security = HTTPBearer()
 
 research_service = ResearchService()
-auth_service = AuthService()
-storage_service = StorageService()
+auth_service     = AuthService()
+storage_service  = StorageService()
 
 
-# ---------------------------------------------------------------------------
-# Request / Response Models
-# ---------------------------------------------------------------------------
+# ─── Response models ──────────────────────────────────────────────────────────
 
 class GenerateResponse(BaseModel):
-    success: bool
+    success:    bool
     project_id: int
-    message: str
-    status: str
+    message:    str
+    status:     str
 
 
 class StatusResponse(BaseModel):
-    project_id: int
-    status: str
+    project_id:          int
+    status:              str
     progress_percentage: int
-    current_phase: str
-    is_complete: bool
+    current_phase:       str
+    is_complete:         bool
 
 
-# ---------------------------------------------------------------------------
-# Background generation task
-# ---------------------------------------------------------------------------
+# ─── Background task ──────────────────────────────────────────────────────────
 
-async def _run_generation_background(project_id: int, config: SpecificationConfig):
+async def _run_generation_background(project_id: int, config: SpecificationConfig, dataset_file_path: str = None):
     """
     Runs the full generation pipeline in the background.
-
-    IMPORTANT: FastAPI closes the request-scoped DB session right after the
-    response is sent.  This task must open its own session.
+    Opens its own DB session — the request session is already closed.
     """
     db = SessionLocal()
     project = None
@@ -69,45 +65,41 @@ async def _run_generation_background(project_id: int, config: SpecificationConfi
             return
 
         print(f"\n🚀 Background generation started for project {project_id}")
-        print(f"   Field: {config.field_of_study}")
-        print(f"   Topic: {config.research_topic}")
-        print(f"   Level: {config.academic_level}")
+        print(f"   Field: {config.field_of_study} | Topic: {config.research_topic}")
+        print(f"   Dataset: {config.dataset_name or config.dataset_source}")
 
         await research_service.start_generation(
             project=project,
             config=config,
             db_session=db,
+            dataset_file_path=dataset_file_path,
         )
-
         print(f"✅ Background generation complete for project {project_id}")
 
     except Exception as exc:
         print(f"❌ Background generation FAILED for project {project_id}: {exc}")
         import traceback
         traceback.print_exc()
-
-        # Mark the project as failed so the UI reflects reality
         if project:
             try:
                 project.status = ProjectStatus.FAILED
                 project.current_phase = f"Error: {str(exc)[:200]}"
                 db.commit()
-            except Exception as db_err:
-                print(f"   Could not update failed status: {db_err}")
+            except Exception:
+                pass
     finally:
         db.close()
 
 
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
+# ─── /generate ────────────────────────────────────────────────────────────────
 
 @router.post("/generate", response_model=GenerateResponse)
 async def generate_specification(
     background_tasks: BackgroundTasks,
     config_json: str = Form(...),
-    guidelines_file: UploadFile = File(...),
-    past_project_files: UploadFile | list[UploadFile] | None = File(None),
+    guidelines_file: Optional[UploadFile] = File(None),   # ← OPTIONAL now
+    past_project_files: Optional[List[UploadFile]] = File(None),
+    dataset_file: Optional[UploadFile] = File(None),       # ← NEW: CSV upload
     user=Depends(get_current_user),
     db=Depends(get_db_session),
 ):
@@ -116,80 +108,109 @@ async def generate_specification(
 
     Steps:
       1. Parse + validate config
-      2. Upload files to storage
+      2. Upload files to storage (guidelines optional, dataset optional)
       3. Create Project row (status=QUEUED)
       4. Schedule background generation task
-      5. Return project_id immediately so the client can poll for status
+      5. Return project_id immediately so client can poll
     """
 
-    # 1. Parse config -----------------------------------------------------------
+    # ── 1. Parse config ───────────────────────────────────────────────────────
     try:
         config_dict = json.loads(config_json)
         config = SpecificationConfig(**config_dict)
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid configuration: {str(e)}",
+            detail=f"Invalid configuration: {exc}",
         )
 
-    # Normalise past_project_files to a list
+    # Normalise list fields
     if past_project_files and not isinstance(past_project_files, list):
         past_project_files = [past_project_files]
 
-    # 2. Upload guidelines file -------------------------------------------------
-    guidelines_result = await storage_service.upload_guidelines(
-        user_id=user.id,
-        file_data=guidelines_file.file,
-        filename=guidelines_file.filename,
-        file_size=guidelines_file.size,
-    )
+    # ── 2. Upload guidelines (optional) ───────────────────────────────────────
+    guidelines_path: Optional[str] = None
 
-    if not guidelines_result["success"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Guidelines upload failed: {', '.join(guidelines_result.get('errors', ['Unknown error']))}",
+    if guidelines_file is not None and guidelines_file.filename:
+        g_result = await storage_service.upload_guidelines(
+            user_id=user.id,
+            file_data=guidelines_file.file,
+            filename=guidelines_file.filename,
+            file_size=guidelines_file.size,
         )
+        if not g_result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Guidelines upload failed: {', '.join(g_result.get('errors', ['Unknown']))}",
+            )
+        guidelines_path = g_result["path"]
+        print(f"   ✅ Guidelines uploaded: {guidelines_file.filename}")
+    else:
+        print("   ℹ️  No guidelines uploaded — will use standard defaults")
 
-    # 3. Upload past project files ----------------------------------------------
+    # ── 3. Upload dataset CSV (optional) ──────────────────────────────────────
+    dataset_file_path: Optional[str] = None
+
+    if dataset_file is not None and dataset_file.filename:
+        d_result = await storage_service.upload_dataset(
+            user_id=user.id,
+            file_data=dataset_file.file,
+            filename=dataset_file.filename,
+            file_size=dataset_file.size,
+        )
+        if d_result["success"]:
+            dataset_file_path = d_result["path"]
+            # Enrich config with uploaded file info
+            config = config.model_copy(update={
+                "dataset_source":      "uploaded",
+                "dataset_name":        dataset_file.filename.replace(".csv", "").replace("_", " ").title(),
+                "dataset_description": f"User-uploaded CSV: {dataset_file.filename}",
+            })
+            print(f"   ✅ Dataset uploaded: {dataset_file.filename}")
+        else:
+            print(f"   ⚠️  Dataset upload failed — continuing without it")
+
+    # ── 4. Upload past project files ──────────────────────────────────────────
     past_project_paths: List[str] = []
     if past_project_files:
-        for file in past_project_files:
-            result = await storage_service.upload_past_project(
+        for f in past_project_files:
+            r = await storage_service.upload_past_project(
                 user_id=user.id,
-                file_data=file.file,
-                filename=file.filename,
-                file_size=file.size,
+                file_data=f.file,
+                filename=f.filename,
+                file_size=f.size,
             )
-            if result["success"]:
-                past_project_paths.append(result["path"])
+            if r["success"]:
+                past_project_paths.append(r["path"])
 
-    # 4. Create project in DB (starts as DRAFT, immediately queued below) ------
+    # ── 5. Create project in DB ───────────────────────────────────────────────
     project = await research_service.create_project(
         user_id=user.id,
         config=config,
-        guidelines_file_path=guidelines_result["path"],
+        guidelines_file_path=guidelines_path,       # may be None
+        dataset_file_path=dataset_file_path,         # may be None
         past_project_files=past_project_paths,
         db_session=db,
     )
 
-    # Set status to QUEUED so the UI shows something meaningful right away
     project.status = ProjectStatus.QUEUED
     project.current_phase = "Queued for generation"
     project.progress_percentage = 5
     db.commit()
 
-    # 5. Schedule background generation ----------------------------------------
-    background_tasks.add_task(_run_generation_background, project.id, config)
+    # ── 6. Launch background task ─────────────────────────────────────────────
+    background_tasks.add_task(_run_generation_background, project.id, config, dataset_file_path)
+    print(f"📋 Project {project.id} queued")
 
-    print(f"📋 Project {project.id} created and queued for generation")
+    return GenerateResponse(
+        success=True,
+        project_id=project.id,
+        message="Generation started",
+        status="queued",
+    )
 
-    return {
-        "success": True,
-        "project_id": project.id,
-        "message": "Generation started",
-        "status": "queued",
-    }
 
+# ─── /status/{project_id} ────────────────────────────────────────────────────
 
 @router.get("/status/{project_id}", response_model=StatusResponse)
 async def get_generation_status(
@@ -197,24 +218,25 @@ async def get_generation_status(
     user=Depends(get_current_user),
     db=Depends(get_db_session),
 ):
-    """Poll generation status for a project."""
+    """Poll generation status."""
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == user.id,
+    ).first()
 
-    if not auth_service.check_user_permission(user, project_id, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
-        )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
-    status_data = await research_service.get_project_status(project_id, db)
+    return StatusResponse(
+        project_id=project.id,
+        status=project.status.value,
+        progress_percentage=project.progress_percentage or 0,
+        current_phase=project.current_phase or "Processing",
+        is_complete=project.status == ProjectStatus.COMPLETE,
+    )
 
-    if "error" in status_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=status_data["error"],
-        )
 
-    return status_data
-
+# ─── /result/{project_id} ────────────────────────────────────────────────────
 
 @router.get("/result/{project_id}")
 async def get_generation_result(
@@ -222,24 +244,45 @@ async def get_generation_result(
     user=Depends(get_current_user),
     db=Depends(get_db_session),
 ):
-    """Get the final specification result once generation is complete."""
+    """Get final specification result."""
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == user.id,
+    ).first()
 
-    if not auth_service.check_user_permission(user, project_id, db):
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if project.status != ProjectStatus.COMPLETE:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
+            status_code=400,
+            detail=f"Project not complete. Status: {project.status.value}"
         )
 
-    result = await research_service.get_project_results(project_id, db)
+    # ProjectResult has no project_id column.
+    # Relationship is: Project.result_id → ProjectResult.id
+    if not project.result_id:
+        raise HTTPException(status_code=404, detail="Result not found — generation may still be saving")
+
+    ProjectResult = __import__("app.models.database", fromlist=["ProjectResult"]).ProjectResult
+    result = db.query(ProjectResult).filter(ProjectResult.id == project.result_id).first()
 
     if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Results not found or generation not complete",
-        )
+        raise HTTPException(status_code=404, detail="Result record missing from database")
 
-    return result
+    return {
+        "success":       True,
+        "project_id":    project_id,
+        "specification": result.specification_json,
+        "review":        result.review_json,
+        "word_count":    result.word_count,
+        "marks":         result.total_marks,
+        "decision":      result.decision,
+        "track":         getattr(result, "track", "A"),
+    }
 
+
+# ─── /cancel/{project_id} ────────────────────────────────────────────────────
 
 @router.post("/cancel/{project_id}")
 async def cancel_generation(
@@ -247,19 +290,19 @@ async def cancel_generation(
     user=Depends(get_current_user),
     db=Depends(get_db_session),
 ):
-    """Cancel ongoing generation."""
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == user.id,
+    ).first()
 
-    if not auth_service.check_user_permission(user, project_id, db):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
-        )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
-    # Find the project and mark it failed
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if project and project.status not in (ProjectStatus.COMPLETE, ProjectStatus.FAILED):
-        project.status = ProjectStatus.FAILED
-        project.current_phase = "Cancelled by user"
-        db.commit()
+    if project.status in (ProjectStatus.COMPLETE, ProjectStatus.FAILED):
+        raise HTTPException(status_code=400, detail="Cannot cancel a finished project")
+
+    project.status = ProjectStatus.FAILED
+    project.current_phase = "Cancelled by user"
+    db.commit()
 
     return {"success": True, "message": "Generation cancelled"}
