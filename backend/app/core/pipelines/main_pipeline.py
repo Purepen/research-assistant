@@ -37,10 +37,10 @@ _DEFAULT_GUIDELINES = ProjectGuidelines(
     citation_style="Harvard",
     timeline_weeks=15,
     target_word_count=3000,
-    project_type="quantitative_ml",
-    requires_dataset=True,
-    requires_methods=True,
-    requires_tools=True,
+    project_type="mixed",
+    requires_dataset=False,
+    requires_methods=False,
+    requires_tools=False,
     additional_requirements=[],
 )
 

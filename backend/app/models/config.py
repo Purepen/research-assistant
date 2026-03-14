@@ -1,10 +1,11 @@
 """
-Configuration Model — UPDATED v2
+Configuration Model — UPDATED v3
 
 New fields added for redesigned generation flow:
   - dataset_source, dataset_name, dataset_url, dataset_description, dataset_size
   - data_sensitivity (for ethics statement generation)
-  - student_success_statement (Track A Step 3)
+  - student_success_statement (Track A Step 3 Q2)
+  - preferred_algorithms (Track A Step 3 Q3 — WEEK 2)
   - theoretical_framework, central_argument, primary_source_focus (Track B Step 3)
   - track (auto-detected, stored for routing)
   - guidelines_optional flag
@@ -68,7 +69,16 @@ class SpecificationConfig(BaseModel):
     )
     student_success_statement: Optional[str] = Field(
         default=None,
-        description="Track A: 'What would success look like for your model?'"
+        description="Track A Q2: 'What would success look like for your model?'"
+    )
+    # WEEK 2: student's own algorithm preferences — drives _pick_algorithms() priority 1
+    preferred_algorithms: Optional[str] = Field(
+        default=None,
+        description=(
+            "Track A Q3: algorithms or methods the student is considering, "
+            "comma-separated free text (e.g. 'Random Forest, XGBoost, LSTM'). "
+            "If provided, takes priority over synthesis and keyword matching in _pick_algorithms()."
+        )
     )
 
     # Track B
@@ -109,6 +119,7 @@ class SpecificationConfig(BaseModel):
             f"  Effort: {self.effort_level}\n"
             f"  Dataset: {self.dataset_name or self.dataset_source}\n"
             f"  Data sensitivity: {self.data_sensitivity}\n"
+            f"  Preferred algorithms: {self.preferred_algorithms or 'Not specified — auto-selected'}\n"
             f"  Past projects mode: {self.past_projects_mode}\n"
             f"  Web searches: {self.num_web_searches}\n"
             f"  Max iterations: {self.max_iterations}"

@@ -215,8 +215,8 @@ async def generate_specification(
             print(f"   ✅ Specialists path complete: {specification.total_word_count} words")
 
         except Exception as exc:
-            print(f"   ⚠️  Specialists path failed ({exc}) — falling back to legacy")
-            specification = None
+            print(f"   ❌ Specialists path FAILED: {exc}")
+            raise  # Surface the error — do not silently degrade to legacy
 
     # ── LEGACY PATH: Orchestrator → Formatter ────────────────────────────────
     if specification is None:

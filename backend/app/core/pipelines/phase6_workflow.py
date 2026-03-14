@@ -3,13 +3,21 @@ Phase 6 Workflows
 
 Extracted from: Notebook Cell 22
 Purpose: Email notification with formatted specification
+
+RACE CONDITION FIX:
+  The original code did:
+      email_agent_with_tool = email_agent        # same reference
+      email_agent_with_tool.tools = [send_email] # mutates the shared module-level object
+  Under concurrent requests this means one request's tool assignment overwrites
+  another's, or a request sees tools=[] if it reads before the assignment lands.
+  Fix: create a fresh Agent instance per call — no shared mutable state.
 """
 
 from typing import Optional
-from agents import Runner, function_tool
+from agents import Agent, Runner, function_tool
 from app.models.specification import ProjectSpecification
 from app.models.review import OverallReview
-from app.core.agents.definitions.phase6_agents import email_agent
+from app.core.agents.instructions.phase6_email import EMAIL_AGENT_INSTRUCTIONS
 import resend
 import os
 
@@ -18,58 +26,58 @@ import os
 def send_email(to: str, subject: str, html: str) -> dict:
     """
     Send email via Resend API
-    
+
     Args:
         to: Recipient email
         subject: Email subject
         html: HTML email content
-        
+
     Returns:
         Result dict with success status
     """
     try:
         resend.api_key = os.getenv("RESEND_API_KEY")
-        
+
         params = {
             "from": "Research Assistant <noreply@yourdomain.com>",
             "to": [to],
             "subject": subject,
             "html": html,
         }
-        
+
         email_result = resend.Emails.send(params)
-        
+
         return {
             "success": True,
             "message": "Email sent successfully",
-            "email_id": email_result.get("id")
+            "email_id": email_result.get("id"),
         }
-        
+
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": str(e),
         }
 
 
 async def send_specification_email(specification_results: dict) -> Optional[dict]:
     """
-    Send final specification via email
-    
+    Send final specification via email.
+
     Args:
         specification_results: Complete results from review loop
-        
+
     Returns:
         Email send result or None if failed
     """
-    
+
     print("\n📧 PREPARING EMAIL NOTIFICATION")
     print("-" * 80)
-    
-    spec = specification_results['final_specification']
+
+    spec   = specification_results['final_specification']
     review = specification_results['final_review']
-    
-    # Create email report text
+
+    # ── Build report text ─────────────────────────────────────────────────────
     report_text = f"""
 MSC RESEARCH SPECIFICATION - FINAL REPORT
 
@@ -150,23 +158,29 @@ ITERATION HISTORY
 
 ⭐ Best iteration selected: Iteration {specification_results['best_iteration_number']} ({review.total_marks}/100)
 """
-    
+
     print("   Formatting email...")
-    
+
     try:
-        # Add send_email tool to agent
-        email_agent_with_tool = email_agent
-        email_agent_with_tool.tools = [send_email]
-        
-        # Send to email agent for formatting and sending
+        # RACE CONDITION FIX: create a fresh Agent instance per call.
+        # The old pattern (email_agent_with_tool = email_agent; then assigning .tools)
+        # mutated the shared module-level Agent object, which is not safe under
+        # concurrent requests. A fresh instance per call has no shared mutable state.
+        email_agent_with_tool = Agent(
+            name="EmailAgent",
+            instructions=EMAIL_AGENT_INSTRUCTIONS,
+            model="gpt-4o-mini",
+            tools=[send_email],
+        )
+
         result = await Runner.run(
             starting_agent=email_agent_with_tool,
-            input=report_text
+            input=report_text,
         )
-        
+
         print("✅ Email sent successfully")
         return result
-        
+
     except Exception as e:
         print(f"⚠️ Email failed: {e}")
         import traceback

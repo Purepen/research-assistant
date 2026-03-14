@@ -17,12 +17,12 @@ from app.models.locked_requirements import VerifiedPaper
 from app.core.agents.instructions.phase1_paper_fetcher import PAPER_ABSTRACT_FETCHER_INSTRUCTIONS
 
 
-# ─── Agent definition ─────────────────────────────────────────────────────────
+# ─── Agent definition ────gpt-40─────────────────────────────────────────────────────
 
 paper_abstract_fetcher_agent = Agent(
     name="PaperAbstractFetcher",
     instructions=PAPER_ABSTRACT_FETCHER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     tools=[WebSearchTool()],
     output_type=VerifiedPaper,
 )

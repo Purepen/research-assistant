@@ -10,10 +10,10 @@ from app.models.review import OverallReview
 from app.core.agents.instructions.phase5_reviewer import PROFESSOR_REVIEWER_INSTRUCTIONS
 
 
-# Professor Reviewer Agent (Cell 20)
+# Professor Reviewer Agent (Cell 20) gpt 4o
 professor_reviewer_agent = Agent(
     name="ProfessorReviewer",
     instructions=PROFESSOR_REVIEWER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=OverallReview
 )

@@ -16,6 +16,7 @@ No agent may introduce facts not present here.
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional, Union
 
 from app.models.guidelines import ProjectGuidelines
@@ -86,13 +87,16 @@ def detect_track(field_of_study: str, research_topic: str) -> str:
 
 # ─── Default work plan templates ─────────────────────────────────────────────
 
-def _default_work_plan_a(weeks: int) -> List[dict]:
+# WEEK 1 FIX: accepts algorithms list and injects it into the model training week.
+def _default_work_plan_a(weeks: int, algorithms: List[str] = None) -> List[dict]:
     """Standard 15-week Track A plan. Scales for 30-week part-time."""
+    algo_str = ", ".join(algorithms) if algorithms else "selected ML models"
+
     if weeks <= 15:
         return [
             {"weeks": "1–2",   "activity": "Literature review and baseline paper identification", "deliverable": "Annotated bibliography"},
-            {"weeks": "3–4",   "activity": "Data acquisition, preprocessing, EDA, and SMOTE balancing", "deliverable": "Clean dataset + EDA report"},
-            {"weeks": "5–8",   "activity": "Model training: LR, SVM, RF, ANN. Hyperparameter tuning. Cross-validation", "deliverable": "Trained models + performance metrics"},
+            {"weeks": "3–4",   "activity": "Data acquisition, preprocessing, EDA, and class imbalance handling", "deliverable": "Clean dataset + EDA report"},
+            {"weeks": "5–8",   "activity": f"Model training: {algo_str}. Hyperparameter tuning via grid search. Stratified cross-validation.", "deliverable": "Trained models + performance metrics"},
             {"weeks": "9–10",  "activity": "XAI integration: SHAP and LIME. Feature importance analysis", "deliverable": "Interpretation outputs"},
             {"weeks": "11–12", "activity": "Cross-dataset generalisation testing and robustness checks", "deliverable": "Generalisation metrics"},
             {"weeks": "13–15", "activity": "Write-up, supervisor review, ethics statement, final submission", "deliverable": "Final dissertation"},
@@ -101,8 +105,8 @@ def _default_work_plan_a(weeks: int) -> List[dict]:
         # 30-week version
         return [
             {"weeks": "1–4",   "activity": "Literature review, baseline identification, annotated bibliography", "deliverable": "Annotated bibliography"},
-            {"weeks": "5–8",   "activity": "Data acquisition, preprocessing, EDA, SMOTE", "deliverable": "Clean dataset + EDA report"},
-            {"weeks": "9–16",  "activity": "Model training: LR, SVM, RF, ANN. Tuning. Cross-validation", "deliverable": "Trained models + metrics"},
+            {"weeks": "5–8",   "activity": "Data acquisition, preprocessing, EDA, class imbalance handling", "deliverable": "Clean dataset + EDA report"},
+            {"weeks": "9–16",  "activity": f"Model training: {algo_str}. Hyperparameter tuning. Stratified cross-validation.", "deliverable": "Trained models + metrics"},
             {"weeks": "17–20", "activity": "XAI integration: SHAP and LIME", "deliverable": "Interpretation outputs"},
             {"weeks": "21–24", "activity": "Cross-dataset generalisation testing", "deliverable": "Generalisation metrics"},
             {"weeks": "25–30", "activity": "Write-up, supervisor review, final submission", "deliverable": "Final dissertation"},
@@ -225,6 +229,7 @@ def _select_baseline(citation_pool: List[VerifiedPaper]) -> Optional[LockedBasel
     """
     Select the best baseline from the citation pool.
     Priority: is_baseline_candidate=True, then most recent, then first with a metric.
+    Returns None if no metric-bearing papers exist — caller handles this honestly.
     """
     candidates = [p for p in citation_pool if p.is_baseline_candidate and p.key_metric_value]
     if not candidates:
@@ -238,7 +243,6 @@ def _select_baseline(citation_pool: List[VerifiedPaper]) -> Optional[LockedBasel
 
     # Parse numeric value to compute target
     try:
-        import re
         num = float(re.sub(r"[^0-9.]", "", metric_val))
         if num < 1:  # it's a 0.xx score
             target_val = f"{num + 0.05:.2f}"
@@ -342,7 +346,8 @@ def build_locked_requirements(
     dataset_size: Optional[str] = None,
 
     # Optional Step 3 data
-    student_success_statement: Optional[str] = None,   # Track A Q1
+    student_success_statement: Optional[str] = None,   # Track A Q2
+    preferred_algorithms: Optional[str] = None,         # Track A Q3 — WEEK 2
     theoretical_framework: Optional[str] = None,        # Track B Q1
     central_argument: Optional[str] = None,             # Track B Q2
     primary_source_focus: Optional[str] = None,         # Track B Q3
@@ -394,9 +399,8 @@ def build_locked_requirements(
                 if dataset_profile.duplicate_row_count > 0
                 else "No duplicate rows detected"
             )
-            if _has_profile:
-                print(f"   ✅ Dataset profile injected: {dataset_profile.row_count:,} rows, "
-                      f"{dataset_profile.column_count} columns")
+            print(f"   ✅ Dataset profile injected: {dataset_profile.row_count:,} rows, "
+                  f"{dataset_profile.column_count} columns")
 
         confirmed_dataset = LockedDataset(
             name=dataset_name or "To be confirmed during data acquisition phase",
@@ -420,20 +424,13 @@ def build_locked_requirements(
             profiled=_has_profile,
         )
 
-        # Baseline
+        # WEEK 1 FIX: baseline is Optional — None is honest, fake is not.
+        # If citation pool has no metric-bearing papers, baseline stays None.
+        # The methodology agent prompt handles None with an honest instruction.
         baseline = _select_baseline(citation_pool)
         if not baseline:
-            # Fallback if no verified papers have metrics yet
-            baseline = LockedBaseline(
-                paper_title="Best available benchmark in the literature",
-                authors="See Literature Review",
-                year=2024,
-                metric_name="Accuracy",
-                metric_value="N/A — to be established via literature review",
-                harvard_citation="See references",
-                target_to_beat="measurable improvement over the best published benchmark",
-            )
-            print("   ⚠️  No baseline paper found — using placeholder")
+            print("   ⚠️  No baseline found in citation pool — baseline set to None.")
+            print("       Methodology section will instruct student to confirm one with supervisor.")
         else:
             print(f"   ✅ Baseline: {baseline.authors} ({baseline.year}) — {baseline.metric_value}")
 
@@ -447,14 +444,17 @@ def build_locked_requirements(
             field_of_study=field_of_study,
         )
 
-        # Algorithms from synthesis or defaults
-        algorithms, justifications = _pick_algorithms(field_of_study, research_topic, synthesis)
+        # WEEK 2: _pick_algorithms now has 3-tier priority — student → synthesis → keywords.
+        algorithms, justifications = _pick_algorithms(
+            field_of_study, research_topic, synthesis,
+            preferred_algorithms=preferred_algorithms,
+        )
 
         # XAI techniques
         xai = _pick_xai(field_of_study, research_topic, synthesis)
 
-        # Work plan
-        work_plan = _default_work_plan_a(timeline_weeks)
+        # WEEK 1 FIX: pass algorithms into work plan so week 5-8 names the real models.
+        work_plan = _default_work_plan_a(timeline_weeks, algorithms=algorithms)
 
         locked = LockedRequirementsA(
             research_topic=research_topic,
@@ -463,8 +463,8 @@ def build_locked_requirements(
             timeline_weeks=timeline_weeks,
             citation_pool=citation_pool,
             confirmed_dataset=confirmed_dataset,
-            baseline=baseline,
-            similar_projects=similar_projects if similar_projects else _fallback_similar_projects(research_topic),
+            baseline=baseline,                  # None is valid — honest over fake
+            similar_projects=similar_projects,  # Empty list is valid — do not fabricate
             evaluation=evaluation,
             ethics=ethics,
             xai_techniques=xai,
@@ -501,7 +501,7 @@ def build_locked_requirements(
             central_argument=central_argument or "To be developed through literature engagement",
             primary_source_focus=primary_source_focus,
             scholarly_debates=scholarly_debates,
-            similar_projects=similar_projects if similar_projects else _fallback_similar_projects(research_topic),
+            similar_projects=similar_projects,  # Empty list is valid — do not fabricate
             positionality_statement=positionality,
             work_plan_weeks=work_plan,
             target_word_count=guidelines.target_word_count or 3000,
@@ -522,8 +522,101 @@ def _build_dataset_citation(name: str, url: Optional[str], source: str) -> str:
     return f"{name} [Dataset]. Available at: {url_str} (Accessed: {today})."
 
 
-def _pick_algorithms(field: str, topic: str, synthesis: Optional[StrategicSynthesis]) -> tuple:
-    """Return (algorithms list, justifications dict)."""
+# WEEK 2: 3-tier priority — student intent → synthesis literature → keyword fallback.
+def _pick_algorithms(
+    field: str,
+    topic: str,
+    synthesis: Optional[StrategicSynthesis],
+    preferred_algorithms: Optional[str] = None,
+) -> tuple:
+    """
+    Return (algorithms list, justifications dict).
+
+    Priority:
+      1. Student's own stated preferences (preferred_algorithms from Step 3 Q3)
+         — uses what the student wrote; always includes an interpretable baseline
+      2. Methods mentioned in synthesis.novel_contributions (from actual papers read)
+         — grounded in the literature the agent actually retrieved
+      3. Keyword matching against field/topic (last resort)
+         — pure heuristic, used only when no better signal exists
+    """
+
+    # ── Priority 1: Student's own stated preferences ──────────────────────────
+    if preferred_algorithms and preferred_algorithms.strip():
+        raw = re.split(r"[,;/]", preferred_algorithms)
+        student_algs = [a.strip() for a in raw if a.strip() and len(a.strip()) > 2]
+
+        if len(student_algs) >= 2:
+            # Check whether student already included an interpretable baseline
+            baseline_terms = ["logistic", "baseline", "naive bayes", "linear regression", "knn"]
+            has_baseline = any(
+                any(bt in a.lower() for bt in baseline_terms)
+                for a in student_algs
+            )
+            if not has_baseline:
+                student_algs.append("Logistic Regression (baseline)")
+
+            just = {}
+            for a in student_algs:
+                a_lower = a.lower()
+                if any(bt in a_lower for bt in ["logistic", "baseline", "linear regression"]):
+                    just[a] = "Interpretable baseline for comparison against more complex models"
+                elif "xgboost" in a_lower or "gradient boost" in a_lower:
+                    just[a] = f"High-performance ensemble method; student-identified as relevant to {topic}"
+                elif "lstm" in a_lower or "rnn" in a_lower:
+                    just[a] = f"Recurrent architecture suited to sequential patterns; student-identified"
+                elif "bert" in a_lower or "transformer" in a_lower:
+                    just[a] = f"State-of-the-art contextual representation; student-identified"
+                elif "cnn" in a_lower or "resnet" in a_lower:
+                    just[a] = f"Convolutional architecture for feature extraction; student-identified"
+                else:
+                    just[a] = f"Student-identified as relevant to {topic}"
+
+            print(f"   ✅ Algorithms: from student preferences ({len(student_algs)} methods)")
+            return student_algs, just
+
+    # ── Priority 2: Methods from actual literature (synthesis) ────────────────
+    KNOWN_METHODS = [
+        "random forest", "xgboost", "lstm", "bert", "svm", "logistic regression",
+        "cnn", "transformer", "gradient boosting", "neural network", "decision tree",
+        "naive bayes", "k-nearest neighbour", "support vector machine", "resnet", "vgg",
+        "lightgbm", "catboost", "adaboost",
+    ]
+
+    if synthesis and synthesis.novel_contributions:
+        mentioned_methods: List[str] = []
+        seen_lower: set = set()
+        for contrib in synthesis.novel_contributions:
+            claim = contrib.claim.lower()
+            for method in KNOWN_METHODS:
+                if method in claim and method not in seen_lower:
+                    seen_lower.add(method)
+                    # Title-case nicely
+                    display = method.upper() if method in ("svm", "lstm", "bert", "cnn", "vgg") \
+                        else method.title()
+                    mentioned_methods.append(display)
+
+        if len(mentioned_methods) >= 2:
+            # Ensure a baseline exists
+            has_baseline = any(
+                "logistic" in m.lower() or "baseline" in m.lower()
+                for m in mentioned_methods
+            )
+            if not has_baseline:
+                mentioned_methods.append("Logistic Regression (baseline)")
+
+            just = {}
+            for m in mentioned_methods:
+                if "logistic" in m.lower() or "baseline" in m.lower():
+                    just[m] = "Interpretable baseline for comparison against more complex models"
+                else:
+                    just[m] = f"Identified in verified literature as relevant to {topic}"
+
+            print(f"   ✅ Algorithms: from synthesis literature ({len(mentioned_methods)} methods)")
+            return mentioned_methods, just
+
+    # ── Priority 3: Keyword matching (last resort) ────────────────────────────
+    print(f"   ℹ️  Algorithms: keyword fallback (no student preferences or synthesis signal)")
     combined = (field + " " + topic).lower()
 
     if any(w in combined for w in ["image", "vision", "cnn", "convolution"]):
@@ -607,14 +700,9 @@ def _build_positionality(field: str, topic: str) -> str:
 
 
 def _fallback_similar_projects(topic: str) -> List[SimilarProjectEntry]:
-    """Minimal fallback when no similar projects were found."""
-    return [
-        SimilarProjectEntry(
-            title=f"A comparative study of approaches to {topic}",
-            author_or_institution="To be identified via literature review",
-            year=None,
-            level="MSc",
-            approach_summary="Standard approach using established methods in the field",
-            limitation="Did not combine the full range of techniques proposed in this project",
-        )
-    ]
+    """
+    Do NOT fabricate similar projects.
+    Return an empty list — the justification agent is instructed to handle this honestly.
+    Dead code: no longer called from build_locked_requirements. Kept for import safety.
+    """
+    return []  # Empty. Do not fabricate.

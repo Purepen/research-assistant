@@ -45,13 +45,19 @@ function ScoreRing({ score }: { score:number }) {
   const lbl = score>=75?'Excellent':score>=55?'Good':'Fair'
   return (
     <div style={{ position:'relative', width:size, height:size, margin:'0 auto 10px' }}>
-      <svg width={size} height={size} style={{ transform:'rotate(-90deg)' }}>
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#e5e7eb" strokeWidth="9"/>
+      {/* Glow ring behind the SVG */}
+      <div style={{
+        position:'absolute', inset:-4, borderRadius:'50%',
+        background:`radial-gradient(circle, ${col}18 0%, transparent 70%)`,
+        pointerEvents:'none',
+      }}/>
+      <svg width={size} height={size} style={{ transform:'rotate(-90deg)', position:'relative', zIndex:1 }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#f0fdf4" strokeWidth="9"/>
         <motion.circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth="9" strokeLinecap="round"
           strokeDasharray={c} initial={{strokeDashoffset:c}} animate={{strokeDashoffset:c-(score/100)*c}}
           transition={{duration:1.4,delay:.4,ease:[.22,1,.36,1]}}/>
       </svg>
-      <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:1 }}>
+      <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:1,zIndex:2 }}>
         <span style={{ fontSize:'1.6rem',fontWeight:800,color:'#0f1f0f',lineHeight:1,fontFamily:'Fraunces,serif' }}>{score}</span>
         <span style={{ fontSize:'.62rem',color:col,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase' }}>{lbl}</span>
       </div>
@@ -74,15 +80,15 @@ export default function DashboardPage() {
   const recentTopics = useMemo(()=>(topicData?.topics||[]).slice(0,3),[topicData])
 
   const statCards = [
-    { label:'Total Specs',       value:sL?'—':(stats?.total_projects??0),    sub:`${stats?.total_projects??0} created`,     icon:<I.File/>,    accent:'#16a34a', bg:'#f0fdf4' },
-    { label:'Completed',         value:sL?'—':(stats?.completed_projects??0), sub:`${completionRate}% rate`,                icon:<I.Check/>,   accent:'#059669', bg:'#ecfdf5' },
-    { label:'Topics Explored',   value:tL?'—':(topicData?.total??0),          sub:'via Topic Lab',                          icon:<I.Beaker/>,  accent:'#7c3aed', bg:'#faf5ff' },
-    { label:'Avg. Score',        value:sL?'—':(avgScore||'—'), suffix:avgScore?'/100':'', sub:'out of 100 pts',              icon:<I.Star/>,    accent:avgScore?scoreColor(avgScore):'#9ca3af', bg:'#fafcfa' },
+    { label:'Total Specs',       value:sL?'—':(stats?.total_projects??0),    sub:`${stats?.total_projects??0} created`,     icon:<I.File/>,    accent:'#16a34a', bg:'#f0fdf4', border:'#bbf7d0' },
+    { label:'Completed',         value:sL?'—':(stats?.completed_projects??0), sub:`${completionRate}% rate`,                icon:<I.Check/>,   accent:'#059669', bg:'#ecfdf5', border:'#a7f3d0' },
+    { label:'Topics Explored',   value:tL?'—':(topicData?.total??0),          sub:'via Topic Lab',                          icon:<I.Beaker/>,  accent:'#7c3aed', bg:'#faf5ff', border:'#e9d5ff' },
+    { label:'Avg. Score',        value:sL?'—':(avgScore||'—'), suffix:avgScore?'/100':'', sub:'out of 100 pts',              icon:<I.Star/>,    accent:avgScore?scoreColor(avgScore):'#9ca3af', bg:'#fafcfa', border:'#e5e7eb' },
   ]
 
   return (
     <div style={{ maxWidth:1140 }}>
-      {/* Greeting */}
+      {/* ── Greeting ── */}
       <div style={{ display:'flex',alignItems:'flex-end',justifyContent:'space-between',marginBottom:28,flexWrap:'wrap',gap:12 }}>
         <div>
           <motion.p {...fu(0)} style={{ fontSize:'.78rem',color:'#9ca3af',marginBottom:3 }}>
@@ -107,58 +113,65 @@ export default function DashboardPage() {
 
         {/* Card 1: Topic Lab */}
         <Link href="/dashboard/topics" style={{ textDecoration:'none' }}>
-          <motion.div whileHover={{ y:-3,boxShadow:'0 12px 32px rgba(124,58,237,.15)' }}
-            style={{ background:'linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)',borderRadius:18,padding:'24px 26px',cursor:'pointer',position:'relative',overflow:'hidden',transition:'all .2s',minHeight:180,height:'100%',display:'flex',flexDirection:'column',justifyContent:'space-between',boxSizing:'border-box' }}>
-            <div style={{ position:'absolute',top:-20,right:-20,width:120,height:120,borderRadius:'50%',background:'rgba(255,255,255,.08)',pointerEvents:'none' }}/>
-            <div style={{ position:'absolute',bottom:-30,left:60,width:80,height:80,borderRadius:'50%',background:'rgba(255,255,255,.05)',pointerEvents:'none' }}/>
+          <motion.div
+            whileHover={{ y:-4, boxShadow:'0 16px 40px rgba(124,58,237,.2)' }}
+            whileTap={{ scale:.99 }}
+            style={{ background:'linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)',borderRadius:20,padding:'24px 26px',cursor:'pointer',position:'relative',overflow:'hidden',transition:'all .2s',minHeight:180,height:'100%',display:'flex',flexDirection:'column',justifyContent:'space-between',boxSizing:'border-box',boxShadow:'0 4px 20px rgba(124,58,237,.12)' }}>
+            {/* Decorative orbs */}
+            <div style={{ position:'absolute',top:-28,right:-28,width:140,height:140,borderRadius:'50%',background:'rgba(255,255,255,.09)',pointerEvents:'none' }}/>
+            <div style={{ position:'absolute',bottom:-40,left:50,width:100,height:100,borderRadius:'50%',background:'rgba(255,255,255,.05)',pointerEvents:'none' }}/>
+            <div style={{ position:'absolute',top:60,right:20,width:40,height:40,borderRadius:'50%',background:'rgba(255,255,255,.06)',pointerEvents:'none' }}/>
             <div>
               <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:12 }}>
-                <div style={{ width:42,height:42,borderRadius:12,background:'rgba(255,255,255,.18)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',flexShrink:0 }}><I.Flask/></div>
+                <div style={{ width:44,height:44,borderRadius:13,background:'rgba(255,255,255,.2)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',flexShrink:0,backdropFilter:'blur(4px)' }}><I.Flask/></div>
                 <div>
-                  <div style={{ fontSize:'.65rem',fontWeight:700,color:'rgba(255,255,255,.7)',textTransform:'uppercase',letterSpacing:'.1em' }}>Step 1 · Start Here</div>
-                  <h2 style={{ margin:0,fontSize:'1.1rem',fontWeight:800,color:'white',lineHeight:1.2 }}>Topic Lab</h2>
+                  <div style={{ fontSize:'.65rem',fontWeight:700,color:'rgba(255,255,255,.65)',textTransform:'uppercase',letterSpacing:'.1em' }}>Step 1 · Start Here</div>
+                  <h2 style={{ margin:0,fontSize:'1.12rem',fontWeight:800,color:'white',lineHeight:1.2 }}>Topic Lab</h2>
                 </div>
               </div>
-              <p style={{ margin:0,fontSize:'.84rem',color:'rgba(255,255,255,.85)',lineHeight:1.65 }}>
+              <p style={{ margin:0,fontSize:'.84rem',color:'rgba(255,255,255,.88)',lineHeight:1.65 }}>
                 Have a topic already? Let AI vet and refine it. Starting fresh? Answer a few questions and get 10–15 personalised, ranked topics — then refine the best one with your AI advisor.
               </p>
             </div>
             <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:18 }}>
-              <div style={{ display:'flex',gap:6 }}>
+              <div style={{ display:'flex',gap:6,flexWrap:'wrap' }}>
                 {['Have a topic','Confused?','Need ideas'].map(tag=>(
-                  <span key={tag} style={{ padding:'3px 9px',borderRadius:999,background:'rgba(255,255,255,.15)',fontSize:'.68rem',fontWeight:600,color:'rgba(255,255,255,.9)' }}>{tag}</span>
+                  <span key={tag} style={{ padding:'3px 9px',borderRadius:999,background:'rgba(255,255,255,.16)',fontSize:'.68rem',fontWeight:600,color:'rgba(255,255,255,.92)',backdropFilter:'blur(4px)' }}>{tag}</span>
                 ))}
               </div>
-              <div style={{ width:32,height:32,borderRadius:'50%',background:'rgba(255,255,255,.2)',display:'flex',alignItems:'center',justifyContent:'center',color:'white' }}><I.ArrowR/></div>
+              <div style={{ width:34,height:34,borderRadius:'50%',background:'rgba(255,255,255,.22)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',flexShrink:0 }}><I.ArrowR/></div>
             </div>
           </motion.div>
         </Link>
 
         {/* Card 2: Generate Spec */}
         <Link href="/dashboard/generate" style={{ textDecoration:'none' }}>
-          <motion.div whileHover={{ y:-3,boxShadow:'0 12px 32px rgba(22,163,74,.18)' }}
-            style={{ background:'linear-gradient(135deg,#16a34a 0%,#22c55e 100%)',borderRadius:18,padding:'24px 26px',cursor:'pointer',position:'relative',overflow:'hidden',transition:'all .2s',minHeight:180,height:'100%',display:'flex',flexDirection:'column',justifyContent:'space-between',boxSizing:'border-box' }}>
-            <div style={{ position:'absolute',top:-20,right:-20,width:120,height:120,borderRadius:'50%',background:'rgba(255,255,255,.08)',pointerEvents:'none' }}/>
-            <div style={{ position:'absolute',bottom:-30,left:60,width:80,height:80,borderRadius:'50%',background:'rgba(255,255,255,.05)',pointerEvents:'none' }}/>
+          <motion.div
+            whileHover={{ y:-4, boxShadow:'0 16px 40px rgba(22,163,74,.22)' }}
+            whileTap={{ scale:.99 }}
+            style={{ background:'linear-gradient(135deg,#16a34a 0%,#22c55e 100%)',borderRadius:20,padding:'24px 26px',cursor:'pointer',position:'relative',overflow:'hidden',transition:'all .2s',minHeight:180,height:'100%',display:'flex',flexDirection:'column',justifyContent:'space-between',boxSizing:'border-box',boxShadow:'0 4px 20px rgba(22,163,74,.12)' }}>
+            <div style={{ position:'absolute',top:-28,right:-28,width:140,height:140,borderRadius:'50%',background:'rgba(255,255,255,.09)',pointerEvents:'none' }}/>
+            <div style={{ position:'absolute',bottom:-40,left:50,width:100,height:100,borderRadius:'50%',background:'rgba(255,255,255,.05)',pointerEvents:'none' }}/>
+            <div style={{ position:'absolute',top:60,right:20,width:40,height:40,borderRadius:'50%',background:'rgba(255,255,255,.06)',pointerEvents:'none' }}/>
             <div>
               <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:12 }}>
-                <div style={{ width:42,height:42,borderRadius:12,background:'rgba(255,255,255,.18)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',flexShrink:0 }}><I.Zap/></div>
+                <div style={{ width:44,height:44,borderRadius:13,background:'rgba(255,255,255,.2)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',flexShrink:0,backdropFilter:'blur(4px)' }}><I.Zap/></div>
                 <div>
-                  <div style={{ fontSize:'.65rem',fontWeight:700,color:'rgba(255,255,255,.7)',textTransform:'uppercase',letterSpacing:'.1em' }}>Step 2 · Already have a topic</div>
-                  <h2 style={{ margin:0,fontSize:'1.1rem',fontWeight:800,color:'white',lineHeight:1.2 }}>Generate Spec</h2>
+                  <div style={{ fontSize:'.65rem',fontWeight:700,color:'rgba(255,255,255,.65)',textTransform:'uppercase',letterSpacing:'.1em' }}>Step 2 · Already have a topic</div>
+                  <h2 style={{ margin:0,fontSize:'1.12rem',fontWeight:800,color:'white',lineHeight:1.2 }}>Generate Spec</h2>
                 </div>
               </div>
-              <p style={{ margin:0,fontSize:'.84rem',color:'rgba(255,255,255,.85)',lineHeight:1.65 }}>
+              <p style={{ margin:0,fontSize:'.84rem',color:'rgba(255,255,255,.88)',lineHeight:1.65 }}>
                 Know your topic already? Upload your university guidelines and let our AI build a complete, scored research specification in minutes.
               </p>
             </div>
             <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:18 }}>
-              <div style={{ display:'flex',gap:6 }}>
+              <div style={{ display:'flex',gap:6,flexWrap:'wrap' }}>
                 {['Have a topic','Ready to go','Upload guidelines'].map(tag=>(
-                  <span key={tag} style={{ padding:'3px 9px',borderRadius:999,background:'rgba(255,255,255,.15)',fontSize:'.68rem',fontWeight:600,color:'rgba(255,255,255,.9)' }}>{tag}</span>
+                  <span key={tag} style={{ padding:'3px 9px',borderRadius:999,background:'rgba(255,255,255,.16)',fontSize:'.68rem',fontWeight:600,color:'rgba(255,255,255,.92)',backdropFilter:'blur(4px)' }}>{tag}</span>
                 ))}
               </div>
-              <div style={{ width:32,height:32,borderRadius:'50%',background:'rgba(255,255,255,.2)',display:'flex',alignItems:'center',justifyContent:'center',color:'white' }}><I.ArrowR/></div>
+              <div style={{ width:34,height:34,borderRadius:'50%',background:'rgba(255,255,255,.22)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',flexShrink:0 }}><I.ArrowR/></div>
             </div>
           </motion.div>
         </Link>
@@ -167,10 +180,13 @@ export default function DashboardPage() {
       {/* ── Stat Cards ── */}
       <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:28 }}>
         {statCards.map((c,i)=>(
-          <motion.div key={c.label} {...fu(.18+i*.05)} className="g-card-flat" style={{ padding:'16px 18px' }}>
-            <div style={{ width:32,height:32,borderRadius:9,background:c.bg,display:'flex',alignItems:'center',justifyContent:'center',color:c.accent,marginBottom:10 }}>{c.icon}</div>
+          <motion.div key={c.label} {...fu(.18+i*.05)} className="g-card-flat"
+            style={{ padding:'16px 18px', borderLeft:`3px solid ${c.border}`, position:'relative', overflow:'hidden' }}>
+            {/* Subtle top gradient accent */}
+            <div style={{ position:'absolute',top:0,left:0,right:0,height:2,background:`linear-gradient(90deg,${c.accent}40,${c.accent},${c.accent}40)`,borderRadius:'inherit' }}/>
+            <div style={{ width:34,height:34,borderRadius:10,background:c.bg,display:'flex',alignItems:'center',justifyContent:'center',color:c.accent,marginBottom:11 }}>{c.icon}</div>
             <div style={{ display:'flex',alignItems:'baseline',gap:3,marginBottom:2 }}>
-              {sL&&i!==2||tL&&i===2 ? <div className="g-sk" style={{ width:44,height:28 }}/> : <>
+              {(sL&&i!==2)||(tL&&i===2) ? <div className="g-sk" style={{ width:44,height:28 }}/> : <>
                 <span style={{ fontSize:'1.8rem',fontWeight:800,color:'#0f1f0f',fontFamily:'Fraunces,serif',lineHeight:1 }}>{c.value}</span>
                 {(c as any).suffix&&<span style={{ fontSize:'.78rem',color:'#9ca3af' }}>{(c as any).suffix}</span>}
               </>}
@@ -203,6 +219,7 @@ export default function DashboardPage() {
                 </div>
               ) : recent.length===0 ? (
                 <div style={{ padding:'40px 20px',textAlign:'center' }}>
+                  <div style={{ width:48,height:48,borderRadius:14,background:'#f0fdf4',display:'flex',alignItems:'center',justifyContent:'center',color:'#16a34a',margin:'0 auto 12px' }}><I.File/></div>
                   <p style={{ fontWeight:700,color:'#0f1f0f',marginBottom:5 }}>No specifications yet</p>
                   <p style={{ fontSize:'.84rem',color:'#9ca3af',marginBottom:18 }}>Start with Topic Lab if you need help, or jump straight to generating your spec.</p>
                   <div style={{ display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap' }}>
@@ -219,7 +236,9 @@ export default function DashboardPage() {
                 return (
                   <motion.div key={p.id} initial={{opacity:0,x:-8}} animate={{opacity:1,x:0}} transition={{delay:.36+i*.05}}
                     className="g-row" onClick={()=>router.push(`/dashboard/projects/${p.id}`)}
-                    style={{ padding:'12px 20px',borderBottom:i<recent.length-1?'1px solid #f3f4f6':'none',cursor:'pointer',display:'flex',alignItems:'center',gap:14 }}>
+                    style={{ padding:'13px 20px',borderBottom:i<recent.length-1?'1px solid #f3f4f6':'none',cursor:'pointer',display:'flex',alignItems:'center',gap:14 }}>
+                    {/* Status dot */}
+                    <div style={{ width:8,height:8,borderRadius:'50%',flexShrink:0,background:p.status==='completed'?'#16a34a':p.status==='failed'?'#dc2626':'#d97706',boxShadow:`0 0 0 2px ${p.status==='completed'?'#dcfce7':p.status==='failed'?'#fef2f2':'#fef3c7'}` }}/>
                     <div style={{ flex:1,minWidth:0 }}>
                       <p style={{ margin:'0 0 2px',fontWeight:600,color:'#0f1f0f',fontSize:'.86rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>
                         {p.research_topic||p.field_of_study||'Untitled'}
@@ -253,6 +272,7 @@ export default function DashboardPage() {
                 </div>
               ) : recentTopics.length===0 ? (
                 <div style={{ padding:'28px 20px',textAlign:'center' }}>
+                  <div style={{ width:42,height:42,borderRadius:12,background:'#faf5ff',display:'flex',alignItems:'center',justifyContent:'center',color:'#7c3aed',margin:'0 auto 12px' }}><I.FlaskSm/></div>
                   <p style={{ fontWeight:700,color:'#0f1f0f',marginBottom:5,fontSize:'.9rem' }}>No topics explored yet</p>
                   <p style={{ fontSize:'.82rem',color:'#9ca3af',marginBottom:14 }}>Use Topic Lab to find, vet, or refine your research topic before generating a spec.</p>
                   <Link href="/dashboard/topics" style={{ textDecoration:'none' }}>
@@ -286,8 +306,8 @@ export default function DashboardPage() {
 
           {/* Score Ring */}
           {avgScore>0 && (
-            <motion.div {...fu(.4)} className="g-card-flat" style={{ padding:'18px',textAlign:'center' }}>
-              <p style={{ margin:'0 0 12px',fontSize:'.7rem',fontWeight:700,color:'#9ca3af',textTransform:'uppercase',letterSpacing:'.09em' }}>Avg. Score</p>
+            <motion.div {...fu(.4)} className="g-card-flat" style={{ padding:'20px',textAlign:'center' }}>
+              <p style={{ margin:'0 0 14px',fontSize:'.7rem',fontWeight:700,color:'#9ca3af',textTransform:'uppercase',letterSpacing:'.09em' }}>Avg. Score</p>
               <ScoreRing score={avgScore}/>
               <p style={{ fontSize:'.78rem',color:'#6b7280',lineHeight:1.6,margin:0 }}>
                 {avgScore>=75?'Outstanding — specs are supervisor-ready.':avgScore>=60?'Solid results. Push for 75+ to impress.':'Upload guidelines to boost your score.'}
@@ -300,24 +320,26 @@ export default function DashboardPage() {
             <div className="g-section-head" style={{ padding:'13px 16px' }}>
               <span style={{ fontWeight:700,color:'#0f1f0f',fontSize:'.86rem' }}>Quick Actions</span>
             </div>
-            <div style={{ padding:'8px 8px',display:'flex',flexDirection:'column',gap:3 }}>
+            <div style={{ padding:'8px 8px',display:'flex',flexDirection:'column',gap:2 }}>
               {[
-                { icon:<I.FlaskSm/>, label:'Topic Lab',      sub:'Find, vet & refine topics', href:'/dashboard/topics',   c:'#7c3aed', bg:'#faf5ff' },
-                { icon:<I.Zap/>,    label:'Generate spec',   sub:'Upload & generate',          href:'/dashboard/generate', c:'#16a34a', bg:'#f0fdf4' },
-                { icon:<I.Book/>,   label:'Browse my specs', sub:'View all projects',          href:'/dashboard/projects', c:'#2563eb', bg:'#eff6ff' },
-                { icon:<I.Trend/>,  label:'Performance',     sub:'Track your scores',          href:'/dashboard/projects', c:'#d97706', bg:'#fffbeb' },
+                { icon:<I.FlaskSm/>, label:'Topic Lab',      sub:'Find, vet & refine topics', href:'/dashboard/topics',   c:'#7c3aed', bg:'#faf5ff', hbg:'#f3e8ff' },
+                { icon:<I.Zap/>,    label:'Generate spec',   sub:'Upload & generate',          href:'/dashboard/generate', c:'#16a34a', bg:'#f0fdf4', hbg:'#dcfce7' },
+                { icon:<I.Book/>,   label:'Browse my specs', sub:'View all projects',          href:'/dashboard/projects', c:'#2563eb', bg:'#eff6ff', hbg:'#dbeafe' },
+                { icon:<I.Trend/>,  label:'Performance',     sub:'Track your scores',          href:'/dashboard/projects', c:'#d97706', bg:'#fffbeb', hbg:'#fef3c7' },
               ].map(a=>(
                 <Link key={a.label} href={a.href} style={{ textDecoration:'none' }}>
-                  <div style={{ display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:10,border:'1px solid transparent',cursor:'pointer',transition:'all .15s' }}
-                    onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background=a.bg;(e.currentTarget as HTMLElement).style.borderColor=`${a.c}18`}}
+                  <motion.div
+                    whileHover={{ x: 2 }}
+                    style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 10px',borderRadius:11,border:'1px solid transparent',cursor:'pointer',transition:'all .15s' }}
+                    onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background=a.hbg;(e.currentTarget as HTMLElement).style.borderColor=`${a.c}20`}}
                     onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background='transparent';(e.currentTarget as HTMLElement).style.borderColor='transparent'}}>
-                    <div style={{ width:30,height:30,borderRadius:8,background:a.bg,display:'flex',alignItems:'center',justifyContent:'center',color:a.c,flexShrink:0 }}>{a.icon}</div>
+                    <div style={{ width:32,height:32,borderRadius:9,background:a.bg,display:'flex',alignItems:'center',justifyContent:'center',color:a.c,flexShrink:0 }}>{a.icon}</div>
                     <div style={{ flex:1 }}>
                       <p style={{ margin:0,fontSize:'.82rem',fontWeight:600,color:'#0f1f0f',lineHeight:1.2 }}>{a.label}</p>
                       <p style={{ margin:0,fontSize:'.7rem',color:'#9ca3af' }}>{a.sub}</p>
                     </div>
-                    <I.Arrow/>
-                  </div>
+                    <div style={{ color:'#d1d5db' }}><I.Arrow/></div>
+                  </motion.div>
                 </Link>
               ))}
             </div>

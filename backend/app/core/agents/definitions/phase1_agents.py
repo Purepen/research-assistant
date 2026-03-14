@@ -30,7 +30,7 @@ web_search_agent = Agent(
 resource_finder_agent = Agent(
     name="ResourceFinder",
     instructions=RESOURCE_FINDER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=DiscoveredResources
 )
 
@@ -46,7 +46,7 @@ project_finder_agent = Agent(
 project_analyzer_agent = Agent(
     name="ProjectAnalyzer",
     instructions=PROJECT_ANALYZER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=AnalyzedProjectSpecSections
 )
 
@@ -54,6 +54,6 @@ project_analyzer_agent = Agent(
 past_projects_spec_analyzer_agent = Agent(
     name="PastProjectsSpecAnalyzer",
     instructions=PAST_PROJECTS_SPEC_ANALYZER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=AnalyzedProjectSpecSections
 )

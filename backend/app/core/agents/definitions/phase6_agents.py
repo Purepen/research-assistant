@@ -9,7 +9,7 @@ from agents import Agent
 from app.core.agents.instructions.phase6_email import EMAIL_AGENT_INSTRUCTIONS
 
 
-# Email Agent (Cell 22)
+# Email Agent (Cell 22) gpt-4o-mini
 # Note: send_email tool defined in phase6_workflow
 email_agent = Agent(
     name="EmailAgent",

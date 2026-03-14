@@ -142,12 +142,17 @@ class LockedRequirementsA(BaseModel):
     confirmed_dataset: LockedDataset
 
     # Baseline (checklist item 2)
-    baseline: LockedBaseline
+    # Optional — if citation pool has no metric-bearing papers, None is set.
+    # Methodology agent will instruct the student to confirm a baseline with their supervisor.
+    baseline: Optional[LockedBaseline] = None
 
     # Similar projects for differentiation (used by JustificationSpecialist)
     similar_projects: List[SimilarProjectEntry] = Field(
-        min_length=1,
-        description="At least 1 real similar project for explicit differentiation."
+        default_factory=list,
+        description=(
+            "Real past projects for explicit differentiation. "
+            "May be empty if none were found — do not fabricate entries."
+        )
     )
 
     # Evaluation framework (checklist items 3+4)
@@ -222,13 +227,18 @@ class LockedRequirementsB(BaseModel):
         description="Active debates this project engages with"
     )
 
-    # Similar projects for differentiation
+    # Similar projects for differentiation (used by JustificationSpecialist)
     similar_projects: List[SimilarProjectEntry] = Field(
-        min_length=1
+        default_factory=list,
+        description=(
+            "Real past projects for explicit differentiation. "
+            "May be empty if none were found — do not fabricate entries."
+        )
     )
 
     # Positionality / ethics for humanities
     positionality_statement: Optional[str] = None
+
 
     # Work plan for theoretical project (reading-heavy)
     work_plan_weeks: List[dict] = Field(

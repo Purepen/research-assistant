@@ -16,53 +16,53 @@ from app.core.agents.instructions.phase3_references     import REFERENCES_COMPIL
 from app.core.agents.instructions.phase3_abstract       import ABSTRACT_SPECIALIST_INSTRUCTIONS
 
 
-# ── Section writers — all plain-text output ───────────────────────────────────
+# ── Section writers — all plain-text output ───────────────────────────────────everything gpt-4o except the last
 # These agents receive a focused locked-context prompt and return prose.
 # The formatter in phase4 assembles them into a ProjectSpecification object.
 
 justification_specialist = Agent(
     name="JustificationSpecialist",
     instructions=JUSTIFICATION_AIM_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
 )
 
 objectives_architect = Agent(
     name="ObjectivesArchitect",
     instructions=OBJECTIVES_ARCHITECT_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
 )
 
 literature_strategist = Agent(
     name="LiteratureStrategist",
     instructions=LITERATURE_STRATEGIST_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
 )
 
 methodology_designer = Agent(
     name="MethodologyDesigner",
     instructions=METHODOLOGY_DESIGNER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
 )
 
 timeline_validator = Agent(
     name="TimelineValidator",
     instructions=TIMELINE_VALIDATOR_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
 )
 
 references_compiler = Agent(
     name="ReferencesCompiler",
     instructions=REFERENCES_COMPILER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
 )
 
 abstract_specialist = Agent(
     name="AbstractSpecialist",
     instructions=ABSTRACT_SPECIALIST_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
 )
 
-# ── Kept for backwards compatibility (feasibility analyst still imported elsewhere) ──
+# ── Kept for backwards compatibility (feasibility analyst still imported elsewhere) ──gpt-4o-mini
 from app.core.agents.instructions.phase3_feasibility import FEASIBILITY_ANALYST_INSTRUCTIONS  # type: ignore
 
 feasibility_analyst = Agent(

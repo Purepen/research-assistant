@@ -137,6 +137,7 @@ export default function GeneratePage() {
     // Step 3 answers
     data_sensitivity: 'public' as 'public' | 'self_collected' | 'sensitive',
     student_success_statement: '',
+    preferred_algorithms: '',        // WEEK 2: Track A Q3
     theoretical_framework: '',
     central_argument: '',
     primary_source_focus: '',
@@ -147,13 +148,22 @@ export default function GeneratePage() {
   const [datasetState, setDatasetState] = useState<{ mode: any; file?: File; name?: string; url?: string; description?: string }>({ mode: null })
 
   // Step 3 answers
-  const [answersA, setAnswersA] = useState<TrackAAnswers>({ data_sensitivity: '', student_success_statement: '' })
-  const [answersB, setAnswersB] = useState<TrackBAnswers>({ theoretical_framework: '', central_argument: '', primary_source_focus: '' })
+  // WEEK 2: preferred_algorithms added to initial state — fixes "Cannot read .trim() of undefined"
+  const [answersA, setAnswersA] = useState<TrackAAnswers>({
+    data_sensitivity: '',
+    student_success_statement: '',
+    preferred_algorithms: '',
+  })
+  const [answersB, setAnswersB] = useState<TrackBAnswers>({
+    theoretical_framework: '',
+    central_argument: '',
+    primary_source_focus: '',
+  })
 
   // Topic Lab prefill
-  const paramTopic    = searchParams.get('topic') || ''
-  const paramField    = searchParams.get('field') || ''
-  const paramLevel    = searchParams.get('level') || ''
+  const paramTopic     = searchParams.get('topic') || ''
+  const paramField     = searchParams.get('field') || ''
+  const paramLevel     = searchParams.get('level') || ''
   const paramSessionId = searchParams.get('topic_session_id') || ''
   const prefillDone = useRef(false)
 
@@ -199,6 +209,7 @@ export default function GeneratePage() {
         ...p,
         data_sensitivity: (answersA.data_sensitivity || 'public') as any,
         student_success_statement: answersA.student_success_statement,
+        preferred_algorithms: answersA.preferred_algorithms,   // WEEK 2
       }))
     } else {
       setFormData(p => ({
@@ -234,13 +245,14 @@ export default function GeneratePage() {
     try {
       const config = { ...formData }
       // Clean empty strings to undefined
-      if (!config.notification_email) delete (config as any).notification_email
-      if (!config.dataset_name) delete (config as any).dataset_name
-      if (!config.dataset_url) delete (config as any).dataset_url
+      if (!config.notification_email)        delete (config as any).notification_email
+      if (!config.dataset_name)              delete (config as any).dataset_name
+      if (!config.dataset_url)               delete (config as any).dataset_url
       if (!config.student_success_statement) delete (config as any).student_success_statement
-      if (!config.theoretical_framework) delete (config as any).theoretical_framework
-      if (!config.central_argument) delete (config as any).central_argument
-      if (!config.primary_source_focus) delete (config as any).primary_source_focus
+      if (!config.preferred_algorithms)      delete (config as any).preferred_algorithms  // WEEK 2
+      if (!config.theoretical_framework)     delete (config as any).theoretical_framework
+      if (!config.central_argument)          delete (config as any).central_argument
+      if (!config.primary_source_focus)      delete (config as any).primary_source_focus
 
       const fd = new FormData()
       fd.append('config_json', JSON.stringify(config))
@@ -394,6 +406,7 @@ export default function GeneratePage() {
           ['Track', track === 'A' ? 'Empirical / Data (Track A)' : 'Theoretical / Humanities (Track B)'],
           ['Effort', formData.effort_level],
           ['Dataset', formData.dataset_name || formData.dataset_source || 'AI will scout'],
+          ...(formData.preferred_algorithms ? [['Algorithms', formData.preferred_algorithms]] : []),
           ['Guidelines', files.guidelines?.name || 'Using standard defaults'],
           ['Past Projects', files.pastProjects.length ? `${files.pastProjects.length} file(s) uploaded` : 'AI auto-discover'],
           ['Iterations', `${formData.max_iterations}`],

@@ -42,20 +42,20 @@ from app.core.agents.instructions.phase0_topic_advisor   import (
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# EXISTING AGENTS (unchanged)
+# EXISTING AGENTS (unchanged) everything gpt-4o
 # ══════════════════════════════════════════════════════════════════════════════
 
 guidelines_parser_agent = Agent(
     name="GuidelinesParser",
     instructions=GUIDELINES_PARSER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=ProjectGuidelines,
 )
 
 topic_suggester_agent = Agent(
     name="TopicSuggester",
     instructions=TOPIC_SUGGESTER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=TopicSuggestions,
 )
 
@@ -68,7 +68,7 @@ topic_suggester_agent = Agent(
 topic_discovery_agent = Agent(
     name="TopicDiscovery",
     instructions=TOPIC_DISCOVERY_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=TopicDiscoveryOutput,
 )
 
@@ -86,7 +86,7 @@ topic_data_scout_agent = Agent(
 topic_project_scout_agent = Agent(
     name="TopicProjectScout",
     instructions=TOPIC_PROJECT_SCOUT_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     tools=[WebSearchTool()],
     output_type=TopicAdvisorOutput,   # message field carries the JSON
 )
@@ -98,7 +98,7 @@ topic_project_scout_agent = Agent(
 topic_vetter_agent = Agent(
     name="TopicVetter",
     instructions=TOPIC_VETTER_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=TopicAdvisorOutput,   # message field carries the structured plain-text
 )
 
@@ -108,7 +108,7 @@ topic_vetter_agent = Agent(
 topic_advisor_explain_agent = Agent(
     name="TopicAdvisorExplain",
     instructions=TOPIC_ADVISOR_EXPLAIN_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=TopicAdvisorOutput,
 )
 
@@ -116,7 +116,7 @@ topic_advisor_explain_agent = Agent(
 topic_advisor_questions_agent = Agent(
     name="TopicAdvisorQuestions",
     instructions=TOPIC_ADVISOR_QUESTIONS_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=TopicAdvisorOutput,
 )
 
@@ -124,7 +124,7 @@ topic_advisor_questions_agent = Agent(
 topic_advisor_feasibility_agent = Agent(
     name="TopicAdvisorFeasibility",
     instructions=TOPIC_ADVISOR_FEASIBILITY_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=TopicAdvisorOutput,
 )
 
@@ -132,6 +132,6 @@ topic_advisor_feasibility_agent = Agent(
 topic_advisor_final_agent = Agent(
     name="TopicAdvisorFinal",
     instructions=TOPIC_ADVISOR_FINAL_INSTRUCTIONS,
-    model="gpt-4o",
+    model="gpt-4o-mini",
     output_type=TopicAdvisorOutput,
 )

@@ -11,14 +11,14 @@ from app.core.agents.instructions.phase4_orchestrator import ORCHESTRATOR_INSTRU
 from app.core.agents.instructions.phase4_formatter import FORMATTER_INSTRUCTIONS
 
 
-# Specification Orchestrator (Cell 19)
+# Specification Orchestrator (Cell 19 )gpt-4o
 specification_orchestrator = Agent(
     name="SpecificationOrchestrator",
     instructions=ORCHESTRATOR_INSTRUCTIONS,
-    model="gpt-4o"
+    model="gpt-4o-mini"
 )
 
-# Specification Formatter (Cell 19)
+# Specification Formatter (Cell 19) gpt-4o-mini
 specification_formatter = Agent(
     name="SpecificationFormatter",
     instructions=FORMATTER_INSTRUCTIONS,
