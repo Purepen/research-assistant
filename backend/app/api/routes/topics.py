@@ -15,6 +15,10 @@ Phase 2 additions (Vetter):
                               original or refined title
 
 All existing endpoints (discover, scout, refine, find-projects) unchanged.
+
+BUG FIX:
+  - Added "nigeria" to geographic_focus Literal — was causing 422 rejection
+  - Added geo_context: Optional[str] field — frontend sends this for custom locations
 """
 
 from __future__ import annotations
@@ -46,7 +50,7 @@ router = APIRouter(prefix="/topics", tags=["Topic Discovery"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Request / Response Models — Existing (unchanged)
+# Request / Response Models — Existing (unchanged except geographic_focus fix)
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TopicDiscoveryRequest(BaseModel):
@@ -55,9 +59,15 @@ class TopicDiscoveryRequest(BaseModel):
     project_type:       Literal["research-based", "practical", "mixed", "not-sure"]
     preferred_activity: List[str]
     interest_areas:     List[str]
-    geographic_focus:   Literal["university", "city", "country", "africa", "europe", "global", "none"]
+    # BUG FIX: added "nigeria" — was missing, causing 422 rejection when selected
+    geographic_focus:   Literal[
+        "university", "city", "country", "nigeria",
+        "africa", "europe", "global", "none"
+    ]
     ambition_level:     Literal["manageable", "impressive", "distinction", "cv-strong"]
     confidence_level:   Literal["very-confused", "somewhat-unsure", "rough-direction", "have-idea"]
+    # BUG FIX: frontend sends geo_context for custom-typed locations (e.g. "Lagos", "Kenya")
+    geo_context:        Optional[str] = None
 
 class TopicDiscoveryResponse(BaseModel):
     clusters:    List[str]
@@ -254,6 +264,8 @@ async def discover_topics(
             preferred_activity=req.preferred_activity, interest_areas=req.interest_areas,
             geographic_focus=req.geographic_focus, ambition_level=req.ambition_level,
             confidence_level=req.confidence_level,
+            # Pass geo_context through so the discovery agent can use the specific location
+            geo_context=req.geo_context,
         )
         return TopicDiscoveryResponse(
             clusters=output.clusters,

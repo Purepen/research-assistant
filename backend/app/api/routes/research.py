@@ -6,6 +6,10 @@ Changes:
   2. dataset_file upload supported (CSV for Track A projects)
   3. All new SpecificationConfig fields flow through from form submission
   4. Storage handles optional guidelines gracefully
+
+BUG FIX (result endpoint):
+  - result.review_json     → result.final_review_json  (correct column name)
+  - result.word_count      → computed from specification_json (column doesn't exist)
 """
 
 from __future__ import annotations
@@ -270,12 +274,17 @@ async def get_generation_result(
     if not result:
         raise HTTPException(status_code=404, detail="Result record missing from database")
 
+    # BUG FIX: the column is final_review_json, not review_json.
+    # word_count does not exist as a column — compute it from specification_json.
+    spec_json = result.specification_json or {}
+    word_count = spec_json.get("total_word_count", 0)
+
     return {
         "success":       True,
         "project_id":    project_id,
         "specification": result.specification_json,
-        "review":        result.review_json,
-        "word_count":    result.word_count,
+        "review":        result.final_review_json,   # fixed: was result.review_json
+        "word_count":    word_count,                  # fixed: was result.word_count (no such column)
         "marks":         result.total_marks,
         "decision":      result.decision,
         "track":         getattr(result, "track", "A"),

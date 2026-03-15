@@ -147,8 +147,7 @@ export default function GeneratePage() {
   const [files, setFiles] = useState<{ guidelines?: File; pastProjects: File[]; datasetFile?: File }>({ pastProjects: [] })
   const [datasetState, setDatasetState] = useState<{ mode: any; file?: File; name?: string; url?: string; description?: string }>({ mode: null })
 
-  // Step 3 answers
-  // WEEK 2: preferred_algorithms added to initial state — fixes "Cannot read .trim() of undefined"
+  // Step 3 answers — preferred_algorithms included from week 2
   const [answersA, setAnswersA] = useState<TrackAAnswers>({
     data_sensitivity: '',
     student_success_statement: '',
@@ -192,6 +191,8 @@ export default function GeneratePage() {
   const updateFiles = (update: any) => setFiles(p => ({ ...p, ...update }))
 
   // Sync dataset state into formData
+  // BUG FIX: also auto-set data_sensitivity for scout and self_collected modes
+  // so the user isn't blocked at Step 3 asking about data they haven't picked yet
   useEffect(() => {
     setFormData(p => ({
       ...p,
@@ -200,6 +201,15 @@ export default function GeneratePage() {
       dataset_url: datasetState.url || '',
       dataset_description: datasetState.description || '',
     }))
+
+    // Auto-answer data_sensitivity based on dataset mode so Step 3 doesn't block
+    if (datasetState.mode === 'self_collected') {
+      // Self-collected means they ARE collecting data — sensitivity is 'self_collected'
+      setAnswersA(prev => ({ ...prev, data_sensitivity: 'self_collected' }))
+    } else if (datasetState.mode === 'scout') {
+      // AI will find a public dataset — default to 'public', user can override in Step 3
+      setAnswersA(prev => ({ ...prev, data_sensitivity: 'public' }))
+    }
   }, [datasetState])
 
   // Sync Step 3 answers into formData
@@ -232,6 +242,7 @@ export default function GeneratePage() {
         if (datasetState.mode === 'uploaded' && !files.datasetFile) return false
         // If public mode, must have a name
         if (datasetState.mode === 'public' && !datasetState.name?.trim()) return false
+        // scout and self_collected: no further input required at Step 2
       }
       return true
     }

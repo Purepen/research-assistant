@@ -88,7 +88,6 @@ type Stage = 'gateway'|'vet'|'vet-loading'|'vet-result'|'form'|'loading'|'result
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const authHeaders = ()=>({ Authorization:`Bearer ${localStorage.getItem('access_token')}` })
 
-// Safely extract a string message from axios errors — handles FastAPI 422 Pydantic arrays
 function extractError(e: any, fallback: string): string {
   const detail = e?.response?.data?.detail
   if (!detail) return fallback
@@ -255,7 +254,7 @@ function GatewayStage({ onHaveTopic, onNeedHelp }:{ onHaveTopic:()=>void; onNeed
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   VET STAGE — user fills in their topic + context
+   VET STAGE
 ══════════════════════════════════════════════════════════════════════════ */
 function VetStage({ onSubmit, onBack }:{ onSubmit:(v:VetInput)=>void; onBack:()=>void }) {
   const [form, setForm] = useState<VetInput>({ original_topic:'', field:'', degree_level:'', project_type:'', ambition_level:'', geographic_focus:'none' })
@@ -387,13 +386,11 @@ function VetResultStage({ result, onChoose, onBack }:
           <I.Back/> Back
         </button>
 
-        {/* Verdict header */}
         <div style={{ display:'flex',alignItems:'center',gap:12,padding:'16px 20px',background:verdictConfig.bg,border:`1.5px solid ${verdictConfig.border}`,borderRadius:14,marginBottom:20 }}>
           <span style={{ fontSize:'1.05rem',fontWeight:800,color:verdictConfig.color,fontFamily:'Fraunces,serif',flexShrink:0 }}>{verdictConfig.label}</span>
           <p style={{ margin:0,fontSize:'.84rem',color:'#374151',lineHeight:1.5 }}>{verdictConfig.sub}</p>
         </div>
 
-        {/* AI assessment */}
         <div style={{ background:'white',border:'1.5px solid #e8ede8',borderRadius:14,padding:'20px',marginBottom:16 }}>
           <p style={{ margin:'0 0 14px',fontSize:'.72rem',fontWeight:700,color:'#9ca3af',textTransform:'uppercase',letterSpacing:'.09em' }}>AI Assessment</p>
           <p style={{ margin:'0 0 16px',fontSize:'.9rem',color:'#374151',lineHeight:1.7,fontStyle:'italic' }}>&ldquo;{result.your_take}&rdquo;</p>
@@ -423,7 +420,6 @@ function VetResultStage({ result, onChoose, onBack }:
           )}
         </div>
 
-        {/* Title comparison + choice */}
         <div style={{ display:'grid',gridTemplateColumns:showRefined?'1fr 1fr':'1fr',gap:12,marginBottom:16 }}>
           <div style={{ background:'white',border:'1.5px solid #e8ede8',borderRadius:14,padding:'18px' }}>
             <p style={{ margin:'0 0 8px',fontSize:'.7rem',fontWeight:700,color:'#9ca3af',textTransform:'uppercase',letterSpacing:'.09em' }}>
@@ -467,7 +463,7 @@ function VetResultStage({ result, onChoose, onBack }:
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   FORM STAGE (discovery path — unchanged from original)
+   FORM STAGE (discovery path — unchanged)
 ══════════════════════════════════════════════════════════════════════════ */
 const QUESTIONS = [
   {id:'degree_level',      label:'What is your degree level?',note:''},
@@ -942,7 +938,6 @@ function FinalStage({ topic, description, field, level, degree }:
                     </div>
                   </div>
                 ))}
-                {/* Amber download instruction note */}
                 <div style={{ background:'#fffbeb',border:'1.5px solid #fde68a',borderRadius:12,padding:'14px 16px',display:'flex',alignItems:'flex-start',gap:10,marginTop:4 }}>
                   <div style={{ color:'#d97706',flexShrink:0,marginTop:1 }}><I.Info/></div>
                   <div>
@@ -1029,7 +1024,7 @@ export default function TopicsPage() {
     else setStage('results')
   }
 
-  const handleFinal=(topic:string,desc:string)=>{    setFinalTopic({topic,description:desc})
+  const handleFinal=(topic:string,desc:string)=>{ setFinalTopic({topic,description:desc})
     setTimeout(()=>setStage('final'),1200)
   }
 
@@ -1052,11 +1047,15 @@ export default function TopicsPage() {
     }
   }
 
+  // BUG FIX: previously routed through scout→chat→final which required the advisor
+  // to produce an is_final signal before FinalStage was reached. Now goes directly
+  // to FinalStage so both paths (vet and discover) end with the same experience:
+  // find similar projects + "Use This Topic → Generate My Spec" button.
   const handleVetChoose=async(chosenTitle:string, origin:'vetted'|'provided')=>{
     if(!vetInput||!vetResult) return
     setError(null)
 
-    // Save the vet session (non-fatal)
+    // Save the vet session to DB (non-fatal — never blocks the user)
     try {
       await axios.post(`${API}/topics/vet/save`,{
         original_topic:  vetInput.original_topic,
@@ -1071,8 +1070,8 @@ export default function TopicsPage() {
       },{headers:authHeaders()})
     } catch(e) { console.warn('Vet save non-fatal:', e) }
 
-    // Build synthetic FormData so ChatStage gets valid context
-    const syntheticFormData: FormData = {
+    // Set formData so FinalStage has valid field/level/degree context
+    setFormData({
       degree_level:        vetInput.degree_level,
       field:               vetInput.field,
       project_type:        vetInput.project_type,
@@ -1081,23 +1080,11 @@ export default function TopicsPage() {
       geographic_focus:    vetInput.geographic_focus,
       ambition_level:      vetInput.ambition_level,
       confidence_level:    'have-idea',
-    }
-    setFormData(syntheticFormData)
+    })
 
-    // Build synthetic Topic — slots into existing scouting→chat→final flow
-    const syntheticTopic: Topic = {
-      id:                `vet-${Date.now()}`,
-      title:             chosenTitle,
-      cluster:           vetInput.field,
-      complexity:        'Medium',
-      research_depth:    'Moderate',
-      implementation:    vetInput.project_type==='research-based'?'Theoretical':vetInput.project_type==='practical'?'Hands-on':'Mixed',
-      suitability_score: vetResult.verdict==='STRONG'?90:vetResult.verdict==='REFINED'?80:70,
-      suitability_reason:vetResult.your_take,
-      one_liner:         vetResult.one_liner,
-    }
-
-    await handleTopicSelect(syntheticTopic)
+    // Skip scout+chat — go directly to FinalStage
+    setFinalTopic({ topic: chosenTitle, description: vetResult.one_liner })
+    setStage('final')
   }
 
   return (
@@ -1145,31 +1132,22 @@ export default function TopicsPage() {
         <motion.div key={stage} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:.2}}>
 
           {stage==='gateway'    && <GatewayStage onHaveTopic={()=>setStage('vet')} onNeedHelp={()=>setStage('form')}/>}
-
           {stage==='vet'        && <VetStage onSubmit={handleVetSubmit} onBack={()=>setStage('gateway')}/>}
-
           {stage==='vet-loading'&& vetInput && <VetLoadingStage topic={vetInput.original_topic}/>}
-
           {stage==='vet-result' && vetResult && (
             <VetResultStage result={vetResult} onChoose={handleVetChoose} onBack={()=>setStage('vet')}/>
           )}
-
           {stage==='form'       && <FormStage onSubmit={handleFormSubmit}/>}
-
           {stage==='loading'    && <LoadingStage/>}
-
           {stage==='results'    && discoveryResult && (
             <ResultsStage result={discoveryResult} onSelect={handleTopicSelect}/>
           )}
-
           {stage==='scouting'   && selectedTopic && (
             <ScoutingStage topic={selectedTopic} isLiterature={isLiterature||false}/>
           )}
-
           {stage==='chat'       && selectedTopic && formData && (
             <ChatStage topic={selectedTopic} formData={formData} scoutData={scoutData} onFinal={handleFinal} onChangeTopic={handleChangeTopic}/>
           )}
-
           {stage==='final'      && finalTopic && formData && (
             <FinalStage topic={finalTopic.topic} description={finalTopic.description}
               field={formData.field} level={formData.ambition_level} degree={formData.degree_level}/>
