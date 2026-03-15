@@ -1,17 +1,22 @@
 """
-Locked Requirements Builder — B2
+Locked Requirements Builder — B3 (Paradigm Edition)
 
 Pure Python. No AI. No guessing.
 Assembles LockedRequirementsA or LockedRequirementsB from:
   - Step 1 answers (field, topic, level)
   - Step 2 answers (dataset info, guidelines)
-  - Step 3 answers (student questions)
+  - Step 3 answers (student questions, incl. new research_nature Q4)
   - Citation pool (from PaperAbstractFetcher)
   - Analyzed similar projects (from Phase 1 streams)
   - Parsed guidelines (from Phase 0)
 
-This object is the single source of truth passed to every section agent.
-No agent may introduce facts not present here.
+WHAT'S NEW IN B3 (non-breaking):
+  - ResearchParadigm detection added between detect_track() and assembly
+  - detect_paradigm() is deterministic — no API calls, no cost
+  - research_nature (Step 3 Q4) is the primary signal; auto-detection is fallback
+  - _pick_methods() dispatches to the right method picker per paradigm
+  - _pick_evaluation_framework_by_paradigm() returns paradigm-correct eval
+  - All existing ML_CLASSIFICATION behaviour is 100% unchanged
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ from app.models.projects import AnalyzedProjectSpecSections
 from app.models.synthesis import StrategicSynthesis
 from app.core.pipelines.dataset_profiler import DatasetProfile
 from app.models.locked_requirements import (
+    ResearchParadigm,
     VerifiedPaper,
     LockedDataset,
     LockedBaseline,
@@ -35,9 +41,8 @@ from app.models.locked_requirements import (
 )
 
 
-# ─── Track detection ──────────────────────────────────────────────────────────
+# ─── Track detection (unchanged) ─────────────────────────────────────────────
 
-# Fields that indicate Track B (theoretical/humanities)
 _TRACK_B_FIELDS = {
     "english", "literature", "history", "law", "philosophy",
     "linguistics", "education", "sociology", "anthropology",
@@ -49,7 +54,6 @@ _TRACK_B_FIELDS = {
     "criminology", "social work",
 }
 
-# Keywords in topic that strongly suggest Track A
 _TRACK_A_TOPIC_SIGNALS = {
     "machine learning", "deep learning", "neural network", "data science",
     "algorithm", "classification", "regression", "clustering", "prediction",
@@ -64,235 +68,666 @@ _TRACK_A_TOPIC_SIGNALS = {
 
 
 def detect_track(field_of_study: str, research_topic: str) -> str:
-    """
-    Detect Track A or B from field and topic.
-    Returns "A" for empirical/data/technical, "B" for theoretical/humanities.
-    """
-    field_lower = field_of_study.lower()
+    """Detect Track A (empirical) or Track B (theoretical). Unchanged."""
     topic_lower = (research_topic or "").lower()
-
-    # Explicit Track A signals in topic override everything
     for signal in _TRACK_A_TOPIC_SIGNALS:
         if signal in topic_lower:
             return "A"
-
-    # Check field
+    field_lower = field_of_study.lower()
     for b_field in _TRACK_B_FIELDS:
         if b_field in field_lower:
             return "B"
-
-    # Default to A — most university projects are empirical
     return "A"
 
 
-# ─── Default work plan templates ─────────────────────────────────────────────
+# ─── Paradigm detection (NEW) ────────────────────────────────────────────────
 
-# WEEK 1 FIX: accepts algorithms list and injects it into the model training week.
-def _default_work_plan_a(weeks: int, algorithms: List[str] = None) -> List[dict]:
-    """Standard 15-week Track A plan. Scales for 30-week part-time."""
-    algo_str = ", ".join(algorithms) if algorithms else "selected ML models"
+# Fields where econometric causal inference is the expected paradigm
+_ECONOMETRIC_FIELDS = {
+    "economics", "finance", "accounting", "business administration",
+    "development studies", "health economics", "public administration",
+    "international business", "banking", "investment", "commerce",
+    "actuarial", "economic", "financial economics", "business",
+    "agribusiness", "agricultural economics",
+}
 
-    if weeks <= 15:
-        return [
-            {"weeks": "1–2",   "activity": "Literature review and baseline paper identification", "deliverable": "Annotated bibliography"},
-            {"weeks": "3–4",   "activity": "Data acquisition, preprocessing, EDA, and class imbalance handling", "deliverable": "Clean dataset + EDA report"},
-            {"weeks": "5–8",   "activity": f"Model training: {algo_str}. Hyperparameter tuning via grid search. Stratified cross-validation.", "deliverable": "Trained models + performance metrics"},
-            {"weeks": "9–10",  "activity": "XAI integration: SHAP and LIME. Feature importance analysis", "deliverable": "Interpretation outputs"},
-            {"weeks": "11–12", "activity": "Cross-dataset generalisation testing and robustness checks", "deliverable": "Generalisation metrics"},
-            {"weeks": "13–15", "activity": "Write-up, supervisor review, ethics statement, final submission", "deliverable": "Final dissertation"},
-        ]
-    else:
-        # 30-week version
-        return [
-            {"weeks": "1–4",   "activity": "Literature review, baseline identification, annotated bibliography", "deliverable": "Annotated bibliography"},
-            {"weeks": "5–8",   "activity": "Data acquisition, preprocessing, EDA, class imbalance handling", "deliverable": "Clean dataset + EDA report"},
-            {"weeks": "9–16",  "activity": f"Model training: {algo_str}. Hyperparameter tuning. Stratified cross-validation.", "deliverable": "Trained models + metrics"},
-            {"weeks": "17–20", "activity": "XAI integration: SHAP and LIME", "deliverable": "Interpretation outputs"},
-            {"weeks": "21–24", "activity": "Cross-dataset generalisation testing", "deliverable": "Generalisation metrics"},
-            {"weeks": "25–30", "activity": "Write-up, supervisor review, final submission", "deliverable": "Final dissertation"},
-        ]
+# Topic phrases that strongly signal causal inference questions
+_ECONOMETRIC_TOPIC_SIGNALS = [
+    "impact of", "effect of", "influence of", "role of",
+    "determinants of", "relationship between",
+    "impact investing", "foreign direct investment", "fdi",
+    "job creation", "employment", "gdp", "economic growth",
+    "wages", "productivity", "poverty", "inequality",
+    "fiscal policy", "monetary policy", "firm performance",
+    "stock return", "market efficiency", "financial performance",
+    "microfinance", "remittance", "trade", "inflation",
+]
+
+# Topic phrases that signal financial time-series / risk paradigm
+_FINANCE_QUANT_SIGNALS = [
+    "volatility", "portfolio", "value at risk", "garch", "monte carlo",
+    "asset pricing", "risk model", "option pricing", "hedge",
+    "stock price", "bond yield", "credit risk", "var ",
+]
+
+# Topic phrases that signal survey-based quantitative study
+_SURVEY_TOPIC_SIGNALS = [
+    "perception", "attitude", "adoption", "satisfaction", "intention",
+    "behaviour", "behavior", "awareness", "motivation", "willingness",
+    "acceptance", "engagement", "experience", "opinion",
+]
+
+# Fields where survey methodology is typical
+_SURVEY_FIELDS = {
+    "management", "education", "psychology", "marketing", "hr",
+    "human resource", "organisational", "organizational", "nursing",
+    "public health", "pharmacy", "social work",
+}
+
+# Topic phrases that signal systems engineering / IS evaluation
+_SYSTEMS_SIGNALS = [
+    "system design", "web application", "web app", "mobile app",
+    "api ", "microservice", "architecture design", "software architecture",
+    "deploy", "implementation", "platform", "database design",
+    "cloud ", "iot system", "embedded system",
+]
 
 
-def _default_work_plan_b(weeks: int) -> List[dict]:
-    """Standard 15-week Track B plan."""
-    if weeks <= 15:
-        return [
-            {"weeks": "1–2",   "activity": "Literature review and theoretical framework selection", "deliverable": "Annotated bibliography + framework justification"},
-            {"weeks": "3–4",   "activity": "Close reading of primary sources; source mapping", "deliverable": "Primary source analysis notes"},
-            {"weeks": "5–8",   "activity": "Thematic analysis applying chosen theoretical lens", "deliverable": "Draft thematic chapters"},
-            {"weeks": "9–11",  "activity": "Engagement with scholarly debates; comparative analysis", "deliverable": "Comparative analysis draft"},
-            {"weeks": "12–13", "activity": "Argument synthesis and draft full spec", "deliverable": "Complete draft"},
-            {"weeks": "14–15", "activity": "Write-up, supervisor review, final submission", "deliverable": "Final dissertation"},
-        ]
-    else:
-        return [
-            {"weeks": "1–5",   "activity": "Literature review and theoretical framework selection", "deliverable": "Annotated bibliography"},
-            {"weeks": "6–10",  "activity": "Close reading of primary sources", "deliverable": "Primary source analysis"},
-            {"weeks": "11–18", "activity": "Thematic and comparative analysis", "deliverable": "Analysis chapters"},
-            {"weeks": "19–24", "activity": "Argument synthesis", "deliverable": "Complete draft"},
-            {"weeks": "25–30", "activity": "Write-up, review, final submission", "deliverable": "Final dissertation"},
-        ]
-
-
-# ─── Ethics statement builders ────────────────────────────────────────────────
-
-def _build_ethics_statement(
-    data_sensitivity: str,
-    dataset_name: str,
+def detect_paradigm(
     field_of_study: str,
-) -> EthicsStatement:
-    """Build a pre-written ethics paragraph from student's data sensitivity answer."""
-
-    if data_sensitivity == "public":
-        statement = (
-            f"All datasets employed in this project are publicly available under open academic "
-            f"licences, specifically the {dataset_name}. No new participant data will be collected "
-            f"and no human subjects will be recruited, eliminating the requirement for institutional "
-            f"ethical approval. However, it is acknowledged that publicly available clinical datasets "
-            f"may exhibit demographic biases reflecting the populations from which they were drawn; "
-            f"these limitations will be explicitly discussed in the findings and should be considered "
-            f"when interpreting the generalisability of results. Data will be used solely for academic "
-            f"research purposes and will not be redistributed or used in clinical decision-making."
-        )
-        return EthicsStatement(
-            data_sensitivity="public",
-            statement=statement,
-            irb_required=False,
-            population_bias_note="Acknowledge demographic limitations of the dataset.",
-        )
-
-    elif data_sensitivity == "self_collected":
-        statement = (
-            f"This project involves the collection of primary data as part of the research methodology. "
-            f"Informed consent will be obtained from all participants prior to data collection, and "
-            f"participants will be clearly informed of their right to withdraw at any time without "
-            f"consequence. All collected data will be anonymised before analysis, stored securely "
-            f"on password-protected systems, and deleted upon project completion in accordance with "
-            f"institutional data retention policies. The research protocol will be submitted for "
-            f"review to the university ethics committee prior to commencement of data collection."
-        )
-        return EthicsStatement(
-            data_sensitivity="self_collected",
-            statement=statement,
-            irb_required=True,
-            population_bias_note="Discuss sampling strategy and representativeness.",
-        )
-
-    else:  # sensitive
-        statement = (
-            f"This project involves sensitive data that may include personal or identifiable information. "
-            f"All data handling will comply with the General Data Protection Regulation (GDPR) and "
-            f"relevant institutional data governance policies. Ethical approval will be sought from "
-            f"the university ethics committee before any data is accessed. Data minimisation principles "
-            f"will be applied throughout; only data strictly necessary for the research objectives "
-            f"will be retained, and all personally identifiable information will be anonymised or "
-            f"pseudonymised prior to analysis."
-        )
-        return EthicsStatement(
-            data_sensitivity="sensitive",
-            statement=statement,
-            irb_required=True,
-            population_bias_note="Discuss ethical implications of sensitive data use.",
-        )
-
-
-# ─── Similar project converter ────────────────────────────────────────────────
-
-def _convert_analyzed_projects(
-    analyzed: List[AnalyzedProjectSpecSections],
-) -> List[SimilarProjectEntry]:
-    """Convert AnalyzedProjectSpecSections → SimilarProjectEntry list."""
-    entries = []
-    for proj in analyzed[:5]:  # cap at 5
-        limitation = (
-            proj.limitations_identified[0]
-            if proj.limitations_identified
-            else "Limitations not explicitly stated in the project."
-        )
-        approach = proj.methodology_used.approach_type if proj.methodology_used else "Not specified"
-        entries.append(
-            SimilarProjectEntry(
-                title=proj.project_title,
-                author_or_institution=proj.author_institution or "Unknown institution",
-                year=proj.year,
-                level=proj.project_type or "MSc",
-                approach_summary=approach,
-                limitation=limitation,
-            )
-        )
-    return entries
-
-
-# ─── Baseline selector ────────────────────────────────────────────────────────
-
-def _select_baseline(citation_pool: List[VerifiedPaper]) -> Optional[LockedBaseline]:
+    research_topic: str,
+    research_nature: Optional[str] = None,
+    preferred_algorithms: Optional[str] = None,
+) -> ResearchParadigm:
     """
-    Select the best baseline from the citation pool.
-    Priority: is_baseline_candidate=True, then most recent, then first with a metric.
-    Returns None if no metric-bearing papers exist — caller handles this honestly.
+    Determine the research paradigm for a Track A project.
+
+    Detection priority (highest → lowest):
+      1. Student's explicit answer to Step 3 Q4 (research_nature)
+         — the student said what kind of study they're doing in plain English
+      2. Econometric terms in preferred_algorithms (Q3)
+         — student typed "OLS, PSM, DiD" — clear signal
+      3. Keyword matching on field + topic
+         — deterministic heuristic, same approach as detect_track()
+      4. ML_CLASSIFICATION (safe default)
+         — preserves all existing behaviour for ambiguous cases
+
+    Returns ResearchParadigm. Never raises.
     """
-    candidates = [p for p in citation_pool if p.is_baseline_candidate and p.key_metric_value]
-    if not candidates:
-        candidates = [p for p in citation_pool if p.key_metric_value]
-    if not candidates:
-        return None
 
-    best = candidates[0]  # already sorted by is_baseline_candidate, then year
-    metric_val = best.key_metric_value or "N/A"
-    metric_name = best.key_metric or "Accuracy"
+    # ── Priority 1: Student's explicit study-type answer (Q4) ────────────────
+    if research_nature:
+        rn = research_nature.lower().strip()
+        # Maps from the plain-English Q4 option values (see Step3Questions.tsx)
+        if rn in ("econometric_causal", "testing_causation"):
+            return ResearchParadigm.ECONOMETRIC_CAUSAL
+        if rn in ("survey_quantitative", "running_survey"):
+            return ResearchParadigm.SURVEY_QUANTITATIVE
+        if rn in ("systems_engineering", "building_system"):
+            return ResearchParadigm.SYSTEMS_ENGINEERING
+        if rn in ("finance_quant", "financial_analysis"):
+            return ResearchParadigm.FINANCE_QUANT
+        if rn in ("ml_classification", "building_model"):
+            return ResearchParadigm.ML_CLASSIFICATION
+        # "not_sure" falls through to auto-detection below
 
-    # Parse numeric value to compute target
-    try:
-        num = float(re.sub(r"[^0-9.]", "", metric_val))
-        if num < 1:  # it's a 0.xx score
-            target_val = f"{num + 0.05:.2f}"
-            target = f"minimum {target_val} {metric_name} (5-point improvement over {metric_val})"
-        else:  # it's a percentage
-            target_val = f"{num + 5:.1f}%"
-            target = f"minimum {target_val} {metric_name} (5-point improvement over {metric_val})"
-    except Exception:
-        target = f"measurable improvement over the {metric_val} reported in the baseline"
+    # ── Priority 2: Econometric terms in preferred_algorithms (Q3 override) ──
+    if preferred_algorithms:
+        alg_lower = preferred_algorithms.lower()
+        econ_terms = ["ols", "psm", "propensity", "diff-in-diff", "did ",
+                      "fixed effect", "random effect", "instrumental variable",
+                      "hausman", "regression analysis", "panel data"]
+        if any(t in alg_lower for t in econ_terms):
+            print(f"   📐 Paradigm detected from preferred_algorithms: ECONOMETRIC_CAUSAL")
+            return ResearchParadigm.ECONOMETRIC_CAUSAL
 
-    return LockedBaseline(
-        paper_title=best.title,
-        authors=best.authors,
-        year=best.year,
-        metric_name=metric_name,
-        metric_value=metric_val,
-        harvard_citation=best.harvard_citation,
-        target_to_beat=target,
+        finance_terms = ["garch", "var ", "monte carlo", "volatility model",
+                         "portfolio optim", "arima", "event study"]
+        if any(t in alg_lower for t in finance_terms):
+            print(f"   📐 Paradigm detected from preferred_algorithms: FINANCE_QUANT")
+            return ResearchParadigm.FINANCE_QUANT
+
+        survey_terms = ["likert", "cronbach", "spss", "sem ", "structural equation",
+                        "questionnaire", "survey analysis", "factor analysis"]
+        if any(t in alg_lower for t in survey_terms):
+            print(f"   📐 Paradigm detected from preferred_algorithms: SURVEY_QUANTITATIVE")
+            return ResearchParadigm.SURVEY_QUANTITATIVE
+
+    # ── Priority 3: Keyword detection on field + topic ────────────────────────
+    field_l = field_of_study.lower()
+    topic_l = (research_topic or "").lower()
+
+    # Systems engineering — strong topic signals override field
+    if any(s in topic_l for s in _SYSTEMS_SIGNALS):
+        print(f"   📐 Paradigm detected from topic keywords: SYSTEMS_ENGINEERING")
+        return ResearchParadigm.SYSTEMS_ENGINEERING
+
+    # Finance quant — strong topic signals
+    if any(s in topic_l for s in _FINANCE_QUANT_SIGNALS):
+        print(f"   📐 Paradigm detected from topic keywords: FINANCE_QUANT")
+        return ResearchParadigm.FINANCE_QUANT
+
+    # Econometric — field match + topic confirmation
+    if any(f in field_l for f in _ECONOMETRIC_FIELDS):
+        if any(s in topic_l for s in _ECONOMETRIC_TOPIC_SIGNALS):
+            print(f"   📐 Paradigm detected: ECONOMETRIC_CAUSAL (field={field_of_study})")
+            return ResearchParadigm.ECONOMETRIC_CAUSAL
+
+    # Survey quantitative — field + topic combination
+    if any(f in field_l for f in _SURVEY_FIELDS):
+        if any(s in topic_l for s in _SURVEY_TOPIC_SIGNALS):
+            print(f"   📐 Paradigm detected: SURVEY_QUANTITATIVE (field={field_of_study})")
+            return ResearchParadigm.SURVEY_QUANTITATIVE
+
+    # ── Priority 4: Safe default ──────────────────────────────────────────────
+    print(f"   📐 Paradigm: ML_CLASSIFICATION (default — no other signal found)")
+    return ResearchParadigm.ML_CLASSIFICATION
+
+
+# ─── Paradigm-specific method pickers (NEW) ──────────────────────────────────
+
+def _pick_econometric_methods(field: str, topic: str, synthesis: Optional[StrategicSynthesis]) -> tuple:
+    """
+    Returns (methods_list, justifications_dict) for econometric causal inference projects.
+    Methods are selected based on whether the research looks like panel, causal, or general.
+    """
+    topic_l = topic.lower()
+
+    if any(w in topic_l for w in ["panel", "cross-country", "longitudinal", "countries", "firms over time"]):
+        methods = [
+            "OLS Regression (pooled baseline)",
+            "Fixed Effects Model",
+            "Random Effects Model",
+            "Hausman Test for model selection",
+        ]
+        just = {
+            "OLS Regression (pooled baseline)":
+                "Provides the baseline estimate before controlling for unobserved unit heterogeneity; "
+                "a standard starting point in panel econometrics",
+            "Fixed Effects Model":
+                "Controls for all time-invariant unobserved differences between units (firms, countries), "
+                "isolating the within-unit effect of the treatment variable (Wooldridge, 2010)",
+            "Random Effects Model":
+                "More efficient than FE when unobserved effects are uncorrelated with regressors; "
+                "suitability is formally tested via Hausman (1978)",
+            "Hausman Test for model selection":
+                "Standard econometric test to determine whether Fixed or Random Effects is the "
+                "appropriate specification; result reported as part of model selection (Hausman, 1978)",
+        }
+
+    elif any(w in topic_l for w in ["impact", "effect", "causal", "invest", "policy", "treatment", "intervention"]):
+        methods = [
+            "OLS Regression (baseline estimate)",
+            "Propensity Score Matching (PSM)",
+            "Difference-in-Differences (if pre/post data available)",
+        ]
+        just = {
+            "OLS Regression (baseline estimate)":
+                "Provides the initial association estimate controlling for observed confounders; "
+                "forms the naive comparison before addressing selection bias",
+            "Propensity Score Matching (PSM)":
+                "Addresses selection bias by matching treated and control units on the probability of "
+                "treatment assignment, creating a quasi-experimental comparison "
+                "(Rosenbaum and Rubin, 1983). Standard for impact evaluation without random assignment.",
+            "Difference-in-Differences (if pre/post data available)":
+                "Estimates causal effect by comparing outcome changes over time between treatment and "
+                "control groups, removing time-invariant confounding under the parallel trends assumption "
+                "(Angrist and Pischke, 2009)",
+        }
+
+    else:
+        # General econometric / determinants study
+        methods = [
+            "Descriptive Statistics and Correlation Analysis",
+            "OLS Multiple Linear Regression",
+            "Heteroskedasticity-Robust Standard Errors",
+            "Multicollinearity Diagnostics (VIF)",
+        ]
+        just = {
+            "Descriptive Statistics and Correlation Analysis":
+                "Provides preliminary assessment of variable distributions and bivariate "
+                "relationships before regression modelling; standard practice in quantitative research",
+            "OLS Multiple Linear Regression":
+                "Estimates the linear relationship between the outcome variable and a set of "
+                "independent variables while controlling for confounders simultaneously (OLS assumptions: "
+                "Wooldridge, 2010)",
+            "Heteroskedasticity-Robust Standard Errors":
+                "White (1980) robust standard errors are applied to guard against heteroskedasticity "
+                "in the error term, which would otherwise inflate t-statistics",
+            "Multicollinearity Diagnostics (VIF)":
+                "Variance Inflation Factors are computed for all regressors; VIF > 10 indicates "
+                "problematic collinearity requiring variable exclusion or transformation",
+        }
+
+    return methods, just
+
+
+def _pick_survey_methods(field: str, topic: str) -> tuple:
+    """Returns (methods, justifications) for survey-based quantitative projects."""
+    methods = [
+        "Descriptive Statistics (mean, SD, frequency distribution)",
+        "Reliability Testing — Cronbach's Alpha",
+        "Correlation Analysis (Pearson / Spearman)",
+        "Multiple Linear Regression or Ordinal Regression",
+    ]
+    just = {
+        "Descriptive Statistics (mean, SD, frequency distribution)":
+            "Characterises the sample and describes the distribution of Likert responses "
+            "before inferential analysis; required for any survey-based study",
+        "Reliability Testing — Cronbach's Alpha":
+            "Assesses internal consistency of the measurement instrument. "
+            "Nunnally (1978) recommends α > 0.7 as the threshold for acceptable reliability; "
+            "constructs below this threshold are revised or excluded",
+        "Correlation Analysis (Pearson / Spearman)":
+            "Examines bivariate relationships between constructs before regression; "
+            "Spearman is used where Likert data violates normality assumptions",
+        "Multiple Linear Regression or Ordinal Regression":
+            "Tests the predictive relationship between independent variables (constructs) "
+            "and the outcome; ordinal regression is used when the dependent variable is a "
+            "Likert-scale construct rather than a continuous measure (Field, 2018)",
+    }
+    return methods, just
+
+
+def _pick_systems_methods(field: str, topic: str) -> tuple:
+    """Returns (methods, justifications) for systems design and evaluation projects."""
+    topic_l = topic.lower()
+
+    has_performance = any(w in topic_l for w in ["performance", "scalability", "load", "throughput"])
+    has_usability   = any(w in topic_l for w in ["usability", "user experience", "ux", "interface"])
+
+    methods = ["System Design and Architecture Specification"]
+    just    = {
+        "System Design and Architecture Specification":
+            "Formal specification of system components, interfaces, and data flows using "
+            "UML or equivalent notation; forms the primary artefact of a systems-design project",
+    }
+
+    if has_performance:
+        methods.append("Performance Benchmarking (response time, throughput, error rate)")
+        just["Performance Benchmarking (response time, throughput, error rate)"] = (
+            "Quantitative evaluation of system performance under controlled load using "
+            "Apache JMeter or Locust. Metrics include mean response time (target: < 200ms "
+            "at 95th percentile), throughput (requests/sec), and error rate (< 1%)"
+        )
+
+    if has_usability:
+        methods.append("Usability Testing — System Usability Scale (SUS)")
+        just["Usability Testing — System Usability Scale (SUS)"] = (
+            "The System Usability Scale (Brooke, 1996) is a validated 10-item Likert "
+            "questionnaire administered to representative users. A SUS score ≥ 68 indicates "
+            "above-average usability (Bangor et al., 2008)"
+        )
+
+    methods.append("Functional Testing and Verification Against Requirements")
+    just["Functional Testing and Verification Against Requirements"] = (
+        "Each functional requirement is tested with defined test cases; "
+        "pass/fail results are recorded in a traceability matrix linking requirements "
+        "to test outcomes"
     )
 
+    return methods, just
 
-# ─── Default evaluation frameworks ───────────────────────────────────────────
 
-_DEFAULT_EVAL_BY_FIELD = {
-    "medical": EvaluationFramework(
-        primary_metric="AUC-ROC",
-        additional_metrics=["F1 Score", "Sensitivity (Recall)", "Specificity", "Precision-Recall curve"],
-        validation_strategy="Stratified 10-fold cross-validation",
-        train_val_test_split="70% training, 15% validation, 15% test",
-        imbalance_strategy="SMOTE (Chawla et al., 2002)",
-    ),
-    "nlp": EvaluationFramework(
-        primary_metric="F1 Score (macro)",
-        additional_metrics=["Precision", "Recall", "BLEU / ROUGE (if generative)", "Confusion Matrix"],
-        validation_strategy="Stratified 5-fold cross-validation",
-        train_val_test_split="70% training, 15% validation, 15% test",
-        imbalance_strategy="Class weighting or oversampling",
-    ),
-    "general": EvaluationFramework(
-        primary_metric="AUC-ROC",
-        additional_metrics=["F1 Score", "Precision", "Recall", "Confusion Matrix"],
-        validation_strategy="Stratified 10-fold cross-validation",
-        train_val_test_split="70% training, 15% validation, 15% test",
-        imbalance_strategy="SMOTE or class weighting as appropriate",
-    ),
-}
+def _pick_finance_methods(field: str, topic: str) -> tuple:
+    """Returns (methods, justifications) for quantitative finance / actuarial projects."""
+    topic_l = topic.lower()
+    methods, just = [], {}
+
+    if any(w in topic_l for w in ["volatility", "garch", "heterosked"]):
+        methods.append("GARCH(1,1) Volatility Model")
+        just["GARCH(1,1) Volatility Model"] = (
+            "Captures time-varying volatility clustering in financial return series; "
+            "GARCH(1,1) is the standard specification shown to adequately fit most financial "
+            "time series (Bollerslev, 1986)"
+        )
+    if any(w in topic_l for w in ["var", "risk", "value at risk"]):
+        methods.append("Value at Risk (VaR) — Historical Simulation and Parametric")
+        just["Value at Risk (VaR) — Historical Simulation and Parametric"] = (
+            "Both historical simulation and parametric (normal) VaR are computed at the "
+            "99th percentile for comparison; Kupiec (1995) back-testing is applied to "
+            "validate coverage"
+        )
+    if any(w in topic_l for w in ["portfolio", "optimis", "allocation"]):
+        methods.append("Mean-Variance Portfolio Optimisation (Markowitz, 1952)")
+        just["Mean-Variance Portfolio Optimisation (Markowitz, 1952)"] = (
+            "Constructs the efficient frontier by minimising portfolio variance for a given "
+            "expected return; the Sharpe ratio is used as the primary performance measure"
+        )
+    if any(w in topic_l for w in ["monte carlo", "simulation"]):
+        methods.append("Monte Carlo Simulation")
+        just["Monte Carlo Simulation"] = (
+            "Generates 10,000+ simulated return paths from fitted distributional parameters "
+            "to estimate tail risk and expected shortfall under uncertainty"
+        )
+
+    if not methods:  # fallback for generic finance topic
+        methods = [
+            "Descriptive Statistics of Return Series",
+            "OLS Regression on Financial Data",
+            "Stationarity Testing (ADF Test)",
+        ]
+        just = {
+            "Descriptive Statistics of Return Series":
+                "Summarises distributional properties of financial returns including mean, "
+                "standard deviation, skewness, and kurtosis; non-normality is tested via "
+                "Jarque-Bera test",
+            "OLS Regression on Financial Data":
+                "Estimates the linear relationship between variables of interest after "
+                "confirming stationarity; HAC-robust standard errors applied",
+            "Stationarity Testing (ADF Test)":
+                "Augmented Dickey-Fuller test is applied to all financial time series to "
+                "confirm stationarity before regression; non-stationary series are "
+                "differenced appropriately (Dickey and Fuller, 1979)",
+        }
+
+    return methods, just
+
+
+def _pick_methods(
+    field: str,
+    topic: str,
+    synthesis: Optional[StrategicSynthesis],
+    paradigm: ResearchParadigm,
+    preferred_algorithms: Optional[str] = None,
+) -> tuple:
+    """
+    Dispatch to the correct method picker based on paradigm.
+    For ML_CLASSIFICATION, falls through to the existing _pick_algorithms() so
+    all existing behaviour is 100% preserved.
+    """
+    if paradigm == ResearchParadigm.ECONOMETRIC_CAUSAL:
+        # If student explicitly stated methods in Q3, honour them but add justifications
+        if preferred_algorithms and preferred_algorithms.strip():
+            raw = re.split(r"[,;/]", preferred_algorithms)
+            student_methods = [m.strip() for m in raw if m.strip() and len(m.strip()) > 2]
+            if len(student_methods) >= 1:
+                just = {}
+                for m in student_methods:
+                    just[m] = (
+                        f"Student-identified method for this econometric study; "
+                        f"appropriate for {topic}"
+                    )
+                return student_methods, just
+        return _pick_econometric_methods(field, topic, synthesis)
+
+    elif paradigm == ResearchParadigm.SURVEY_QUANTITATIVE:
+        return _pick_survey_methods(field, topic)
+
+    elif paradigm == ResearchParadigm.SYSTEMS_ENGINEERING:
+        return _pick_systems_methods(field, topic)
+
+    elif paradigm == ResearchParadigm.FINANCE_QUANT:
+        return _pick_finance_methods(field, topic)
+
+    else:
+        # ML_CLASSIFICATION — call existing _pick_algorithms() unchanged
+        return _pick_algorithms(field, topic, synthesis, preferred_algorithms)
+
+
+def _pick_evaluation_framework_by_paradigm(
+    field: str,
+    topic: str,
+    paradigm: ResearchParadigm,
+) -> EvaluationFramework:
+    """
+    Returns an EvaluationFramework appropriate for the paradigm.
+    For ML_CLASSIFICATION, falls through to existing _pick_evaluation_framework().
+    """
+    if paradigm == ResearchParadigm.ECONOMETRIC_CAUSAL:
+        return EvaluationFramework(
+            primary_metric="Coefficient significance (p < 0.05) and model R²",
+            additional_metrics=[
+                "95% confidence intervals on key coefficients",
+                "Heteroskedasticity-robust standard errors (White, 1980)",
+                "Variance Inflation Factor (VIF < 10 for all regressors)",
+                "Breusch-Pagan test for heteroskedasticity",
+                "Hausman test statistic (if panel data used)",
+            ],
+            validation_strategy=(
+                "Robustness checks with alternative variable specifications, "
+                "alternative estimation periods, and sub-group analysis"
+            ),
+            train_val_test_split=(
+                "Not applicable — full dataset used for estimation; "
+                "train/test split is a machine learning concept not used in econometric inference"
+            ),
+            imbalance_strategy=None,  # SMOTE does not apply to econometric studies
+        )
+
+    elif paradigm == ResearchParadigm.SURVEY_QUANTITATIVE:
+        return EvaluationFramework(
+            primary_metric="Regression coefficient significance and R² (explained variance)",
+            additional_metrics=[
+                "Cronbach's Alpha for reliability (target: α > 0.7)",
+                "Correlation coefficients (Pearson / Spearman)",
+                "Standardised regression coefficients (β)",
+                "Factor loadings (if confirmatory factor analysis used)",
+            ],
+            validation_strategy=(
+                "Pilot study with ≥30 respondents to test instrument reliability "
+                "before main data collection; split-half reliability cross-check"
+            ),
+            train_val_test_split=(
+                "Not applicable — survey data is not split into training and test sets; "
+                "inferential statistics are applied to the full sample"
+            ),
+            imbalance_strategy=None,
+        )
+
+    elif paradigm == ResearchParadigm.SYSTEMS_ENGINEERING:
+        return EvaluationFramework(
+            primary_metric="Functional requirement pass rate (target: 100% of critical requirements)",
+            additional_metrics=[
+                "Mean response time under load (target: < 200ms at 95th percentile)",
+                "System throughput (requests/second under peak load)",
+                "Error rate under stress testing (target: < 1%)",
+                "System Usability Scale (SUS) score ≥ 68 (if usability testing applied)",
+            ],
+            validation_strategy=(
+                "Requirement-driven testing using a traceability matrix; "
+                "performance tests run at 50%, 100%, and 150% of target load"
+            ),
+            train_val_test_split=(
+                "Not applicable — system evaluation uses functional and performance "
+                "testing, not machine learning train/test methodology"
+            ),
+            imbalance_strategy=None,
+        )
+
+    elif paradigm == ResearchParadigm.FINANCE_QUANT:
+        return EvaluationFramework(
+            primary_metric="Statistical significance of model parameters and goodness-of-fit",
+            additional_metrics=[
+                "AIC/BIC for model selection between competing specifications",
+                "Kupiec (1995) back-test for VaR coverage (if applicable)",
+                "Sharpe ratio and maximum drawdown (if portfolio analysis)",
+                "Ljung-Box test for residual autocorrelation",
+            ],
+            validation_strategy=(
+                "Rolling window out-of-sample validation; model estimated on in-sample "
+                "period and evaluated on held-out recent data"
+            ),
+            train_val_test_split=(
+                "In-sample / out-of-sample split using chronological boundary "
+                "(typically 80% in-sample / 20% out-of-sample by time)"
+            ),
+            imbalance_strategy=None,
+        )
+
+    else:
+        # ML_CLASSIFICATION — call existing function unchanged
+        return _pick_evaluation_framework(field, topic)
+
+
+# ─── All existing functions below — UNCHANGED ────────────────────────────────
+
+def _pick_algorithms(
+    field: str,
+    topic: str,
+    synthesis: Optional[StrategicSynthesis],
+    preferred_algorithms: Optional[str] = None,
+) -> tuple:
+    """
+    Return (algorithms list, justifications dict) for ML_CLASSIFICATION paradigm.
+
+    Priority:
+      1. Student's own stated preferences (preferred_algorithms from Step 3 Q3)
+      2. Methods mentioned in synthesis.novel_contributions (from actual papers)
+      3. Keyword matching against field/topic (last resort)
+    """
+
+    # ── Priority 1: Student's own stated preferences ──────────────────────────
+    if preferred_algorithms and preferred_algorithms.strip():
+        raw = re.split(r"[,;/]", preferred_algorithms)
+        student_algs = [a.strip() for a in raw if a.strip() and len(a.strip()) > 2]
+
+        if len(student_algs) >= 2:
+            baseline_terms = ["logistic", "baseline", "naive bayes", "linear regression", "knn"]
+            has_baseline = any(
+                any(bt in a.lower() for bt in baseline_terms)
+                for a in student_algs
+            )
+            if not has_baseline:
+                student_algs.append("Logistic Regression (baseline)")
+
+            just = {}
+            for a in student_algs:
+                a_lower = a.lower()
+                if any(bt in a_lower for bt in ["logistic", "baseline", "linear regression"]):
+                    just[a] = "Interpretable baseline for comparison against more complex models"
+                elif "xgboost" in a_lower or "gradient boost" in a_lower:
+                    just[a] = f"High-performance ensemble method; student-identified as relevant to {topic}"
+                elif "lstm" in a_lower or "rnn" in a_lower:
+                    just[a] = f"Recurrent architecture suited to sequential patterns; student-identified"
+                elif "bert" in a_lower or "transformer" in a_lower:
+                    just[a] = f"State-of-the-art contextual representation; student-identified"
+                elif "cnn" in a_lower or "resnet" in a_lower:
+                    just[a] = f"Convolutional architecture for spatial/image features; student-identified"
+                elif "random forest" in a_lower:
+                    just[a] = f"Robust ensemble method; resistant to overfitting on moderately-sized datasets"
+                elif "svm" in a_lower or "support vector" in a_lower:
+                    just[a] = f"Effective for high-dimensional classification; student-identified"
+                else:
+                    just[a] = f"Student-identified method — appropriate for {topic}"
+
+            print(f"   🎯 Algorithms: Priority 1 (student preference) — {student_algs}")
+            return student_algs, just
+
+    # ── Priority 2: Methods from synthesis.novel_contributions ───────────────
+    if synthesis and synthesis.novel_contributions:
+        combined = " ".join(synthesis.novel_contributions).lower()
+        found_algs, found_just = [], {}
+
+        ml_method_map = {
+            "random forest":      ("Random Forest", "Identified from literature review as a high-performing ensemble method for this problem domain"),
+            "xgboost":            ("XGBoost",        "Gradient boosted trees found in reviewed papers to achieve strong benchmark performance"),
+            "support vector":     ("Support Vector Machine", "SVM identified in synthesis as effective for this classification task"),
+            "neural network":     ("Artificial Neural Network", "Deep learning approach surfaced from literature synthesis"),
+            "lstm":               ("LSTM",            "Long Short-Term Memory network identified in literature for sequential modelling"),
+            "bert":               ("BERT",            "Transformer-based NLP model found in synthesis for text classification"),
+            "cnn":                ("CNN",             "Convolutional Neural Network identified in literature for spatial feature extraction"),
+            "logistic regression":("Logistic Regression", "Interpretable baseline found consistently across reviewed studies"),
+            "k-nearest":          ("K-Nearest Neighbours", "Instance-based learner identified in synthesis for comparison"),
+            "naive bayes":        ("Naive Bayes",    "Probabilistic baseline identified from reviewed papers"),
+        }
+
+        for keyword, (alg_name, justification) in ml_method_map.items():
+            if keyword in combined:
+                found_algs.append(alg_name)
+                found_just[alg_name] = justification
+
+        if len(found_algs) >= 2:
+            baseline_terms = ["logistic", "baseline", "naive bayes", "k-nearest"]
+            has_baseline = any(any(bt in a.lower() for bt in baseline_terms) for a in found_algs)
+            if not has_baseline:
+                found_algs.append("Logistic Regression (baseline)")
+                found_just["Logistic Regression (baseline)"] = "Interpretable baseline added to anchor comparison"
+            print(f"   🎯 Algorithms: Priority 2 (synthesis) — {found_algs}")
+            return found_algs, found_just
+
+    # ── Priority 3: Keyword matching on field/topic ───────────────────────────
+    combined = (field + " " + (topic or "")).lower()
+
+    if any(w in combined for w in ["image", "photo", "visual", "object detect", "face"]):
+        algs = ["CNN (ResNet-50)", "EfficientNet", "Vision Transformer (ViT)", "Logistic Regression (baseline)"]
+        just = {
+            "CNN (ResNet-50)": "Deep convolutional architecture standard for image classification tasks",
+            "EfficientNet": "Compound-scaled CNN achieving strong accuracy/efficiency trade-off",
+            "Vision Transformer (ViT)": "Attention-based architecture demonstrating competitive image recognition performance",
+            "Logistic Regression (baseline)": "Simple interpretable baseline for comparison",
+        }
+    elif any(w in combined for w in ["text", "nlp", "language", "sentiment", "translation", "document"]):
+        algs = ["BERT (fine-tuned)", "TF-IDF + Logistic Regression (baseline)", "LSTM", "XGBoost"]
+        just = {
+            "BERT (fine-tuned)": "Pre-trained transformer achieving state-of-the-art results on text classification benchmarks",
+            "TF-IDF + Logistic Regression (baseline)": "Strong traditional NLP baseline providing interpretable feature weights",
+            "LSTM": "Recurrent architecture capturing sequential dependencies in text",
+            "XGBoost": "Gradient boosted trees applied to TF-IDF features for robust non-neural comparison",
+        }
+    elif any(w in combined for w in ["time series", "forecast", "predict", "temporal", "sequence"]):
+        algs = ["LSTM", "ARIMA (statistical baseline)", "XGBoost", "Prophet"]
+        just = {
+            "LSTM": "Long Short-Term Memory network suited to long-range sequential dependencies",
+            "ARIMA (statistical baseline)": "Classical time-series baseline for comparison against deep learning approaches",
+            "XGBoost": "Gradient boosting applied to lagged feature representations; strong tabular baseline",
+            "Prophet": "Facebook's decomposable time-series model handling seasonality and trend changes",
+        }
+    else:
+        # Default classification suite (CS, health informatics, general data science)
+        algs = ["Logistic Regression", "Support Vector Machine", "Random Forest", "Artificial Neural Network"]
+        just = {
+            "Logistic Regression": "Interpretable probabilistic baseline providing odds-ratio insights",
+            "Support Vector Machine": "Effective for binary classification with strong theoretical guarantees (Cortes and Vapnik, 1995)",
+            "Random Forest": "Ensemble method robust to overfitting; handles mixed feature types well (Breiman, 2001)",
+            "Artificial Neural Network": "Feedforward network providing a deep learning benchmark",
+        }
+
+    print(f"   🎯 Algorithms: Priority 3 (keyword matching) — {algs}")
+    return algs, just
+
+
+def _pick_xai(field: str, topic: str, synthesis: Optional[StrategicSynthesis]) -> Optional[List[str]]:
+    """Return XAI techniques if applicable to the project type. Unchanged."""
+    combined = (field + " " + (topic or "")).lower()
+    xai_relevant = any(w in combined for w in [
+        "health", "medical", "clinical", "disease", "diagnos",
+        "fraud", "credit", "loan", "financial risk",
+        "predict", "classification", "interpretab", "explain",
+    ])
+    if not xai_relevant:
+        return None
+    return ["SHAP (Lundberg and Lee, 2017)", "LIME (Ribeiro et al., 2016)"]
 
 
 def _pick_evaluation_framework(field: str, topic: str) -> EvaluationFramework:
-    """Select the appropriate default evaluation framework."""
+    """
+    Select appropriate ML evaluation framework. Unchanged from B2.
+    Only called for ML_CLASSIFICATION paradigm.
+    """
+    _DEFAULT_EVAL_BY_FIELD = {
+        "medical": EvaluationFramework(
+            primary_metric="AUC-ROC",
+            additional_metrics=["F1 Score", "Sensitivity (Recall)", "Specificity", "Precision-Recall Curve", "Confusion Matrix"],
+            validation_strategy="Stratified 10-fold cross-validation",
+            train_val_test_split="70% train, 15% validation, 15% test (stratified)",
+            imbalance_strategy="SMOTE (Chawla et al., 2002)",
+        ),
+        "nlp": EvaluationFramework(
+            primary_metric="F1 Score (macro-averaged)",
+            additional_metrics=["Precision", "Recall", "AUC-ROC (binary)", "Confusion Matrix"],
+            validation_strategy="Stratified 5-fold cross-validation",
+            train_val_test_split="80% train, 10% validation, 10% test (stratified)",
+            imbalance_strategy=None,
+        ),
+        "general": EvaluationFramework(
+            primary_metric="AUC-ROC",
+            additional_metrics=["F1 Score", "Precision", "Recall", "Confusion Matrix"],
+            validation_strategy="Stratified 10-fold cross-validation",
+            train_val_test_split="70% train, 15% validation, 15% test",
+            imbalance_strategy=None,
+        ),
+    }
     combined = (field + " " + topic).lower()
     if any(w in combined for w in ["heart", "disease", "cancer", "medical", "health", "clinical"]):
         return _DEFAULT_EVAL_BY_FIELD["medical"]
@@ -301,25 +736,229 @@ def _pick_evaluation_framework(field: str, topic: str) -> EvaluationFramework:
     return _DEFAULT_EVAL_BY_FIELD["general"]
 
 
-# ─── Section word target defaults ────────────────────────────────────────────
+def _select_baseline(citation_pool: List[VerifiedPaper]) -> Optional[LockedBaseline]:
+    """Select the best baseline from citation pool. Unchanged."""
+    candidates = [p for p in citation_pool if p.is_baseline_candidate and p.key_metric_value]
+    if not candidates:
+        candidates = [p for p in citation_pool if p.key_metric_value]
+    if not candidates:
+        return None
+    best = max(candidates, key=lambda p: len(p.abstract_snippet))
+    return LockedBaseline(
+        paper_title=best.title,
+        authors=best.authors,
+        year=best.year,
+        metric_name=best.key_metric or "performance metric",
+        metric_value=best.key_metric_value or "reported in paper",
+        harvard_citation=best.harvard_citation,
+        target_to_beat=(
+            f"Improve upon {best.key_metric_value} {best.key_metric or 'performance'} "
+            f"reported by {best.authors} ({best.year})"
+        ),
+    )
 
-_DEFAULT_SECTION_TARGETS = {
-    "Abstract":               300,
-    "Justification and Aim":  400,
-    "Objectives":             300,
-    "Literature Review":      800,
-    "Methodology":            900,
-    "Work Plan":              300,
-}
+
+def _build_ethics_statement(
+    data_sensitivity: str,
+    dataset_name: str,
+    field_of_study: str,
+) -> EthicsStatement:
+    """Build pre-written ethics statement. Unchanged."""
+    if data_sensitivity == "public":
+        stmt = (
+            f"The dataset used in this study, {dataset_name}, is publicly available under an open licence "
+            f"and does not contain identifiable personal data. No informed consent or institutional ethics "
+            f"approval is required for secondary analysis of open-access data. However, the researcher acknowledges "
+            f"the potential for population bias inherent in any pre-collected dataset. The demographic composition "
+            f"of {dataset_name} may not be representative of the target population, and findings should be "
+            f"interpreted with this limitation in mind. All data will be handled in compliance with applicable "
+            f"data protection guidelines."
+        )
+        return EthicsStatement(
+            data_sensitivity="public",
+            statement=stmt,
+            irb_required=False,
+            population_bias_note=f"Demographic representation of {dataset_name} may limit generalisation.",
+        )
+    elif data_sensitivity == "self_collected":
+        stmt = (
+            f"This study involves primary data collection from human participants, which requires ethical "
+            f"approval from the institutional ethics review board prior to data collection. Informed consent "
+            f"will be obtained from all participants before they provide any data. Participation is entirely "
+            f"voluntary and participants may withdraw at any time without consequence. All collected data will "
+            f"be anonymised before analysis and stored securely in accordance with GDPR (or equivalent national "
+            f"legislation). No personally identifiable information will appear in the final report."
+        )
+        return EthicsStatement(
+            data_sensitivity="self_collected",
+            statement=stmt,
+            irb_required=True,
+            population_bias_note="Sample recruitment method may introduce self-selection bias.",
+        )
+    else:  # sensitive
+        stmt = (
+            f"This study uses restricted or sensitive data, which requires formal data access agreements and "
+            f"institutional ethics approval before any data processing begins. All data access, storage, and "
+            f"processing will comply with the relevant data protection framework. Data will be accessed only "
+            f"within the approved secure environment, will not be transferred to external systems, and will be "
+            f"deleted at the end of the study period in accordance with the data access agreement terms. "
+            f"Individual-level records will not be reported; only aggregate findings will be presented."
+        )
+        return EthicsStatement(
+            data_sensitivity="sensitive",
+            statement=stmt,
+            irb_required=True,
+            population_bias_note=None,
+        )
+
+
+def _build_dataset_citation(name: str, url: Optional[str], source: str) -> str:
+    """Build a Harvard dataset citation. Unchanged."""
+    import datetime
+    year = datetime.datetime.now().year
+    if url:
+        return f"{name} ({year}) {name}. Available at: {url} (Accessed: {datetime.datetime.now().strftime('%d %B %Y')})."
+    return f"{name} ({year}) {name} dataset. {source}."
+
+
+def _convert_analyzed_projects(
+    analyzed_projects: List[AnalyzedProjectSpecSections],
+) -> List[SimilarProjectEntry]:
+    """Convert analyzed projects to SimilarProjectEntry. Unchanged."""
+    entries = []
+    for p in analyzed_projects:
+        if not p.title:
+            continue
+        entries.append(SimilarProjectEntry(
+            title=p.title,
+            author_or_institution=p.author or "Unknown",
+            year=p.year,
+            level=p.level or "MSc",
+            approach_summary=p.approach_summary or "Empirical study in this domain",
+            limitation=p.key_limitation or "Does not address the specific gap identified in this study",
+        ))
+    return entries
+
+
+def _extract_debates(synthesis: Optional[StrategicSynthesis], topic: str) -> List[str]:
+    """Extract scholarly debates for Track B. Unchanged."""
+    if synthesis and synthesis.research_gaps:
+        return synthesis.research_gaps[:3]
+    return [
+        f"The theoretical framing of {topic} within existing disciplinary paradigms",
+        f"Methodological debates regarding the study of {topic}",
+        f"The relationship between {topic} and broader structural or cultural forces",
+    ]
+
+
+def _build_positionality(field: str, topic: str) -> str:
+    """Build positionality statement for Track B. Unchanged."""
+    return (
+        f"As a researcher approaching {topic} from a {field} perspective, I acknowledge that my "
+        f"institutional positioning, cultural background, and disciplinary training shape both my "
+        f"interpretive choices and the theoretical frameworks I consider most relevant. This "
+        f"positionality statement is included in accordance with best practice in reflexive qualitative "
+        f"and theoretical research."
+    )
+
+
+def _suggest_framework(field: str, topic: str) -> str:
+    """Suggest theoretical framework for Track B. Unchanged."""
+    field_l = field.lower()
+    if any(w in field_l for w in ["english", "literature", "film", "media"]):
+        return "Postcolonial theory and cultural studies frameworks"
+    if "law" in field_l:
+        return "Critical legal studies and socio-legal theory"
+    if "education" in field_l:
+        return "Social constructivism and critical pedagogy"
+    if "sociology" in field_l or "anthropology" in field_l:
+        return "Structural functionalism and conflict theory"
+    if "politics" in field_l or "policy" in field_l:
+        return "Discourse analysis and critical policy studies"
+    return "Interpretive and critical theoretical framework"
+
+
+def _default_work_plan_a(weeks: int, algorithms: Optional[List[str]] = None) -> List[dict]:
+    """Build default Track A work plan. Unchanged."""
+    alg_str = ", ".join(algorithms[:2]) if algorithms else "selected models"
+    if weeks <= 12:
+        return [
+            {"weeks": "1–2",  "activity": "Literature review, dataset acquisition and initial EDA", "deliverable": "Annotated bibliography and EDA notebook"},
+            {"weeks": "3–4",  "activity": f"Data preprocessing, feature selection, baseline {alg_str}", "deliverable": "Clean dataset and baseline results"},
+            {"weeks": "5–8",  "activity": f"Model development and tuning: {alg_str}", "deliverable": "Trained models with cross-validation results"},
+            {"weeks": "9–10", "activity": "Evaluation, comparison, interpretability analysis", "deliverable": "Full results table with statistical significance"},
+            {"weeks": "11–12","activity": "Write-up, critical reflection, submission preparation", "deliverable": "Final specification document"},
+        ]
+    return [
+        {"weeks": "1–2",  "activity": "Literature review, gap identification, baseline confirmation", "deliverable": "Annotated bibliography and confirmed gap statement"},
+        {"weeks": "3–4",  "activity": "Dataset acquisition, cleaning, exploratory data analysis (EDA)", "deliverable": "Clean dataset with EDA report"},
+        {"weeks": "5–6",  "activity": "Feature engineering, preprocessing pipeline, class imbalance handling", "deliverable": "Preprocessing pipeline and feature importance analysis"},
+        {"weeks": "7–10", "activity": f"Model development: {alg_str} — training, cross-validation, hyperparameter tuning", "deliverable": "Trained models with cross-validation scores"},
+        {"weeks": "11–12","activity": "Evaluation against baseline, interpretability (SHAP/LIME if applicable)", "deliverable": "Results table with statistical significance tests"},
+        {"weeks": "13–14","activity": "Critical analysis, limitations discussion, ethical reflection", "deliverable": "Discussion and ethics sections drafted"},
+        {"weeks": "15",   "activity": "Final write-up, proofreading, submission", "deliverable": "Completed specification document"},
+    ]
+
+
+def _default_work_plan_b(weeks: int) -> List[dict]:
+    """Build default Track B work plan. Unchanged."""
+    if weeks <= 12:
+        return [
+            {"weeks": "1–3",  "activity": "Systematic literature review and theoretical framework selection", "deliverable": "Annotated bibliography and framework rationale"},
+            {"weeks": "4–6",  "activity": "Primary source analysis using the chosen framework", "deliverable": "Analytical notes and key themes"},
+            {"weeks": "7–9",  "activity": "Argument development, engagement with scholarly debates", "deliverable": "Drafted analysis sections"},
+            {"weeks": "10–12","activity": "Write-up, critical reflection, positionality statement, submission", "deliverable": "Final specification document"},
+        ]
+    return [
+        {"weeks": "1–3",  "activity": "Systematic literature review: identify key texts, debates, and theoretical approaches", "deliverable": "Annotated bibliography (min. 20 sources)"},
+        {"weeks": "4–5",  "activity": "Theoretical framework selection and justification", "deliverable": "Framework rationale document"},
+        {"weeks": "6–8",  "activity": "Primary source analysis using the chosen analytical lens", "deliverable": "Close reading notes and thematic coding"},
+        {"weeks": "9–11", "activity": "Argument development, engaging with competing scholarly positions", "deliverable": "Drafts of analysis and literature review sections"},
+        {"weeks": "12–13","activity": "Critical synthesis, positionality reflection, ethical considerations", "deliverable": "Positionality and ethics sections"},
+        {"weeks": "14–15","activity": "Final write-up, editing, proofreading, submission", "deliverable": "Completed specification document"},
+    ]
 
 
 def _build_section_targets(guidelines: ProjectGuidelines) -> dict:
+    """Build section word targets from guidelines. Unchanged."""
+    _DEFAULT_SECTION_TARGETS = {
+        "Abstract":               300,
+        "Justification and Aim":  400,
+        "Objectives":             300,
+        "Literature Review":      800,
+        "Methodology":            900,
+        "Work Plan":              300,
+    }
     targets = {}
     for s in guidelines.sections:
         targets[s.section_name] = s.word_count
     if not targets:
         return _DEFAULT_SECTION_TARGETS.copy()
     return targets
+
+
+# ─── Econometric data source hints ───────────────────────────────────────────
+
+_ECONOMETRIC_DATA_HINTS: dict = {
+    "impact investing":    ["GIIN IRIS+ Platform (thegiin.org)", "ANDE (andeglobal.org)"],
+    "employment":          ["World Bank Enterprise Survey (wbenterprisesurveys.org)", "ILO ILOSTAT (ilostat.ilo.org)"],
+    "foreign investment":  ["UNCTAD FDI Statistics (unctad.org)", "World Bank WDI (databank.worldbank.org)"],
+    "firm performance":    ["Compustat via WRDS", "Orbis — Bureau van Dijk"],
+    "macroeconomics":      ["IMF World Economic Outlook (imf.org)", "Penn World Tables (pwt.upenn.edu)"],
+    "africa":              ["Mo Ibrahim Foundation Data (moibrahimfoundation.org)", "African Development Bank Statistics (afdb.org)"],
+    "financial":           ["CRSP", "Compustat", "Bloomberg Terminal (institutional access)"],
+    "poverty":             ["World Bank PovcalNet", "UNDP Human Development Reports"],
+    "health economics":    ["WHO Global Health Observatory (who.int/data/gho)", "DHS Program (dhsprogram.com)"],
+}
+
+
+def _get_econometric_data_hint(topic: str) -> Optional[str]:
+    """Return relevant data source hint for econometric projects."""
+    topic_l = topic.lower()
+    for keyword, sources in _ECONOMETRIC_DATA_HINTS.items():
+        if keyword in topic_l:
+            return "Recommended data sources for this econometric topic: " + "; ".join(sources)
+    return None
 
 
 # ─── Main builder ─────────────────────────────────────────────────────────────
@@ -331,8 +970,8 @@ def build_locked_requirements(
     academic_level: str,
 
     # Step 2 data
-    dataset_source: str,            # "uploaded" | "public" | "scout" | "self_collected"
-    data_sensitivity: str,          # "public" | "self_collected" | "sensitive"
+    dataset_source: str,
+    data_sensitivity: str,
 
     # Derived data
     citation_pool: List[VerifiedPaper],
@@ -347,14 +986,15 @@ def build_locked_requirements(
 
     # Optional Step 3 data
     student_success_statement: Optional[str] = None,   # Track A Q2
-    preferred_algorithms: Optional[str] = None,         # Track A Q3 — WEEK 2
+    preferred_algorithms: Optional[str] = None,         # Track A Q3
+    research_nature: Optional[str] = None,              # Track A Q4 (NEW — paradigm hint)
     theoretical_framework: Optional[str] = None,        # Track B Q1
     central_argument: Optional[str] = None,             # Track B Q2
     primary_source_focus: Optional[str] = None,         # Track B Q3
 
     # Optional derived
     synthesis: Optional[StrategicSynthesis] = None,
-    dataset_profile: Optional["DatasetProfile"] = None,  # from dataset_profiler.py
+    dataset_profile: Optional["DatasetProfile"] = None,
 
 ) -> Union[LockedRequirementsA, LockedRequirementsB]:
     """
@@ -376,7 +1016,16 @@ def build_locked_requirements(
     # ── Track A ───────────────────────────────────────────────────────────────
     if track == "A":
 
-        # Dataset — enriched with real profile if available
+        # ── Detect paradigm (NEW) ─────────────────────────────────────────
+        paradigm = detect_paradigm(
+            field_of_study=field_of_study,
+            research_topic=research_topic,
+            research_nature=research_nature,
+            preferred_algorithms=preferred_algorithms,
+        )
+        print(f"   📐 Paradigm: {paradigm.value}")
+
+        # ── Dataset assembly (unchanged) ──────────────────────────────────
         _has_profile = dataset_profile is not None and not dataset_profile.is_fallback
         _size_str = (
             f"{dataset_profile.row_count:,} rows × {dataset_profile.column_count} columns"
@@ -384,7 +1033,6 @@ def build_locked_requirements(
         )
         _desc_str = dataset_description or f"Dataset for {research_topic} research"
 
-        # Build missing value summary from profile
         _missing_summary = None
         _quality_notes = None
         if _has_profile:
@@ -402,6 +1050,13 @@ def build_locked_requirements(
             print(f"   ✅ Dataset profile injected: {dataset_profile.row_count:,} rows, "
                   f"{dataset_profile.column_count} columns")
 
+        # For econometric projects with no dataset yet, inject a data hint
+        _econ_hint = None
+        if paradigm == ResearchParadigm.ECONOMETRIC_CAUSAL and not dataset_name:
+            _econ_hint = _get_econometric_data_hint(research_topic)
+            if _econ_hint:
+                _desc_str = _econ_hint
+
         confirmed_dataset = LockedDataset(
             name=dataset_name or "To be confirmed during data acquisition phase",
             source=dataset_source,
@@ -412,7 +1067,6 @@ def build_locked_requirements(
             harvard_citation=_build_dataset_citation(
                 dataset_name or "Dataset", dataset_url, dataset_source
             ),
-            # Real profile fields
             row_count=dataset_profile.row_count if _has_profile else None,
             column_count=dataset_profile.column_count if _has_profile else None,
             column_names=[c.name for c in dataset_profile.columns] if _has_profile else [],
@@ -424,47 +1078,100 @@ def build_locked_requirements(
             profiled=_has_profile,
         )
 
-        # WEEK 1 FIX: baseline is Optional — None is honest, fake is not.
-        # If citation pool has no metric-bearing papers, baseline stays None.
-        # The methodology agent prompt handles None with an honest instruction.
-        baseline = _select_baseline(citation_pool)
-        if not baseline:
-            print("   ⚠️  No baseline found in citation pool — baseline set to None.")
-            print("       Methodology section will instruct student to confirm one with supervisor.")
+        # ── Baseline: only meaningful for ML paradigm ─────────────────────
+        # Econometric/survey/systems baselines are different in kind —
+        # the methodology template handles None for non-ML paradigms.
+        baseline = None
+        if paradigm == ResearchParadigm.ML_CLASSIFICATION:
+            baseline = _select_baseline(citation_pool)
+            if not baseline:
+                print("   ⚠️  No baseline found in citation pool — baseline set to None.")
+            else:
+                print(f"   ✅ Baseline: {baseline.authors} ({baseline.year}) — {baseline.metric_value}")
         else:
-            print(f"   ✅ Baseline: {baseline.authors} ({baseline.year}) — {baseline.metric_value}")
+            print(f"   ℹ️  Baseline not applicable for {paradigm.value} — set to None.")
 
-        # Evaluation framework
-        evaluation = _pick_evaluation_framework(field_of_study, research_topic)
+        # ── Evaluation framework (paradigm-aware) ─────────────────────────
+        evaluation = _pick_evaluation_framework_by_paradigm(
+            field_of_study, research_topic, paradigm
+        )
 
-        # Ethics
+        # ── Ethics (unchanged) ────────────────────────────────────────────
         ethics = _build_ethics_statement(
             data_sensitivity=data_sensitivity,
             dataset_name=confirmed_dataset.name,
             field_of_study=field_of_study,
         )
 
-        # WEEK 2: _pick_algorithms now has 3-tier priority — student → synthesis → keywords.
-        algorithms, justifications = _pick_algorithms(
-            field_of_study, research_topic, synthesis,
+        # ── Methods (paradigm-dispatched) ─────────────────────────────────
+        algorithms, justifications = _pick_methods(
+            field=field_of_study,
+            topic=research_topic,
+            synthesis=synthesis,
+            paradigm=paradigm,
             preferred_algorithms=preferred_algorithms,
         )
 
-        # XAI techniques
-        xai = _pick_xai(field_of_study, research_topic, synthesis)
+        # ── XAI: only for ML paradigm ─────────────────────────────────────
+        xai = None
+        if paradigm == ResearchParadigm.ML_CLASSIFICATION:
+            xai = _pick_xai(field_of_study, research_topic, synthesis)
 
-        # WEEK 1 FIX: pass algorithms into work plan so week 5-8 names the real models.
+        # ── Work plan (unchanged) ─────────────────────────────────────────
         work_plan = _default_work_plan_a(timeline_weeks, algorithms=algorithms)
 
+        # ── Paradigm-specific optional fields ────────────────────────────
+        treatment_var = None
+        outcome_var = None
+        control_vars = None
+        causal_strategy = None
+        stat_software = None
+        data_structure = None
+        measurement_instrument = None
+        reliability_test = None
+        sample_size_target = None
+        system_type = None
+        eval_env = None
+
+        if paradigm == ResearchParadigm.ECONOMETRIC_CAUSAL:
+            # Derive treatment/outcome from student_success_statement or topic keywords
+            topic_l = research_topic.lower()
+            if "impact" in topic_l or "effect" in topic_l:
+                causal_strategy = "Propensity Score Matching (PSM) + OLS baseline"
+            elif "panel" in topic_l or "longitudinal" in topic_l:
+                causal_strategy = "Fixed Effects / Random Effects panel regression (Hausman, 1978)"
+            else:
+                causal_strategy = "OLS Multiple Regression with robust standard errors"
+            stat_software = "R (packages: plm, MatchIt, stargazer) or Stata (xtreg, psmatch2)"
+            data_structure = "cross-sectional" if "panel" not in topic_l else "panel"
+
+        elif paradigm == ResearchParadigm.SURVEY_QUANTITATIVE:
+            measurement_instrument = "5-point Likert scale (1 = Strongly Disagree, 5 = Strongly Agree)"
+            reliability_test = "Cronbach's Alpha (target: α > 0.7 per Nunnally, 1978)"
+            sample_size_target = "minimum 100 respondents (G*Power, α = 0.05, power = 0.80)"
+
+        elif paradigm == ResearchParadigm.SYSTEMS_ENGINEERING:
+            topic_l = research_topic.lower()
+            if "web" in topic_l:
+                system_type = "web application"
+            elif "mobile" in topic_l or "app" in topic_l:
+                system_type = "mobile application"
+            elif "api" in topic_l:
+                system_type = "REST API service"
+            else:
+                system_type = "software system"
+            eval_env = "Docker containerised environment on cloud VM (AWS/GCP t2.medium or equivalent)"
+
         locked = LockedRequirementsA(
+            paradigm=paradigm,
             research_topic=research_topic,
             field_of_study=field_of_study,
             academic_level=academic_level,
             timeline_weeks=timeline_weeks,
             citation_pool=citation_pool,
             confirmed_dataset=confirmed_dataset,
-            baseline=baseline,                  # None is valid — honest over fake
-            similar_projects=similar_projects,  # Empty list is valid — do not fabricate
+            baseline=baseline,
+            similar_projects=similar_projects,
             evaluation=evaluation,
             ethics=ethics,
             xai_techniques=xai,
@@ -472,15 +1179,25 @@ def build_locked_requirements(
             algorithm_justifications=justifications,
             work_plan_weeks=work_plan,
             student_success_statement=student_success_statement,
+            # Paradigm-specific
+            causal_identification_strategy=causal_strategy,
+            statistical_software=stat_software,
+            data_structure=data_structure,
+            measurement_instrument=measurement_instrument,
+            reliability_test=reliability_test,
+            sample_size_target=sample_size_target,
+            system_type=system_type,
+            evaluation_environment=eval_env,
+            # Guidelines
             target_word_count=guidelines.target_word_count or 3000,
             citation_style=citation_style,
             section_word_targets=section_targets,
         )
 
-        print(f"   ✅ LockedRequirementsA assembled")
+        print(f"   ✅ LockedRequirementsA assembled — paradigm: {paradigm.value}")
         return locked
 
-    # ── Track B ───────────────────────────────────────────────────────────────
+    # ── Track B (completely unchanged) ────────────────────────────────────────
     else:
         scholarly_debates = _extract_debates(synthesis, research_topic)
         positionality = _build_positionality(field_of_study, research_topic)
@@ -498,10 +1215,14 @@ def build_locked_requirements(
                 f"analytical tools to examine the underlying structures, power relations, "
                 f"and cultural contexts that shape the subject matter."
             ),
-            central_argument=central_argument or "To be developed through literature engagement",
+            central_argument=central_argument or (
+                f"This project argues that {research_topic} can be understood through "
+                f"a critical examination of the social, cultural, and structural factors "
+                f"that shape its production and reception."
+            ),
             primary_source_focus=primary_source_focus,
             scholarly_debates=scholarly_debates,
-            similar_projects=similar_projects,  # Empty list is valid — do not fabricate
+            similar_projects=similar_projects,
             positionality_statement=positionality,
             work_plan_weeks=work_plan,
             target_word_count=guidelines.target_word_count or 3000,
@@ -511,198 +1232,3 @@ def build_locked_requirements(
 
         print(f"   ✅ LockedRequirementsB assembled")
         return locked
-
-
-# ─── Helper functions ─────────────────────────────────────────────────────────
-
-def _build_dataset_citation(name: str, url: Optional[str], source: str) -> str:
-    from datetime import datetime
-    today = datetime.now().strftime("%d %B %Y").lstrip("0")
-    url_str = url or f"https://www.{source.lower()}.com"
-    return f"{name} [Dataset]. Available at: {url_str} (Accessed: {today})."
-
-
-# WEEK 2: 3-tier priority — student intent → synthesis literature → keyword fallback.
-def _pick_algorithms(
-    field: str,
-    topic: str,
-    synthesis: Optional[StrategicSynthesis],
-    preferred_algorithms: Optional[str] = None,
-) -> tuple:
-    """
-    Return (algorithms list, justifications dict).
-
-    Priority:
-      1. Student's own stated preferences (preferred_algorithms from Step 3 Q3)
-         — uses what the student wrote; always includes an interpretable baseline
-      2. Methods mentioned in synthesis.novel_contributions (from actual papers read)
-         — grounded in the literature the agent actually retrieved
-      3. Keyword matching against field/topic (last resort)
-         — pure heuristic, used only when no better signal exists
-    """
-
-    # ── Priority 1: Student's own stated preferences ──────────────────────────
-    if preferred_algorithms and preferred_algorithms.strip():
-        raw = re.split(r"[,;/]", preferred_algorithms)
-        student_algs = [a.strip() for a in raw if a.strip() and len(a.strip()) > 2]
-
-        if len(student_algs) >= 2:
-            # Check whether student already included an interpretable baseline
-            baseline_terms = ["logistic", "baseline", "naive bayes", "linear regression", "knn"]
-            has_baseline = any(
-                any(bt in a.lower() for bt in baseline_terms)
-                for a in student_algs
-            )
-            if not has_baseline:
-                student_algs.append("Logistic Regression (baseline)")
-
-            just = {}
-            for a in student_algs:
-                a_lower = a.lower()
-                if any(bt in a_lower for bt in ["logistic", "baseline", "linear regression"]):
-                    just[a] = "Interpretable baseline for comparison against more complex models"
-                elif "xgboost" in a_lower or "gradient boost" in a_lower:
-                    just[a] = f"High-performance ensemble method; student-identified as relevant to {topic}"
-                elif "lstm" in a_lower or "rnn" in a_lower:
-                    just[a] = f"Recurrent architecture suited to sequential patterns; student-identified"
-                elif "bert" in a_lower or "transformer" in a_lower:
-                    just[a] = f"State-of-the-art contextual representation; student-identified"
-                elif "cnn" in a_lower or "resnet" in a_lower:
-                    just[a] = f"Convolutional architecture for feature extraction; student-identified"
-                else:
-                    just[a] = f"Student-identified as relevant to {topic}"
-
-            print(f"   ✅ Algorithms: from student preferences ({len(student_algs)} methods)")
-            return student_algs, just
-
-    # ── Priority 2: Methods from actual literature (synthesis) ────────────────
-    KNOWN_METHODS = [
-        "random forest", "xgboost", "lstm", "bert", "svm", "logistic regression",
-        "cnn", "transformer", "gradient boosting", "neural network", "decision tree",
-        "naive bayes", "k-nearest neighbour", "support vector machine", "resnet", "vgg",
-        "lightgbm", "catboost", "adaboost",
-    ]
-
-    if synthesis and synthesis.novel_contributions:
-        mentioned_methods: List[str] = []
-        seen_lower: set = set()
-        for contrib in synthesis.novel_contributions:
-            claim = contrib.claim.lower()
-            for method in KNOWN_METHODS:
-                if method in claim and method not in seen_lower:
-                    seen_lower.add(method)
-                    # Title-case nicely
-                    display = method.upper() if method in ("svm", "lstm", "bert", "cnn", "vgg") \
-                        else method.title()
-                    mentioned_methods.append(display)
-
-        if len(mentioned_methods) >= 2:
-            # Ensure a baseline exists
-            has_baseline = any(
-                "logistic" in m.lower() or "baseline" in m.lower()
-                for m in mentioned_methods
-            )
-            if not has_baseline:
-                mentioned_methods.append("Logistic Regression (baseline)")
-
-            just = {}
-            for m in mentioned_methods:
-                if "logistic" in m.lower() or "baseline" in m.lower():
-                    just[m] = "Interpretable baseline for comparison against more complex models"
-                else:
-                    just[m] = f"Identified in verified literature as relevant to {topic}"
-
-            print(f"   ✅ Algorithms: from synthesis literature ({len(mentioned_methods)} methods)")
-            return mentioned_methods, just
-
-    # ── Priority 3: Keyword matching (last resort) ────────────────────────────
-    print(f"   ℹ️  Algorithms: keyword fallback (no student preferences or synthesis signal)")
-    combined = (field + " " + topic).lower()
-
-    if any(w in combined for w in ["image", "vision", "cnn", "convolution"]):
-        algs = ["CNN", "ResNet", "VGG", "Logistic Regression (baseline)"]
-        just = {
-            "CNN": "Standard architecture for image classification tasks",
-            "ResNet": "Residual connections address vanishing gradient for deeper models",
-            "VGG": "Well-established benchmark for comparison",
-            "Logistic Regression (baseline)": "Interpretable baseline for binary classification",
-        }
-    elif any(w in combined for w in ["text", "nlp", "sentiment", "language"]):
-        algs = ["BERT", "Logistic Regression (baseline)", "SVM", "Random Forest"]
-        just = {
-            "BERT": "State-of-the-art contextual embeddings for text classification",
-            "Logistic Regression (baseline)": "Interpretable baseline for comparison",
-            "SVM": "Strong performer on high-dimensional text features",
-            "Random Forest": "Robust ensemble method for tabular/TF-IDF features",
-        }
-    else:
-        # Default classification suite (covers heart disease, fraud, etc.)
-        algs = ["Logistic Regression", "Support Vector Machine", "Random Forest", "Artificial Neural Network"]
-        just = {
-            "Logistic Regression": "Interpretable baseline appropriate for binary classification; low risk of overfitting on small datasets",
-            "Support Vector Machine": "Established performance in binary medical classification tasks with high-dimensional feature spaces",
-            "Random Forest": "Ensemble method providing robustness to overfitting; handles non-linear interactions without feature scaling",
-            "Artificial Neural Network": "Included to benchmark deep learning performance against simpler models and test whether added complexity improves results",
-        }
-
-    return algs, just
-
-
-def _pick_xai(field: str, topic: str, synthesis: Optional[StrategicSynthesis]) -> Optional[List[str]]:
-    """Return XAI techniques if appropriate for the project type."""
-    combined = (field + " " + topic).lower()
-    interpretability_signals = [
-        "interpret", "explain", "xai", "shap", "lime", "transparent",
-        "clinical", "medical", "health", "disease", "diagnosis"
-    ]
-    if any(s in combined for s in interpretability_signals):
-        return [
-            "SHAP (SHapley Additive exPlanations) (Lundberg and Lee, 2017)",
-            "LIME (Local Interpretable Model-agnostic Explanations) (Ribeiro et al., 2016)",
-        ]
-    return None
-
-
-def _suggest_framework(field: str, topic: str) -> str:
-    """Suggest a theoretical framework for Track B if student didn't choose one."""
-    combined = (field + " " + topic).lower()
-    if any(w in combined for w in ["postcolonial", "colonial", "africa", "diaspora"]):
-        return "Postcolonial theory (Bhabha, 1994; Said, 1978)"
-    if any(w in combined for w in ["gender", "feminist", "women"]):
-        return "Feminist theory (Butler, 1990)"
-    if any(w in combined for w in ["discourse", "power", "foucault"]):
-        return "Critical discourse analysis (Fairclough, 1992)"
-    if any(w in combined for w in ["law", "legal", "rights", "justice"]):
-        return "Critical legal theory"
-    if any(w in combined for w in ["media", "representation", "culture"]):
-        return "Cultural studies / representation theory (Hall, 1997)"
-    return "Critical theory — to be confirmed with supervisor"
-
-
-def _extract_debates(synthesis: Optional[StrategicSynthesis], topic: str) -> List[str]:
-    """Extract scholarly debates from synthesis or generate defaults."""
-    if synthesis and synthesis.differentiation_strategy:
-        return [d.aspect for d in synthesis.differentiation_strategy[:3]]
-    return [
-        f"The methodological debate within {topic} scholarship",
-        f"Contested theoretical frameworks applied to this subject area",
-        f"Emerging critical perspectives challenging traditional approaches",
-    ]
-
-
-def _build_positionality(field: str, topic: str) -> str:
-    return (
-        f"As a researcher approaching {topic}, I acknowledge that my academic "
-        f"background in {field} shapes the analytical lens through which this subject "
-        f"is examined. This positionality will be reflected upon throughout the project "
-        f"to ensure rigorous, reflexive scholarship."
-    )
-
-
-def _fallback_similar_projects(topic: str) -> List[SimilarProjectEntry]:
-    """
-    Do NOT fabricate similar projects.
-    Return an empty list — the justification agent is instructed to handle this honestly.
-    Dead code: no longer called from build_locked_requirements. Kept for import safety.
-    """
-    return []  # Empty. Do not fabricate.

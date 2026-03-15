@@ -35,6 +35,15 @@ function detectTrack(field: string, topic: string): 'A' | 'B' {
   return 'A'
 }
 
+const RESEARCH_NATURE_LABELS: Record<string, string> = {
+  building_model:      'ML / Prediction model',
+  testing_causation:   'Econometric causal study',
+  running_survey:      'Survey / Questionnaire study',
+  building_system:     'Software system design',
+  financial_analysis:  'Quantitative finance / Actuarial',
+  not_sure:            'Auto-detect from field and topic',
+}
+
 // ─── Stepper ──────────────────────────────────────────────────────────────────
 const STEPS = ['Basic Info', 'Documents & Data', 'Quick Questions', 'Configure', 'Review']
 
@@ -137,7 +146,8 @@ export default function GeneratePage() {
     // Step 3 answers
     data_sensitivity: 'public' as 'public' | 'self_collected' | 'sensitive',
     student_success_statement: '',
-    preferred_algorithms: '',        // WEEK 2: Track A Q3
+    preferred_algorithms: '',  
+    research_nature: '',       // WEEK 2: Track A Q3
     theoretical_framework: '',
     central_argument: '',
     primary_source_focus: '',
@@ -152,6 +162,7 @@ export default function GeneratePage() {
     data_sensitivity: '',
     student_success_statement: '',
     preferred_algorithms: '',
+    research_nature: '',          // NEW Q4 — empty = auto-detect (safe default)
   })
   const [answersB, setAnswersB] = useState<TrackBAnswers>({
     theoretical_framework: '',
@@ -219,7 +230,8 @@ export default function GeneratePage() {
         ...p,
         data_sensitivity: (answersA.data_sensitivity || 'public') as any,
         student_success_statement: answersA.student_success_statement,
-        preferred_algorithms: answersA.preferred_algorithms,   // WEEK 2
+        preferred_algorithms: answersA.preferred_algorithms,
+        research_nature: answersA.research_nature || '',    // NEW Q4
       }))
     } else {
       setFormData(p => ({
@@ -261,6 +273,7 @@ export default function GeneratePage() {
       if (!config.dataset_url)               delete (config as any).dataset_url
       if (!config.student_success_statement) delete (config as any).student_success_statement
       if (!config.preferred_algorithms)      delete (config as any).preferred_algorithms  // WEEK 2
+      if (!config.research_nature)           delete (config as any).research_nature
       if (!config.theoretical_framework)     delete (config as any).theoretical_framework
       if (!config.central_argument)          delete (config as any).central_argument
       if (!config.primary_source_focus)      delete (config as any).primary_source_focus
@@ -418,6 +431,9 @@ export default function GeneratePage() {
           ['Effort', formData.effort_level],
           ['Dataset', formData.dataset_name || formData.dataset_source || 'AI will scout'],
           ...(formData.preferred_algorithms ? [['Algorithms', formData.preferred_algorithms]] : []),
+          ...(formData.research_nature && formData.research_nature !== 'not_sure'
+            ? [['Study Type', RESEARCH_NATURE_LABELS[formData.research_nature] || formData.research_nature]]
+            : []),
           ['Guidelines', files.guidelines?.name || 'Using standard defaults'],
           ['Past Projects', files.pastProjects.length ? `${files.pastProjects.length} file(s) uploaded` : 'AI auto-discover'],
           ['Iterations', `${formData.max_iterations}`],

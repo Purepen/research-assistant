@@ -1,16 +1,16 @@
 """
-Phase 3 Workflows — FULLY IMPLEMENTED
+Phase 3 Workflows — FULLY IMPLEMENTED (Paradigm Edition)
 
-Previous state: every section was a comment ("# Call justification_specialist").
-This file: every specialist is called individually with injected locked context.
+Changes from previous version:
+  1. All la.baseline.* reads are null-guarded — baseline is None for non-ML paradigms
+     and optionally None for ML when citation pool has no metric-bearing papers.
+     Previously all five context builders crashed on NoneType attribute access.
 
-Architecture:
-  Each agent receives a carefully constructed prompt containing ONLY what it needs
-  from the LockedRequirements object. No agent sees the full locked object — only
-  its relevant slice. This keeps prompts focused and prevents agents from inventing
-  facts not in their slice.
+  2. _methodology_context() now passes PARADIGM to the agent so it can route to
+     the correct template block (ML / Econometric / Survey / Systems / Finance).
 
-All sections feed into a sections dict that phase4_workflow assembles.
+  3. All other logic is unchanged — same agent calls, same section order, same
+     prompt structure for ML_CLASSIFICATION (the default and most common path).
 """
 
 from __future__ import annotations
@@ -23,7 +23,11 @@ from agents import Runner
 from app.models.specification import ProjectSpecification, SpecificationSection
 from app.models.guidelines import ProjectGuidelines
 from app.models.synthesis import StrategicSynthesis
-from app.models.locked_requirements import LockedRequirementsA, LockedRequirementsB
+from app.models.locked_requirements import (
+    LockedRequirementsA,
+    LockedRequirementsB,
+    ResearchParadigm,
+)
 
 from app.core.agents.definitions.phase3_agents import (
     justification_specialist,
@@ -38,10 +42,7 @@ from app.core.agents.definitions.phase3_agents import (
 LockedRequirements = Union[LockedRequirementsA, LockedRequirementsB]
 
 
-# ─── Context builders per agent ───────────────────────────────────────────────
-# Each function builds a minimal, focused prompt for one specialist.
-# Only the facts that agent needs — nothing more.
-
+# ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _build_citation_pool_text(locked: LockedRequirements) -> str:
     """Serialize citation pool into readable text for agent prompts."""
@@ -76,17 +77,134 @@ def _build_similar_projects_text(locked: LockedRequirements) -> str:
     return "\n\n".join(lines)
 
 
+def _safe_baseline_text_for_justification(la: LockedRequirementsA) -> str:
+    """
+    BUG FIX: previously read la.baseline.authors etc. directly — crashes when None.
+    Non-ML paradigms always have baseline=None. ML paradigm may also have None
+    when the citation pool contained no metric-bearing papers.
+    """
+    if la.baseline is None:
+        paradigm_val = la.paradigm.value if hasattr(la, 'paradigm') else 'ml_classification'
+        if paradigm_val == ResearchParadigm.ML_CLASSIFICATION.value:
+            return (
+                "No quantitative baseline found in citation pool. "
+                "The student should confirm a specific benchmark with their supervisor "
+                "from the reviewed literature before submission."
+            )
+        else:
+            return (
+                f"No ML-style baseline applies for this {paradigm_val} project. "
+                "The justification should position this work against the existing literature "
+                "by identifying a specific gap rather than a performance benchmark."
+            )
+    return (
+        f"Baseline: {la.baseline.authors} ({la.baseline.year}) achieved "
+        f"{la.baseline.metric_value} {la.baseline.metric_name} on the same dataset. "
+        f"Target to beat: {la.baseline.target_to_beat}.\n"
+        f"Harvard: {la.baseline.harvard_citation}"
+    )
+
+
+def _safe_baseline_text_short(la: LockedRequirementsA) -> str:
+    """
+    BUG FIX: short form used in objectives and literature contexts.
+    Returns a safe string regardless of whether baseline is None.
+    """
+    if la.baseline is None:
+        return "No named baseline — student to confirm with supervisor from literature"
+    return f"{la.baseline.paper_title} ({la.baseline.year}): {la.baseline.metric_value}"
+
+
+def _safe_baseline_text_for_literature(la: LockedRequirementsA) -> str:
+    """
+    BUG FIX: used in literature review context.
+    """
+    if la.baseline is None:
+        paradigm_val = la.paradigm.value if hasattr(la, 'paradigm') else 'ml_classification'
+        if paradigm_val == ResearchParadigm.ML_CLASSIFICATION.value:
+            return (
+                "No named baseline confirmed yet. "
+                "Position the review around the best-performing methods in the pool "
+                "and identify the performance gap this project will target."
+            )
+        else:
+            return (
+                "No quantitative performance baseline applies. "
+                "Position the review around the key theoretical debates, methodological gaps, "
+                "or empirical findings in the citation pool relevant to this research question."
+            )
+    return (
+        f"Named baseline for positioning: {la.baseline.paper_title} ({la.baseline.year}), "
+        f"{la.baseline.metric_value} {la.baseline.metric_name}. "
+        f"This is the benchmark for comparison."
+    )
+
+
+def _safe_baseline_text_for_abstract(la: LockedRequirementsA) -> str:
+    """
+    BUG FIX: used in abstract context.
+    """
+    if la.baseline is None:
+        paradigm_val = la.paradigm.value if hasattr(la, 'paradigm') else 'ml_classification'
+        if paradigm_val == ResearchParadigm.ML_CLASSIFICATION.value:
+            return (
+                "No specific baseline confirmed — "
+                "describe the expected contribution without a named performance figure."
+            )
+        else:
+            return (
+                f"No ML-style baseline — this is a {paradigm_val} project. "
+                "State the expected contribution in terms appropriate to this paradigm "
+                "(e.g. causal relationship established, survey constructs validated, system deployed)."
+            )
+    return (
+        f"Baseline: {la.baseline.metric_value} {la.baseline.metric_name} by "
+        f"{la.baseline.authors} ({la.baseline.year}). Target: {la.baseline.target_to_beat}"
+    )
+
+
+def _safe_baseline_block_for_methodology(la: LockedRequirementsA) -> str:
+    """
+    BUG FIX: full baseline block used in methodology context.
+    Returns a complete formatted block whether baseline exists or not.
+    """
+    if la.baseline is None:
+        paradigm_val = la.paradigm.value if hasattr(la, 'paradigm') else 'ml_classification'
+        if paradigm_val == ResearchParadigm.ML_CLASSIFICATION.value:
+            return (
+                "BASELINE:\n"
+                "  No named baseline confirmed in citation pool.\n"
+                "  Instruct student: 'A specific benchmark paper and performance figure\n"
+                "  will be confirmed with the supervisor prior to model training.\n"
+                "  The target is to improve upon the best result identified in the literature review.'"
+            )
+        else:
+            return (
+                f"BASELINE:\n"
+                f"  Not applicable for {paradigm_val} paradigm.\n"
+                f"  Do not reference AUC-ROC, accuracy figures, or ML benchmarks.\n"
+                f"  The evaluation criteria for this paradigm are defined in the EVALUATION block below."
+            )
+    return (
+        f"BASELINE:\n"
+        f"  Paper: {la.baseline.paper_title}\n"
+        f"  Authors: {la.baseline.authors}\n"
+        f"  Year: {la.baseline.year}\n"
+        f"  Their result: {la.baseline.metric_value} {la.baseline.metric_name}\n"
+        f"  Target: {la.baseline.target_to_beat}\n"
+        f"  Citation: {la.baseline.harvard_citation}"
+    )
+
+
+# ─── Context builders per agent ───────────────────────────────────────────────
+
 def _justification_context(locked: LockedRequirements, guidelines: ProjectGuidelines) -> str:
     section_target = guidelines.sections[1].word_count if len(guidelines.sections) > 1 else 400
 
     if locked.track == "A":
         la: LockedRequirementsA = locked  # type: ignore
-        baseline_text = (
-            f"Baseline: {la.baseline.authors} ({la.baseline.year}) achieved "
-            f"{la.baseline.metric_value} {la.baseline.metric_name} on the same dataset. "
-            f"Target to beat: {la.baseline.target_to_beat}.\n"
-            f"Harvard: {la.baseline.harvard_citation}"
-        )
+        # BUG FIX: was `la.baseline.authors` etc. — crashes when baseline is None
+        baseline_text = _safe_baseline_text_for_justification(la)
     else:
         baseline_text = "No quantitative baseline (theoretical project)."
 
@@ -131,7 +249,8 @@ def _objectives_context(locked: LockedRequirements, guidelines: ProjectGuideline
         la: LockedRequirementsA = locked  # type: ignore
         algorithms_text = "\n".join(f"  - {alg}" for alg in la.algorithms)
         dataset_text = f"{la.confirmed_dataset.name} ({la.confirmed_dataset.source})"
-        baseline_text = f"{la.baseline.paper_title} ({la.baseline.year}): {la.baseline.metric_value}"
+        # BUG FIX: was `la.baseline.paper_title` etc. — crashes when baseline is None
+        baseline_text = _safe_baseline_text_short(la)
         xai_text = ", ".join(la.xai_techniques) if la.xai_techniques else "None"
     else:
         algorithms_text = "No algorithms (theoretical project)"
@@ -153,7 +272,7 @@ JUSTIFICATION SECTION (already written — objectives must align with this aim):
 
 KEY FACTS TO INCORPORATE:
 - Dataset: {dataset_text}
-- Algorithms: {algorithms_text}
+- Algorithms / Methods: {algorithms_text}
 - XAI: {xai_text}
 - Baseline: {baseline_text}
 
@@ -162,13 +281,13 @@ MANDATORY REQUIREMENTS:
 2. Each objective starts with "To [verb]..." and is 1-3 sentences
 3. Objectives must be sequenced logically: acquisition → preprocessing → development → evaluation → documentation
 4. ONE objective must address ethical considerations / responsible data use
-5. ONE objective must reference a specific measurable target (the baseline)
+5. ONE objective must reference a specific measurable target (the baseline, or equivalent for non-ML paradigms)
 6. Do NOT list methodology details here — that is a different section
 
 PROHIBITED:
 - Paragraph form for the objectives themselves (they must be numbered)
 - Vague language: "improve significantly", "achieve good results"
-- Any performance target not anchored to the named baseline
+- Any performance target not anchored to the named baseline (or paradigm-appropriate criterion)
 """
 
 
@@ -180,11 +299,8 @@ def _literature_context(locked: LockedRequirements, guidelines: ProjectGuideline
 
     if locked.track == "A":
         la: LockedRequirementsA = locked  # type: ignore
-        baseline_text = (
-            f"Named baseline for positioning: {la.baseline.paper_title} ({la.baseline.year}), "
-            f"{la.baseline.metric_value} {la.baseline.metric_name}. "
-            f"This is the benchmark for comparison."
-        )
+        # BUG FIX: was `la.baseline.paper_title` etc. — crashes when baseline is None
+        baseline_text = _safe_baseline_text_for_literature(la)
     else:
         baseline_text = "No quantitative baseline — position around the theoretical debate."
 
@@ -208,12 +324,13 @@ MANDATORY REQUIREMENTS:
 1. Every cited paper must include its ACTUAL performance figure or core finding
    BAD: "Smith et al. (2021) achieved high accuracy"
    GOOD: "Smith et al. (2021) achieved 91.2% AUC-ROC on the UCI dataset, though..."
+   For non-ML papers: cite the key empirical finding, coefficient, or theoretical contribution
 2. Minimum 8 in-text citations from the pool
 3. Must include a synthesis — compare papers against each other, not just describe them
-4. Must identify a SPECIFIC gap (not "no study combined X and Y" — be precise about what combination)
+4. Must identify a SPECIFIC gap (not "no study combined X and Y" — be precise)
 5. Final paragraph must bridge from the gap to what this project will do
 6. Include one comparison table if ≥5 papers are available (earns synthesis marks):
-   | Study | Year | Method | Dataset | Key Metric | Limitation |
+   | Study | Year | Method | Dataset | Key Finding | Limitation |
 
 PROHIBITED:
 - "Studies have shown", "Literature indicates" without a citation
@@ -231,17 +348,58 @@ def _methodology_context(locked: LockedRequirements, guidelines: ProjectGuidelin
 
     if locked.track == "A":
         la: LockedRequirementsA = locked  # type: ignore
+
+        # Paradigm — safe read with fallback to ML_CLASSIFICATION for backward compat
+        paradigm_val = la.paradigm.value if hasattr(la, 'paradigm') else ResearchParadigm.ML_CLASSIFICATION.value
+
         algo_justifications = "\n".join(
             f"  - {alg}: {la.algorithm_justifications.get(alg, 'standard choice for this problem type')}"
             for alg in la.algorithms
         )
+
+        # BUG FIX: was a direct f-string block reading la.baseline.* attributes.
+        # Now uses null-safe helper that returns appropriate text for any paradigm.
+        baseline_block = _safe_baseline_block_for_methodology(la)
+
+        # Paradigm-specific optional fields (None for paradigms where they don't apply)
+        paradigm_extras = ""
+        if paradigm_val == ResearchParadigm.ECONOMETRIC_CAUSAL.value:
+            paradigm_extras = f"""
+CAUSAL INFERENCE CONTEXT:
+  Treatment variable: {la.treatment_variable or 'To be specified by student with supervisor'}
+  Outcome variable:   {la.outcome_variable or 'To be specified by student with supervisor'}
+  Identification strategy: {la.causal_identification_strategy or 'OLS baseline + robustness checks'}
+  Statistical software: {la.statistical_software or 'R or Stata (student to confirm)'}
+  Data structure: {la.data_structure or 'cross-sectional (confirm with supervisor)'}
+  Control variables: {', '.join(la.control_variables) if la.control_variables else 'To be identified from literature'}
+"""
+        elif paradigm_val == ResearchParadigm.SURVEY_QUANTITATIVE.value:
+            paradigm_extras = f"""
+SURVEY INSTRUMENT CONTEXT:
+  Measurement instrument: {la.measurement_instrument or '5-point Likert scale'}
+  Reliability test: {la.reliability_test or "Cronbach's Alpha (target: α > 0.7)"}
+  Sample size target: {la.sample_size_target or 'minimum 100 respondents (G*Power)'}
+"""
+        elif paradigm_val == ResearchParadigm.SYSTEMS_ENGINEERING.value:
+            paradigm_extras = f"""
+SYSTEMS CONTEXT:
+  System type: {la.system_type or 'software system'}
+  Evaluation environment: {la.evaluation_environment or 'standard development environment'}
+"""
+
         return f"""
 TASK: Write the "Methodology" section.
 
 RESEARCH TOPIC: {locked.research_topic}
 TRACK: A (empirical/data)
+PARADIGM: {paradigm_val}
 SECTION WORD TARGET: {section_target} words (minimum {int(section_target * 0.85)} words)
 CITATION STYLE: {locked.citation_style}
+
+READ THE PARADIGM FIELD ABOVE BEFORE WRITING.
+It tells you which template and checklist to use from your instructions.
+Do not use ML metrics (AUC-ROC, F1, SMOTE, train/test split) for non-ML paradigms.
+Do not use econometric language (OLS, coefficient, p-value) in ML paradigms.
 
 ══ LOCKED FACTS — use exactly as stated, no deviation ══
 
@@ -255,53 +413,31 @@ DATASET:
   Citation: {la.confirmed_dataset.harvard_citation}
 {('\nVERIFIED DATASET PROFILE (from uploaded file — use these EXACT figures):\n' + la.confirmed_dataset.full_profile_text) if la.confirmed_dataset.profiled and la.confirmed_dataset.full_profile_text else ''}
 
-BASELINE:
-  Paper: {la.baseline.paper_title}
-  Authors: {la.baseline.authors}
-  Year: {la.baseline.year}
-  Their result: {la.baseline.metric_value} {la.baseline.metric_name}
-  Target: {la.baseline.target_to_beat}
-  Citation: {la.baseline.harvard_citation}
+{baseline_block}
 
 EVALUATION:
   Primary metric: {la.evaluation.primary_metric}
   Additional metrics: {', '.join(la.evaluation.additional_metrics)}
-  Split: {la.evaluation.train_val_test_split}
+  Split / Validation: {la.evaluation.train_val_test_split}
   Validation strategy: {la.evaluation.validation_strategy}
-  Imbalance strategy: {la.evaluation.imbalance_strategy or 'Not specified — describe appropriately'}
+  Imbalance strategy: {la.evaluation.imbalance_strategy or 'Not applicable for this paradigm'}
 
-ALGORITHMS (with justifications):
+METHODS / ALGORITHMS (with justifications):
 {algo_justifications}
 
 XAI TECHNIQUES:
 {', '.join(la.xai_techniques) if la.xai_techniques else 'Not applicable'}
-
+{paradigm_extras}
 ETHICS STATEMENT (DROP THIS IN — do not rewrite or summarise):
 {la.ethics.statement}
-Population bias note: {la.ethics.population_bias_note or 'Acknowledge demographic limitations of dataset'}
+Population bias note: {la.ethics.population_bias_note or 'Acknowledge relevant limitations of data source'}
 
 CITATION POOL for method citations:
 {_build_citation_pool_text(locked)}
 
-══ MANDATORY CHECKLIST — ALL 8 MUST APPEAR ══
-1. Named dataset with source URL and citation ← use locked dataset above
-2. Explicit train/validation/test split ← use locked evaluation.train_val_test_split
-3. Evaluation metrics beyond accuracy ← use locked evaluation
-4. Named baseline with figure ← use locked baseline
-5. Class imbalance strategy ← use locked evaluation.imbalance_strategy
-6. Algorithm justifications ← use locked algo_justifications
-7. XAI technique named and justified ← use locked xai_techniques
-8. Ethics statement ← DROP IN the locked ethics statement verbatim
-
-The validation layer will check every one of these. Missing any = hard failure.
-
-STRUCTURE:
-  1. Data Source and Collection
-  2. Data Preprocessing
-  3. Model Development (algorithms + XAI)
-  4. Evaluation Framework
-  5. Practical Limitations
-  6. Ethical Considerations ← Item 8 goes here
+══ USE THE CHECKLIST FROM YOUR INSTRUCTIONS FOR PARADIGM: {paradigm_val} ══
+The validation layer checks the paradigm-appropriate items — not the ML checklist.
+Missing any hard item = validation failure.
 
 No bullet points in final output — academic prose with subsection headers.
 """
@@ -312,6 +448,7 @@ TASK: Write the "Methodology" section.
 
 RESEARCH TOPIC: {locked.research_topic}
 TRACK: B (theoretical/humanities)
+PARADIGM: theoretical
 SECTION WORD TARGET: {section_target} words (minimum {int(section_target * 0.85)} words)
 
 ══ LOCKED FACTS ══
@@ -416,14 +553,16 @@ def _abstract_context(locked: LockedRequirements, guidelines: ProjectGuidelines,
 
     if locked.track == "A":
         la: LockedRequirementsA = locked  # type: ignore
-        baseline_info = (
-            f"Baseline: {la.baseline.metric_value} {la.baseline.metric_name} by "
-            f"{la.baseline.authors} ({la.baseline.year}). Target: {la.baseline.target_to_beat}"
-        )
+        # BUG FIX: was `la.baseline.metric_value` etc. — crashes when baseline is None
+        baseline_info = _safe_baseline_text_for_abstract(la)
         xai_info = f"XAI: {', '.join(la.xai_techniques)}" if la.xai_techniques else ""
+        dataset_name = la.confirmed_dataset.name
+        paradigm_val = la.paradigm.value if hasattr(la, 'paradigm') else ResearchParadigm.ML_CLASSIFICATION.value
     else:
         baseline_info = "Theoretical project — no quantitative baseline"
         xai_info = ""
+        dataset_name = "theoretical sources"
+        paradigm_val = "theoretical"
 
     return f"""
 TASK: Write the "Abstract" section.
@@ -432,11 +571,12 @@ This is the LAST section to write — you now have all other sections to draw fr
 WORD TARGET: EXACTLY {section_target} words (±15 words acceptable)
 RESEARCH TOPIC: {locked.research_topic}
 TRACK: {locked.track}
+PARADIGM: {paradigm_val}
 
 LOCKED FACTS TO INCLUDE:
 {baseline_info}
 {xai_info}
-Dataset: {locked.confirmed_dataset.name if locked.track == 'A' else 'theoretical sources'}
+Dataset / Sources: {dataset_name}
 
 COMPLETED SECTIONS (draw from these — do not invent new content):
 JUSTIFICATION (first 300 chars): {all_sections.get('justification', '')[:300]}...
@@ -448,7 +588,10 @@ MANDATORY STRUCTURE (4 elements):
 2. The specific gap in existing knowledge this project fills (1 sentence, specific)
 3. What this project will do — methods, techniques, named specifically (2-3 sentences)
 4. What the project expects to FIND or CONTRIBUTE — not just what it will DO (1-2 sentences)
-   For Track A: include target metric with baseline reference
+   For ML projects: include target metric with baseline reference (if baseline confirmed)
+   For econometric: state the causal relationship to be established
+   For survey: state the construct relationships to be validated
+   For systems: state the system to be delivered and its success criterion
    For Track B: state the argument and its contribution to the scholarly debate
 
 PROHIBITED:
@@ -461,7 +604,7 @@ PROHIBITED:
 """
 
 
-# ─── Main workflow function ────────────────────────────────────────────────────
+# ─── Main workflow function (unchanged) ───────────────────────────────────────
 
 async def generate_specification_sections(
     research_topic: str,

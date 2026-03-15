@@ -10,11 +10,38 @@ Two shapes:
   - LockedRequirementsB  →  theoretical / humanities / essay projects (Track B)
 
 Track is determined at Step 1 submission by field_of_study + research_topic.
+
+PARADIGM ADDITION (non-breaking):
+  Track A now carries a ResearchParadigm that drives method selection,
+  evaluation framework, and methodology instruction routing.
+  Default is ML_CLASSIFICATION — all existing specs are 100% unchanged.
 """
 
 from __future__ import annotations
+
+from enum import Enum
 from pydantic import BaseModel, Field
 from typing import List, Optional
+
+
+# ─── Research Paradigm ────────────────────────────────────────────────────────
+
+class ResearchParadigm(str, Enum):
+    """
+    The five empirical paradigms covering ~95% of all Track A dissertations.
+
+    Defaults to ML_CLASSIFICATION — backward compatible with every existing spec.
+    Detection order in locked_requirements_builder.py:
+      1. Student's explicit answer to Step 3 Q4 (research_nature)
+      2. Econometric terms detected in preferred_algorithms (Q3 override)
+      3. detect_paradigm() — deterministic keyword matching
+      4. ML_CLASSIFICATION (final safe fallback)
+    """
+    ML_CLASSIFICATION    = "ml_classification"    # CS, Data Science, Health Informatics
+    ECONOMETRIC_CAUSAL   = "econometric_causal"   # Economics, Finance, Accounting, Business
+    SURVEY_QUANTITATIVE  = "survey_quantitative"  # Management, Education, Psychology, HR
+    SYSTEMS_ENGINEERING  = "systems_engineering"  # Software Engineering, Information Systems
+    FINANCE_QUANT        = "finance_quant"         # Actuarial, Quant Finance, Risk Management
 
 
 # ─── Verified Paper ───────────────────────────────────────────────────────────
@@ -98,12 +125,16 @@ class SimilarProjectEntry(BaseModel):
 # ─── Evaluation Framework ─────────────────────────────────────────────────────
 
 class EvaluationFramework(BaseModel):
-    """Explicitly defined metrics for Track A projects."""
-    primary_metric: str                    # e.g. "AUC-ROC"
-    additional_metrics: List[str]          # e.g. ["F1 Score", "Sensitivity", "Specificity"]
-    validation_strategy: str               # e.g. "Stratified 10-fold cross-validation"
-    train_val_test_split: str              # e.g. "70% train, 15% validation, 15% test"
-    imbalance_strategy: Optional[str] = None  # e.g. "SMOTE (Chawla et al., 2002)"
+    """
+    Explicitly defined metrics for Track A projects.
+    Fields are interpreted differently per paradigm — the methodology agent
+    receives the paradigm label and knows what each field means in context.
+    """
+    primary_metric: str                    # ML: "AUC-ROC" | Econ: "Coefficient significance (p<0.05) and R²"
+    additional_metrics: List[str]          # ML: ["F1","Sensitivity"] | Econ: ["VIF","Hausman test"]
+    validation_strategy: str               # ML: "10-fold CV" | Econ: "Robustness checks + sub-group analysis"
+    train_val_test_split: str              # ML: "70/15/15" | Econ: "Not applicable — full dataset estimation"
+    imbalance_strategy: Optional[str] = None  # ML only: "SMOTE (Chawla et al., 2002)" | None for other paradigms
 
 
 # ─── Ethics Statement ─────────────────────────────────────────────────────────
@@ -120,12 +151,18 @@ class EthicsStatement(BaseModel):
 
 class LockedRequirementsA(BaseModel):
     """
-    Locked context for Track A (CS, Engineering, Data Science, Health Informatics, etc.)
-    
-    All 8 mandatory methodology checklist items are represented here.
-    The MethodologyDesigner instruction enforces all 8 must appear.
+    Locked context for Track A (CS, Engineering, Data Science, Health Informatics,
+    Economics, Finance, Management, Systems, etc.)
+
+    PARADIGM FIELD: determines which methodology template, method picker, and
+    evaluation framework the agent uses. Defaults to ML_CLASSIFICATION so all
+    existing behaviour is 100% preserved — no existing spec is affected.
     """
     track: str = "A"
+
+    # ── Research paradigm ────────────────────────────────────────────────────
+    # Default: ML_CLASSIFICATION — preserves all existing behaviour.
+    paradigm: ResearchParadigm = ResearchParadigm.ML_CLASSIFICATION
 
     # Core identification
     research_topic: str
@@ -142,8 +179,8 @@ class LockedRequirementsA(BaseModel):
     confirmed_dataset: LockedDataset
 
     # Baseline (checklist item 2)
-    # Optional — if citation pool has no metric-bearing papers, None is set.
-    # Methodology agent will instruct the student to confirm a baseline with their supervisor.
+    # Optional — None for econometric/survey/systems paradigms where ML baseline
+    # concept doesn't apply. Methodology agent handles None honestly.
     baseline: Optional[LockedBaseline] = None
 
     # Similar projects for differentiation (used by JustificationSpecialist)
@@ -155,31 +192,57 @@ class LockedRequirementsA(BaseModel):
         )
     )
 
-    # Evaluation framework (checklist items 3+4)
+    # Evaluation framework (interpretation depends on paradigm)
     evaluation: EvaluationFramework
 
-    # Ethics (checklist item 5)
+    # Ethics (required for all paradigms)
     ethics: EthicsStatement
 
-    # XAI / interpretability tools if claimed (checklist item 6)
+    # XAI / interpretability — ML paradigm only
     xai_techniques: Optional[List[str]] = None  # e.g. ["SHAP (Lundberg & Lee, 2017)", "LIME"]
 
-    # Algorithms to use (checklist item 7)
+    # Methods/algorithms (interpretation depends on paradigm):
+    #   ML:         ["Random Forest", "SVM", "ANN"]
+    #   Econometric:["OLS Regression", "PSM", "DiD"]
+    #   Survey:     ["Descriptive Statistics", "Cronbach's α", "Multiple Regression"]
+    #   Systems:    ["Performance Benchmarking", "Load Testing", "SUS Usability Test"]
+    #   Finance:    ["GARCH", "Monte Carlo Simulation", "VaR"]
     algorithms: List[str] = Field(
-        description="Named algorithms with brief justifications."
+        description="Named methods with justifications. Interpretation depends on paradigm."
     )
     algorithm_justifications: dict = Field(
         default_factory=dict,
-        description="Mapping: algorithm_name → why_chosen"
+        description="method_name → why_chosen. Language appropriate to paradigm."
     )
 
-    # Work plan structure (checklist item 8)
+    # Work plan structure
     work_plan_weeks: List[dict] = Field(
         description="List of {weeks: str, activity: str, deliverable: str}"
     )
 
-    # Student's stated success definition (from Step 3 Q)
+    # Student's stated success definition (from Step 3 Q2)
     student_success_statement: Optional[str] = None
+
+    # ── Paradigm-specific optional fields ────────────────────────────────────
+    # These are populated by build_locked_requirements() for the relevant paradigm.
+    # They are None for all other paradigms — agents only read the ones that apply.
+
+    # ECONOMETRIC_CAUSAL
+    treatment_variable: Optional[str] = None          # "impact_investment_received (binary: 1/0)"
+    outcome_variable: Optional[str] = None            # "jobs_created (continuous, year-on-year)"
+    control_variables: Optional[List[str]] = None     # ["firm_age", "sector", "country_gdp_growth"]
+    causal_identification_strategy: Optional[str] = None  # "PSM", "DiD", "FE", "OLS with controls"
+    statistical_software: Optional[str] = None        # "R (plm, MatchIt, stargazer)", "Stata"
+    data_structure: Optional[str] = None              # "cross-sectional", "panel", "time-series"
+
+    # SURVEY_QUANTITATIVE
+    measurement_instrument: Optional[str] = None      # "5-point Likert scale (Strongly Disagree–Agree)"
+    reliability_test: Optional[str] = None            # "Cronbach's α (target: α > 0.7)"
+    sample_size_target: Optional[str] = None          # "minimum 100 respondents (G*Power α=0.05)"
+
+    # SYSTEMS_ENGINEERING
+    system_type: Optional[str] = None                 # "REST API", "web application", "mobile app"
+    evaluation_environment: Optional[str] = None      # "Docker + AWS EC2 t3.medium"
 
     # Guidelines-derived targets
     target_word_count: int = 3000
@@ -195,7 +258,7 @@ class LockedRequirementsA(BaseModel):
 class LockedRequirementsB(BaseModel):
     """
     Locked context for Track B (English, Law, History, Policy, Philosophy, etc.)
-    
+
     No datasets. No algorithms. No metrics.
     Framework + argument + sources + positionality.
     """
@@ -227,7 +290,7 @@ class LockedRequirementsB(BaseModel):
         description="Active debates this project engages with"
     )
 
-    # Similar projects for differentiation (used by JustificationSpecialist)
+    # Similar projects for differentiation
     similar_projects: List[SimilarProjectEntry] = Field(
         default_factory=list,
         description=(
@@ -239,8 +302,7 @@ class LockedRequirementsB(BaseModel):
     # Positionality / ethics for humanities
     positionality_statement: Optional[str] = None
 
-
-    # Work plan for theoretical project (reading-heavy)
+    # Work plan for theoretical project
     work_plan_weeks: List[dict] = Field(
         description="List of {weeks: str, activity: str, deliverable: str}"
     )

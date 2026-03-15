@@ -9,8 +9,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 export interface TrackAAnswers {
   data_sensitivity: 'public' | 'self_collected' | 'sensitive' | ''
   student_success_statement: string
-  // WEEK 2: student's algorithm preferences — feeds _pick_algorithms() priority 1
   preferred_algorithms: string
+  // NEW Q4: plain-English study type — maps to ResearchParadigm on backend
+  // Empty string = "not sure" = auto-detect from field+topic (safe default)
+  research_nature: string
 }
 
 export interface TrackBAnswers {
@@ -54,7 +56,7 @@ const card: React.CSSProperties = {
   overflow: 'hidden',
 }
 
-// ─── Data sensitivity options ─────────────────────────────────────────────────
+// ─── Data sensitivity options (unchanged) ─────────────────────────────────────
 
 const DATA_SENSITIVITY_OPTIONS = [
   {
@@ -83,21 +85,99 @@ const DATA_SENSITIVITY_OPTIONS = [
   },
 ]
 
+// ─── Research nature options (NEW Q4) ────────────────────────────────────────
+// Written for a clueless student — no technical jargon, just plain descriptions.
+// The `value` maps to ResearchParadigm in the backend.
+
+const RESEARCH_NATURE_OPTIONS = [
+  {
+    value: 'building_model',
+    label: 'Building a model that makes predictions or classifications',
+    sub: 'e.g. "Will a patient get disease X?" · "Is this email spam?" · "Which category does this belong to?"',
+    icon: '🤖',
+    color: '#7c3aed',
+    bg: '#faf5ff',
+    border: '#e9d5ff',
+  },
+  {
+    value: 'testing_causation',
+    label: 'Testing whether something causes or affects something else',
+    sub: 'e.g. "Does investment X increase jobs?" · "What factors explain GDP?" · "Does policy Y reduce poverty?"',
+    icon: '📊',
+    color: '#0369a1',
+    bg: '#f0f9ff',
+    border: '#bae6fd',
+  },
+  {
+    value: 'running_survey',
+    label: 'Running a survey or collecting responses from people',
+    sub: 'e.g. "Questionnaire about attitudes, behaviour, or perceptions" · Likert scale study',
+    icon: '📋',
+    color: '#0891b2',
+    bg: '#ecfeff',
+    border: '#a5f3fc',
+  },
+  {
+    value: 'building_system',
+    label: 'Designing or building a software system or application',
+    sub: 'e.g. "Web app, mobile app, REST API, database system" · Evaluating it for performance',
+    icon: '🖥️',
+    color: '#16a34a',
+    bg: '#f0fdf4',
+    border: '#bbf7d0',
+  },
+  {
+    value: 'financial_analysis',
+    label: 'Analysing financial markets, prices, or investment risk',
+    sub: 'e.g. "Stock volatility, portfolio risk, VaR, GARCH modelling" · Actuarial / quant finance',
+    icon: '📈',
+    color: '#d97706',
+    bg: '#fffbeb',
+    border: '#fde68a',
+  },
+  {
+    value: 'not_sure',
+    label: "I'm not sure yet — let the AI decide",
+    sub: 'The system will auto-detect based on your field and topic. You can always change it later.',
+    icon: '🤔',
+    color: '#6b7280',
+    bg: '#f9fafb',
+    border: '#e5e7eb',
+  },
+]
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+function CardAccent({ color }: { color: string }) {
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: 4,
+      height: '100%',
+      background: color,
+      borderRadius: '16px 0 0 16px',
+    }} />
+  )
+}
 
 function QuestionLabel({ n, text, color = '#16a34a', bg = '#f0fdf4', border = '#bbf7d0' }: {
   n: number; text: string; color?: string; bg?: string; border?: string
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
       <div style={{
-        width: 26, height: 26, borderRadius: 8,
+        width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
         background: bg, border: `1.5px solid ${border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0, fontWeight: 800, fontSize: '.72rem', color,
-        boxShadow: `0 0 0 3px ${bg}`,
-      }}>{n}</div>
-      <p style={{ margin: 0, fontWeight: 700, fontSize: '.88rem', color: '#0f1f0f', lineHeight: 1.45 }}>{text}</p>
+        fontSize: '.72rem', fontWeight: 800, color,
+      }}>
+        {n}
+      </div>
+      <p style={{ margin: 0, fontWeight: 700, color: '#0f1f0f', fontSize: '.92rem', lineHeight: 1.35 }}>
+        {text}
+      </p>
     </div>
   )
 }
@@ -109,16 +189,13 @@ function WhyNote({ text }: { text: string }) {
       <button
         onClick={() => setOpen(o => !o)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 5,
+          display: 'inline-flex', alignItems: 'center', gap: 4,
           background: 'none', border: 'none', cursor: 'pointer',
-          color: '#9ca3af', fontSize: '.73rem', padding: 0,
-          transition: 'color .15s',
+          color: '#9ca3af', fontSize: '.72rem', fontWeight: 600, padding: 0,
         }}
-        onMouseEnter={e => (e.currentTarget.style.color = '#6b7280')}
-        onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}
       >
-        {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        Why do we ask this?
+        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        Why does this matter?
       </button>
       <AnimatePresence>
         {open && (
@@ -126,12 +203,11 @@ function WhyNote({ text }: { text: string }) {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: .2 }}
             style={{
-              margin: '8px 0 0', fontSize: '.76rem', color: '#6b7280',
-              lineHeight: 1.65, paddingLeft: 18,
-              borderLeft: '2px solid #e8ede8',
-            }}>
+              margin: '6px 0 0', fontSize: '.76rem', color: '#6b7280',
+              lineHeight: 1.6, borderLeft: '2px solid #e8ede8', paddingLeft: 10,
+            }}
+          >
             {text}
           </motion.p>
         )}
@@ -140,122 +216,103 @@ function WhyNote({ text }: { text: string }) {
   )
 }
 
-function CardAccent({ color }: { color: string }) {
-  return (
-    <div style={{
-      position: 'absolute', top: 0, left: 0, right: 0,
-      height: 3, background: `linear-gradient(90deg, ${color}60 0%, ${color} 40%, ${color}60 100%)`,
-      borderRadius: '16px 16px 0 0',
-    }} />
-  )
-}
-
 // ─── Track A Questions ────────────────────────────────────────────────────────
 
-function TrackAQuestions({ answers, update, topic }: {
+function TrackAQuestions({ answers, update, topic, field }: {
   answers: TrackAAnswers
   update: (a: TrackAAnswers) => void
   topic: string
+  field: string
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* Q1 — Data sensitivity */}
+      {/* Q1 — Data sensitivity (unchanged) */}
       <div style={card}>
         <CardAccent color="#16a34a" />
-        <QuestionLabel n={1} text="Is your data publicly available, or will you need to collect or access it yourself?" />
-        <p style={{ margin: '0 0 13px', fontSize: '.78rem', color: '#6b7280', lineHeight: 1.55 }}>
-          This shapes the ethics section of your specification — required by every university.
-        </p>
+        <QuestionLabel n={1} text="Where is your data coming from?" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {DATA_SENSITIVITY_OPTIONS.map(opt => {
             const selected = answers.data_sensitivity === opt.id
             return (
-              <motion.button
+              <button
                 key={opt.id}
-                onClick={() => update({ ...answers, data_sensitivity: opt.id as any })}
-                whileHover={{ scale: 1.005 }}
-                whileTap={{ scale: .998 }}
+                onClick={() => update({ ...answers, data_sensitivity: opt.id as TrackAAnswers['data_sensitivity'] })}
                 style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 14px',
+                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                  padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
                   border: `1.5px solid ${selected ? opt.border : '#e8ede8'}`,
-                  borderRadius: 11, background: selected ? opt.bg : 'white',
-                  cursor: 'pointer', textAlign: 'left',
-                  transition: 'border-color .15s, background .15s, box-shadow .15s',
-                  boxShadow: selected ? `0 0 0 3px ${opt.color}14` : 'none',
+                  background: selected ? opt.bg : 'white',
+                  transition: 'all .15s', textAlign: 'left',
                 }}
               >
                 <div style={{
-                  width: 19, height: 19, borderRadius: '50%',
+                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 1,
                   border: `2px solid ${selected ? opt.color : '#d1d5db'}`,
                   background: selected ? opt.color : 'white',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0, marginTop: 1,
-                  transition: 'all .15s',
                 }}>
-                  {selected && (
-                    <motion.div
-                      initial={{ scale: 0 }} animate={{ scale: 1 }}
-                      style={{ width: 7, height: 7, borderRadius: '50%', background: 'white' }}
-                    />
-                  )}
+                  {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'white' }} />}
                 </div>
                 <div>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: '.84rem', color: '#0f1f0f', lineHeight: 1.3 }}>{opt.label}</p>
-                  <p style={{ margin: '3px 0 0', fontSize: '.74rem', color: '#6b7280', lineHeight: 1.4 }}>{opt.sub}</p>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '.84rem', color: selected ? opt.color : '#374151' }}>
+                    {opt.label}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: '.74rem', color: '#6b7280', lineHeight: 1.4 }}>
+                    {opt.sub}
+                  </p>
                 </div>
-              </motion.button>
+              </button>
             )
           })}
         </div>
-        <WhyNote text="Examiners require an ethics statement in the methodology section. Your answer determines what gets written — public data means no consent needed; collected data means you need ethical approval." />
+        <WhyNote text="This determines the ethics statement that goes into your methodology section — an examiner will specifically look for it." />
       </div>
 
-      {/* Q2 — Success statement */}
+      {/* Q2 — Success statement (unchanged) */}
       <div style={card}>
         <CardAccent color="#16a34a" />
-        <QuestionLabel n={2} text="What would success look like for your project — what should it do well?" />
+        <QuestionLabel n={2} text="What would success look like for this project?" />
         <p style={{ margin: '0 0 11px', fontSize: '.78rem', color: '#6b7280', lineHeight: 1.55 }}>
-          Describe it like you're telling a friend. Don't worry about technical language.
+          In your own words — what result would make you happy to show your supervisor?
         </p>
         <textarea
-          placeholder={`e.g. "I want the model to accurately predict heart disease early enough to help doctors, even when the data is messy or imbalanced"`}
+          placeholder={`e.g. "I want to beat the existing 85% accuracy benchmark" · "A working system that processes 100 requests/sec" · "Show that X significantly affects Y"`}
           value={answers.student_success_statement}
           onChange={e => update({ ...answers, student_success_statement: e.target.value })}
           rows={3}
-          style={{ ...inp, resize: 'vertical' }}
+          style={{ ...inp, resize: 'vertical', lineHeight: 1.6 }}
           onFocus={e => { e.target.style.borderColor = '#16a34a'; e.target.style.boxShadow = '0 0 0 3px rgba(22,163,74,.1)' }}
           onBlur={e => { e.target.style.borderColor = '#e8ede8'; e.target.style.boxShadow = 'none' }}
         />
-        <WhyNote text="This tells the AI what your project is actually trying to achieve — not just technically, but in terms of real-world value. It becomes the foundation for your abstract and justification sections." />
+        <WhyNote text="Your answer shapes the objectives section — the AI writes 'to achieve X as defined by the student' which is always stronger than a generic objective." />
       </div>
 
-      {/* Q3 — Preferred algorithms (WEEK 2) */}
+      {/* Q3 — Algorithm preferences (unchanged) */}
       <div style={card}>
         <CardAccent color="#059669" />
-        {/* Optional badge */}
         <div style={{
           position: 'absolute', top: 14, right: 16,
           fontSize: '.67rem', fontWeight: 700, color: '#6b7280',
           background: '#f9fafb', border: '1px solid #e5e7eb',
           borderRadius: 999, padding: '2px 8px',
         }}>Optional</div>
-        <QuestionLabel n={3} text="Which algorithms or methods are you thinking of using — or do you have a preference?" />
+        <QuestionLabel n={3} text="Which methods or techniques are you thinking of using?" color="#059669" bg="#f0fdf4" border="#6ee7b7" />
         <p style={{ margin: '0 0 11px', fontSize: '.78rem', color: '#6b7280', lineHeight: 1.55 }}>
           Don't know yet? Leave it blank and the AI will choose based on your topic and the literature it reads.
         </p>
         <input
           type="text"
-          placeholder={`e.g. "Random Forest, XGBoost, LSTM" or "I'm not sure yet" or "whatever works best for classification"`}
+          placeholder={`ML: "Random Forest, XGBoost, LSTM" · Stats: "OLS, PSM, Fixed Effects" · Survey: "Likert, regression, SPSS"`}
           value={answers.preferred_algorithms}
           onChange={e => update({ ...answers, preferred_algorithms: e.target.value })}
           style={inp}
           onFocus={e => { e.target.style.borderColor = '#059669'; e.target.style.boxShadow = '0 0 0 3px rgba(5,150,105,.1)' }}
           onBlur={e => { e.target.style.borderColor = '#e8ede8'; e.target.style.boxShadow = 'none' }}
         />
-        {/* Chip suggestions */}
+        {/* Chip shortcuts */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-          {['Random Forest', 'XGBoost', 'LSTM', 'BERT', 'SVM', 'CNN'].map(alg => (
+          {['Random Forest', 'XGBoost', 'LSTM', 'BERT', 'OLS Regression', 'PSM', 'Likert + Regression'].map(alg => (
             <button
               key={alg}
               onClick={() => {
@@ -268,8 +325,7 @@ function TrackAQuestions({ answers, update, topic }: {
               style={{
                 padding: '4px 10px', borderRadius: 999, fontSize: '.71rem', fontWeight: 600,
                 cursor: 'pointer', border: '1.5px solid #d1fae5',
-                background: '#f0fdf4', color: '#059669',
-                transition: 'all .12s',
+                background: '#f0fdf4', color: '#059669', transition: 'all .12s',
               }}
               onMouseEnter={e => { e.currentTarget.style.background = '#d1fae5'; e.currentTarget.style.borderColor = '#6ee7b7' }}
               onMouseLeave={e => { e.currentTarget.style.background = '#f0fdf4'; e.currentTarget.style.borderColor = '#d1fae5' }}
@@ -278,13 +334,56 @@ function TrackAQuestions({ answers, update, topic }: {
             </button>
           ))}
         </div>
-        <WhyNote text="When you name your algorithms, the AI uses exactly those in the work plan and methodology — instead of guessing from your topic. If you say 'I don't know', that's fine too and it falls back to literature-based selection." />
+        <WhyNote text="When you name your methods, the AI uses exactly those in the work plan and methodology — instead of guessing. Economists: type 'OLS, PSM'. Survey students: type 'Likert, regression'. ML students: type your algorithms." />
       </div>
+
+      {/* Q4 — Research nature (NEW) */}
+      <div style={card}>
+        <CardAccent color="#7c3aed" />
+        <QuestionLabel n={4} text="What kind of study is this?" color="#7c3aed" bg="#faf5ff" border="#e9d5ff" />
+        <p style={{ margin: '0 0 14px', fontSize: '.78rem', color: '#6b7280', lineHeight: 1.55 }}>
+          Pick the one that best describes what you're doing. This helps the AI write the right methodology — 
+          an economics student and a CS student need very different sections.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {RESEARCH_NATURE_OPTIONS.map(opt => {
+            const selected = answers.research_nature === opt.value
+            return (
+              <button
+                key={opt.value}
+                onClick={() => update({ ...answers, research_nature: opt.value })}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                  padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${selected ? opt.border : '#e8ede8'}`,
+                  background: selected ? opt.bg : 'white',
+                  transition: 'all .15s', textAlign: 'left',
+                }}
+              >
+                <div style={{ fontSize: '1.1rem', flexShrink: 0, marginTop: 1 }}>{opt.icon}</div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '.85rem', color: selected ? opt.color : '#374151', lineHeight: 1.3 }}>
+                    {opt.label}
+                  </p>
+                  <p style={{ margin: '3px 0 0', fontSize: '.73rem', color: '#6b7280', lineHeight: 1.45 }}>
+                    {opt.sub}
+                  </p>
+                </div>
+                {selected && (
+                  <CheckCircle size={16} color={opt.color} style={{ flexShrink: 0, marginTop: 2 }} />
+                )}
+              </button>
+            )
+          })}
+        </div>
+        <WhyNote text="This is the most important question for getting the methodology right. An accounting student testing causal impact needs OLS regression and PSM — not AUC-ROC and scikit-learn. Without this, the AI defaults to machine learning for every empirical project." />
+      </div>
+
     </div>
   )
 }
 
-// ─── Track B Questions ────────────────────────────────────────────────────────
+// ─── Track B Questions (unchanged) ───────────────────────────────────────────
 
 function TrackBQuestions({ answers, update, topic, field }: {
   answers: TrackBAnswers
@@ -300,37 +399,37 @@ function TrackBQuestions({ answers, update, topic, field }: {
         <CardAccent color="#7c3aed" />
         <QuestionLabel n={1} text="Which theoretical or analytical lens feels most right for your project?" color="#7c3aed" bg="#faf5ff" border="#e9d5ff" />
         <p style={{ margin: '0 0 11px', fontSize: '.78rem', color: '#6b7280', lineHeight: 1.55 }}>
-          If you're not sure, describe how you want to approach the material — the AI will suggest a framework.
+          E.g. "Postcolonial theory" · "Critical discourse analysis" · "Feminist theory" · "Grounded theory" · "Not sure yet"
         </p>
         <input
           type="text"
-          placeholder={`e.g. "Postcolonial theory", "Feminist lens", "Critical discourse analysis", "Not sure yet"`}
+          placeholder={`e.g. "Postcolonial theory (Bhabha, 1994)" or "Critical realism" or "Social constructivism"`}
           value={answers.theoretical_framework}
           onChange={e => update({ ...answers, theoretical_framework: e.target.value })}
           style={inp}
           onFocus={e => { e.target.style.borderColor = '#7c3aed'; e.target.style.boxShadow = '0 0 0 3px rgba(124,58,237,.1)' }}
           onBlur={e => { e.target.style.borderColor = '#e8ede8'; e.target.style.boxShadow = 'none' }}
         />
-        <WhyNote text="Every humanities and social science dissertation needs a named theoretical lens. It shows examiners you know how to position your work within the scholarly conversation." />
+        <WhyNote text="Examiners in humanities and social sciences award significant marks for clearly stating and justifying your theoretical lens. If you don't know yet, type 'not sure' and the AI will suggest one based on your field." />
       </div>
 
       {/* Q2 — Central argument */}
       <div style={card}>
         <CardAccent color="#7c3aed" />
-        <QuestionLabel n={2} text="What's the main argument or question you want to answer — in one sentence?" color="#7c3aed" bg="#faf5ff" border="#e9d5ff" />
+        <QuestionLabel n={2} text="In one sentence — what is the main argument or claim of your project?" color="#7c3aed" bg="#faf5ff" border="#e9d5ff" />
         <p style={{ margin: '0 0 11px', fontSize: '.78rem', color: '#6b7280', lineHeight: 1.55 }}>
-          Don't overthink it. Even a rough version helps the AI build your justification section.
+          This becomes the backbone of your justification, objectives, and conclusion.
         </p>
         <textarea
-          placeholder={`e.g. "I want to argue that Achebe's trilogy reclaims African identity from colonial narratives by inverting the European gaze"`}
+          placeholder={`e.g. "This project argues that colonial legacy in Nigerian land law continues to shape contemporary property disputes" · Or just your rough idea`}
           value={answers.central_argument}
           onChange={e => update({ ...answers, central_argument: e.target.value })}
           rows={3}
-          style={{ ...inp, resize: 'vertical' }}
+          style={{ ...inp, resize: 'vertical', lineHeight: 1.6 }}
           onFocus={e => { e.target.style.borderColor = '#7c3aed'; e.target.style.boxShadow = '0 0 0 3px rgba(124,58,237,.1)' }}
           onBlur={e => { e.target.style.borderColor = '#e8ede8'; e.target.style.boxShadow = 'none' }}
         />
-        <WhyNote text="This becomes the spine of your specification. The AI will build your justification, objectives, and methodology around it." />
+        <WhyNote text="The AI will build your justification, objectives, and methodology around it." />
       </div>
 
       {/* Q3 — Primary source focus */}
@@ -357,6 +456,7 @@ function TrackBQuestions({ answers, update, topic, field }: {
         />
         <WhyNote text="Naming your primary sources helps the AI write a more specific and credible methodology section." />
       </div>
+
     </div>
   )
 }
@@ -367,13 +467,24 @@ export function Step3Questions({
   track, answersA, answersB, updateA, updateB, researchTopic, fieldOfStudy
 }: Step3Props) {
 
+  // canProceed: Track A requires data_sensitivity (Q1) to be answered.
+  // research_nature (Q4) is not required — empty string is valid ("not sure" = auto-detect).
   const canProceed = track === 'A'
     ? !!answersA.data_sensitivity
     : !!answersB.central_argument
 
-  const trackColor = track === 'A' ? '#16a34a' : '#7c3aed'
-  const trackBg    = track === 'A' ? '#f0fdf4' : '#faf5ff'
+  const trackColor  = track === 'A' ? '#16a34a' : '#7c3aed'
+  const trackBg     = track === 'A' ? '#f0fdf4' : '#faf5ff'
   const trackBorder = track === 'A' ? '#bbf7d0' : '#e9d5ff'
+
+  // Detect what paradigm the Q4 answer implies, for the badge
+  const paradigmBadge = (): { label: string; color: string; bg: string } | null => {
+    if (track !== 'A' || !answersA.research_nature) return null
+    const opt = RESEARCH_NATURE_OPTIONS.find(o => o.value === answersA.research_nature)
+    if (!opt || opt.value === 'not_sure') return null
+    return { label: opt.label.split(' ').slice(0, 4).join(' ') + '…', color: opt.color, bg: opt.bg }
+  }
+  const badge = paradigmBadge()
 
   return (
     <div>
@@ -384,53 +495,48 @@ export function Step3Questions({
         </h2>
         <p style={{ margin: '0 0 13px', fontSize: '.84rem', color: '#9ca3af', lineHeight: 1.55 }}>
           {track === 'A'
-            ? 'Three questions that ground your specification in real information — not AI guesses.'
+            ? 'Four questions that ground your specification in real information — not AI guesses.'
             : 'Three questions that give your specification its academic backbone.'}
         </p>
 
-        {/* Track badge */}
+        {/* Track badge (unchanged) */}
         <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '5px 12px', borderRadius: 9,
+          display: 'inline-flex', alignItems: 'center', gap: 7,
+          padding: '5px 12px', borderRadius: 999,
           background: trackBg, border: `1.5px solid ${trackBorder}`,
-          boxShadow: `0 0 0 3px ${trackColor}0a`,
         }}>
-          <Sparkles size={12} color={trackColor} />
+          {track === 'A' ? <Cpu size={12} color={trackColor} /> : <Brain size={12} color={trackColor} />}
           <span style={{ fontSize: '.74rem', fontWeight: 700, color: trackColor }}>
-            {track === 'A' ? 'Empirical / Data Project' : 'Theoretical / Humanities Project'}
+            {track === 'A' ? 'Empirical / Data project (Track A)' : 'Theoretical / Humanities project (Track B)'}
           </span>
+          {badge && (
+            <span style={{
+              fontSize: '.67rem', fontWeight: 700,
+              color: badge.color, background: badge.bg,
+              padding: '1px 8px', borderRadius: 999, marginLeft: 4,
+            }}>
+              {badge.label}
+            </span>
+          )}
         </div>
       </div>
 
+      {/* Questions */}
       {track === 'A' ? (
-        <TrackAQuestions answers={answersA} update={updateA} topic={researchTopic} />
+        <TrackAQuestions
+          answers={answersA}
+          update={updateA}
+          topic={researchTopic}
+          field={fieldOfStudy}
+        />
       ) : (
-        <TrackBQuestions answers={answersB} update={updateB} topic={researchTopic} field={fieldOfStudy} />
+        <TrackBQuestions
+          answers={answersB}
+          update={updateB}
+          topic={researchTopic}
+          field={fieldOfStudy}
+        />
       )}
-
-      {/* Completion banner */}
-      <AnimatePresence>
-        {canProceed && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: .25 }}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 9, marginTop: 20,
-              padding: '12px 16px',
-              background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-              border: '1.5px solid #bbf7d0', borderRadius: 12,
-              boxShadow: '0 2px 8px rgba(22,163,74,.08)',
-            }}
-          >
-            <CheckCircle size={16} color="#16a34a" />
-            <span style={{ fontSize: '.79rem', color: '#15803d', fontWeight: 600 }}>
-              Ready — your answers are locked in. Click Continue to generate.
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }
