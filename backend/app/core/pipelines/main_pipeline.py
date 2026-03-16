@@ -94,6 +94,8 @@ async def run_complete_specification_system(
         config=config,
     )
 
+    track = detect_track(config.field_of_study, final_topic)
+
     # PHASE 2: Resource Discovery + Paper Abstract Fetching
     # Skip dataset search if student already has a dataset (saves cost)
     _dataset_source = getattr(config, "dataset_source", "scout") or "scout"
@@ -103,6 +105,7 @@ async def run_complete_specification_system(
         guidelines=guidelines,
         num_searches=config.num_web_searches,
         dataset_source=_dataset_source,
+        track=track,
     )
 
     await _progress(22, "Fetching paper abstracts and verifying citations")
@@ -153,6 +156,8 @@ async def run_complete_specification_system(
         discovered_resources=discovered_resources,
         analyzed_projects=all_analyzed_projects,
         guidelines=guidelines,
+        track=track,
+        field_of_study=config.field_of_study,   # ← add this line
     )
 
     # PHASE 4.5: Build Locked Requirements
@@ -172,6 +177,7 @@ async def run_complete_specification_system(
         theoretical_framework=getattr(config, "theoretical_framework", None),
         central_argument=getattr(config, "central_argument", None),
         primary_source_focus=getattr(config, "primary_source_focus", None),
+        research_nature=getattr(config, "research_nature", None),
         citation_pool=citation_pool,
         analyzed_projects=all_analyzed_projects,
         guidelines=guidelines,

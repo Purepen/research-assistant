@@ -7,6 +7,20 @@ Changes in this version:
                          is skipped entirely — saves 1 web search call + cost.
   analyze_user_dumps()        — reads each file and runs PastProjectsSpecAnalyzer.
   find_and_analyze_projects() — runs ProjectFinder then ProjectAnalyzer per URL.
+
+TRACK B ADDITION:
+  discover_resources() now accepts track: str = "A".
+  When track == "B":
+    - Dataset searches are never run (Track B has no dataset)
+    - Method/algorithm searches are replaced with humanities-specific queries:
+        * theoretical framework + scholarly debate search
+        * key scholars + foundational literature search
+        * primary source + policy document search
+    - The same web_search_agent and resource_finder_agent are used —
+      the difference is purely in the queries sent to them.
+
+  main_pipeline.py needs to pass track=detect_track(...) to activate this.
+  Default is "A" so all existing calls continue to work without change.
 """
 
 from __future__ import annotations
@@ -57,33 +71,75 @@ async def discover_resources(
     guidelines: ProjectGuidelines,
     num_searches: int = 5,
     dataset_source: str = "scout",
+    track: str = "A",
 ) -> DiscoveredResources:
     """
     Discover papers, methods, tools, and (optionally) datasets via web search.
 
     dataset_source:
-      'scout'          → AI searches for a dataset (adds a search call)
-      anything else    → dataset search is SKIPPED — student already has one
+      'scout'          → AI searches for a dataset (adds a search call, Track A only)
+      anything else    → dataset search is SKIPPED
+
+    track:
+      'A' → empirical project: dataset search, methods search, tools search (existing behaviour)
+      'B' → theoretical project: humanities-specific queries, NO dataset search ever
     """
     print("\n🔍 RESOURCE DISCOVERY (Adaptive)")
     print("-" * 80)
-    print(f"   Project type: {guidelines.project_type}")
+    print(f"   Track: {track} | Project type: {guidelines.project_type}")
     print(f"   Dataset source: {dataset_source} "
-          f"{'→ will search for dataset' if dataset_source == 'scout' else '→ dataset search SKIPPED'}")
+          f"{'→ will search for dataset' if dataset_source == 'scout' and track == 'A' else '→ dataset search SKIPPED'}")
 
     search_queries: List[str] = []
-    search_queries.append(f"{research_topic} recent research papers 2024 2025")
 
-    # Only search for a dataset if the student wants AI to find one
-    if guidelines.requires_dataset and num_searches > 1 and dataset_source == "scout":
-        search_queries.append(f"{research_topic} datasets Kaggle UCI")
-    elif dataset_source != "scout":
-        print(f"   ⏭️  Dataset search skipped — student provided own dataset ({dataset_source})")
+    # ── Track B: humanities-specific search strategy ──────────────────────────
+    if track == "B":
+        print("   📚 Track B detected — using humanities search strategy")
 
-    if guidelines.requires_methods and num_searches > 3:
-        search_queries.append(f"{research_topic} methods techniques algorithms")
-    if guidelines.requires_tools and num_searches > 4:
-        search_queries.append(f"{research_topic} tools libraries frameworks Python")
+        # Query 1: Theoretical frameworks and scholarly debates in this field
+        search_queries.append(
+            f"{research_topic} theoretical framework scholarly debate academic literature"
+        )
+
+        # Query 2: Key scholars and foundational works
+        if num_searches >= 2:
+            search_queries.append(
+                f"{research_topic} key scholars foundational studies literature review"
+            )
+
+        # Query 3: Primary sources, policy documents, and institutional reports
+        if num_searches >= 3:
+            search_queries.append(
+                f"{research_topic} policy document primary source report institutional"
+            )
+
+        # Query 4: Recent peer-reviewed papers (2022-2025)
+        if num_searches >= 4:
+            search_queries.append(
+                f"{research_topic} peer reviewed journal article 2022 2023 2024 2025"
+            )
+
+        # Query 5: Similar dissertations / theses in the field
+        if num_searches >= 5:
+            field_hint = guidelines.project_type or "social science"
+            search_queries.append(
+                f"{research_topic} dissertation thesis {field_hint} research findings"
+            )
+
+    # ── Track A: original search strategy (UNCHANGED) ────────────────────────
+    else:
+        search_queries.append(f"{research_topic} recent research papers 2024 2025")
+
+        # Only search for a dataset if the student wants AI to find one
+        if guidelines.requires_dataset and num_searches > 1 and dataset_source == "scout":
+            search_queries.append(f"{research_topic} datasets Kaggle UCI")
+        elif dataset_source != "scout":
+            print(f"   ⏭️  Dataset search skipped — student provided own dataset ({dataset_source})")
+
+        if guidelines.requires_methods and num_searches > 3:
+            search_queries.append(f"{research_topic} methods techniques algorithms")
+        if guidelines.requires_tools and num_searches > 4:
+            search_queries.append(f"{research_topic} tools libraries frameworks Python")
 
     search_queries = search_queries[:num_searches]
     search_results = []
@@ -107,11 +163,13 @@ async def discover_resources(
             input=f"""
 Research Topic: {research_topic}
 Project Type: {guidelines.project_type}
+Track: {track} {'(Theoretical/Humanities — no datasets, no algorithms)' if track == 'B' else '(Empirical/Data)'}
 
 Web Search Results:
 {compiled}
 
 Extract and structure all relevant resources found in these search results.
+{'For this Track B project: focus on papers, key scholars, and theoretical sources. Do not extract datasets or ML methods.' if track == 'B' else ''}
 """,
         )
 
@@ -133,7 +191,7 @@ Extract and structure all relevant resources found in these search results.
 
 
 # ---------------------------------------------------------------------------
-# Stream 1 — User-Provided Dumps
+# Stream 1 — User-Provided Dumps (UNCHANGED)
 # ---------------------------------------------------------------------------
 
 async def analyze_user_dumps(
@@ -182,7 +240,7 @@ DOCUMENT CONTENT:
 
 
 # ---------------------------------------------------------------------------
-# Stream 2 — Auto-Discovery
+# Stream 2 — Auto-Discovery (project_finder_agent now has output_type fixed)
 # ---------------------------------------------------------------------------
 
 async def find_and_analyze_projects(
@@ -192,7 +250,8 @@ async def find_and_analyze_projects(
 ) -> List[AnalyzedProjectSpecSections]:
     """
     Auto-discover and analyse similar student projects via web search.
-    Step 1: ProjectFinder searches for URLs.
+    Step 1: ProjectFinder searches for URLs — now returns ProjectFinderOutput
+            (fixing the 'str object has no attribute project_urls' crash).
     Step 2: ProjectAnalyzer fetches and analyses each URL.
     """
     print(f"\n🤖 Auto-discovering up to {num_projects} similar project(s)…")

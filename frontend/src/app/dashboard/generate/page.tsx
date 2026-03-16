@@ -3,13 +3,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import axios from 'axios'
-import { ArrowLeft, ArrowRight, Sparkles, CheckCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Sparkles, CheckCircle, AlertTriangle, FlaskConical, Brain, BarChart3 } from 'lucide-react'
 import { useGenerateSpecification } from '@/hooks/useProjects'
 import { topicsApi } from '@/lib/api'
 import { Step2FileUploads } from '@/components/generate/Step2FileUploads'
 import { Step3Questions, TrackAAnswers, TrackBAnswers } from '@/components/generate/Step3Questions'
 
-// ─── Track detection (mirrors backend logic) ──────────────────────────────────
+// ─── Track detection — B5 signals (mirrors backend locked_requirements_builder.py) ──
 const TRACK_B_FIELDS = [
   'english','literature','history','law','philosophy','linguistics',
   'education','sociology','anthropology','political science','politics',
@@ -18,6 +18,7 @@ const TRACK_B_FIELDS = [
   'film','music','theatre','drama','international relations','policy',
 ]
 const TRACK_A_SIGNALS = [
+  // Original signals
   'machine learning','deep learning','neural network','data science',
   'algorithm','classification','regression','clustering','prediction',
   'dataset','model',' ai ','artificial intelligence','nlp',
@@ -25,14 +26,36 @@ const TRACK_A_SIGNALS = [
   'blockchain','cybersecurity','iot','bioinformatics','genomics',
   'epidemiology','public health data','econometrics','quantitative',
   'simulation','optimization','engineering','software',
+  // B5 fix: new quantitative/causal phrases
+  'econometric','regression analysis','statistical analysis',
+  'quantitative analysis','quantitative study','empirical analysis',
+  'empirical study','causal analysis','causal inference',
+  'panel data','impact of','effect of','determinants of','an analysis of',
 ]
 
-function detectTrack(field: string, topic: string): 'A' | 'B' {
+function detectTrackAuto(field: string, topic: string): 'A' | 'B' {
   const t = (topic || '').toLowerCase()
   for (const s of TRACK_A_SIGNALS) if (t.includes(s)) return 'A'
   const f = field.toLowerCase()
   for (const b of TRACK_B_FIELDS) if (f.includes(b)) return 'B'
   return 'A'
+}
+
+// Detect if there's a conflict — field says B but topic has quantitative language
+function detectConflict(field: string, topic: string): boolean {
+  const fieldTrack = (() => {
+    const f = field.toLowerCase()
+    for (const b of TRACK_B_FIELDS) if (f.includes(b)) return 'B'
+    return 'A'
+  })()
+  if (fieldTrack !== 'B') return false
+  const t = (topic || '').toLowerCase()
+  const quantSignals = [
+    'econometric','regression','statistical','quantitative','empirical',
+    'causal','panel data','impact of','effect of','determinants of',
+    'analysis of','human capital','performance analysis',
+  ]
+  return quantSignals.some(s => t.includes(s))
 }
 
 const RESEARCH_NATURE_LABELS: Record<string, string> = {
@@ -44,39 +67,73 @@ const RESEARCH_NATURE_LABELS: Record<string, string> = {
   not_sure:            'Auto-detect from field and topic',
 }
 
+// ─── Design tokens ────────────────────────────────────────────────────────────
+const C = {
+  purple: '#7c3aed',
+  purpleLight: '#ede9fe',
+  purpleBorder: '#c4b5fd',
+  green: '#16a34a',
+  greenLight: '#f0fdf4',
+  greenBorder: '#bbf7d0',
+  amber: '#d97706',
+  amberLight: '#fffbeb',
+  amberBorder: '#fde68a',
+  red: '#dc2626',
+  dark: '#0f1f0f',
+  muted: '#6b7280',
+  border: '#e5e7eb',
+  bg: '#fafafa',
+  white: '#ffffff',
+}
+
 // ─── Stepper ──────────────────────────────────────────────────────────────────
 const STEPS = ['Basic Info', 'Documents & Data', 'Quick Questions', 'Configure', 'Review']
 
-function Stepper({ step }: { step: number }) {
+function Stepper({ step, track }: { step: number; track: 'A' | 'B' }) {
+  const accent = track === 'B' ? C.purple : C.green
+  const accentLight = track === 'B' ? C.purpleLight : C.greenLight
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 32 }}>
-      {STEPS.map((label, i) => {
-        const idx = i + 1
-        const done = idx < step
-        const active = idx === step
-        return (
-          <div key={idx} style={{ display: 'flex', alignItems: 'center', flex: idx < STEPS.length ? 1 : 0 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 44 }}>
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+        <div style={{
+          position: 'absolute', top: 15, left: '5%', right: '5%',
+          height: 2, background: C.border, zIndex: 0,
+        }}>
+          <div style={{
+            height: '100%',
+            width: `${Math.max(0, ((step - 1) / (STEPS.length - 1)) * 100)}%`,
+            background: `linear-gradient(90deg, ${accent}, ${accent}cc)`,
+            borderRadius: 2, transition: 'width .4s ease',
+          }} />
+        </div>
+        {STEPS.map((label, i) => {
+          const idx = i + 1
+          const done = idx < step
+          const active = idx === step
+          return (
+            <div key={idx} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 1 }}>
               <div style={{
-                width: 30, height: 30, borderRadius: '50%',
-                background: done ? '#16a34a' : active ? '#0f1f0f' : '#f3f4f6',
-                border: `2px solid ${done ? '#16a34a' : active ? '#0f1f0f' : '#e8ede8'}`,
+                width: 32, height: 32, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'all .2s',
+                background: done ? accent : active ? C.dark : C.white,
+                border: `2px solid ${done ? accent : active ? C.dark : C.border}`,
+                boxShadow: active ? `0 0 0 4px ${accentLight}` : 'none',
+                transition: 'all .25s',
               }}>
                 {done
                   ? <CheckCircle size={15} color="white" />
-                  : <span style={{ fontSize: '.72rem', fontWeight: 700, color: active ? 'white' : '#9ca3af' }}>{idx}</span>
+                  : <span style={{ fontSize: '.72rem', fontWeight: 800, color: active ? 'white' : C.muted }}>{idx}</span>
                 }
               </div>
-              <span style={{ fontSize: '.66rem', fontWeight: active ? 700 : 500, color: active ? '#0f1f0f' : '#9ca3af', whiteSpace: 'nowrap' }}>{label}</span>
+              <span style={{
+                fontSize: '.65rem', fontWeight: active ? 800 : 500, marginTop: 7,
+                color: done ? accent : active ? C.dark : C.muted, whiteSpace: 'nowrap',
+              }}>{label}</span>
             </div>
-            {idx < STEPS.length && (
-              <div style={{ flex: 1, height: 2, background: done ? '#16a34a' : '#e8ede8', margin: '0 4px', marginBottom: 18, transition: 'background .3s' }} />
-            )}
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -84,29 +141,218 @@ function Stepper({ step }: { step: number }) {
 // ─── Topic Lab banner ─────────────────────────────────────────────────────────
 function TopicLabBanner({ topic, onClear }: { topic: string; onClear: () => void }) {
   return (
-    <div style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 12, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div style={{
+      background: 'linear-gradient(135deg, #f0fdf4, #faf5ff)',
+      border: `1.5px solid ${C.greenBorder}`,
+      borderRadius: 12, padding: '12px 16px', marginBottom: 20,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Sparkles size={14} color="#16a34a" />
-        <span style={{ fontSize: '.8rem', color: '#15803d', fontWeight: 600 }}>
-          Topic from Topic Lab: <em style={{ fontStyle: 'italic' }}>{topic}</em>
+        <div style={{ width: 28, height: 28, borderRadius: 8, background: C.greenLight, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <FlaskConical size={14} color={C.green} />
+        </div>
+        <span style={{ fontSize: '.82rem', color: C.green, fontWeight: 700 }}>
+          From Topic Lab: <em style={{ fontWeight: 400, color: C.dark }}>{topic.length > 60 ? topic.slice(0, 60) + '…' : topic}</em>
         </span>
       </div>
-      <button onClick={onClear} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '.73rem', color: '#9ca3af', textDecoration: 'underline' }}>Clear</button>
+      <button onClick={onClear} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '.72rem', color: C.muted, fontWeight: 600, padding: '4px 8px', borderRadius: 6 }}
+        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = C.dark}
+        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = C.muted}
+      >Clear ×</button>
+    </div>
+  )
+}
+
+// ─── Track Confirmation Selector ──────────────────────────────────────────────
+// This is the critical UX piece. Shown at the bottom of Step 1.
+// Auto-detects and pre-selects the most likely track, but the student
+// must explicitly click one before they can proceed to Step 2.
+// This is what prevents the wrong methodology from being generated.
+function TrackConfirmation({
+  autoDetected,
+  confirmed,
+  onConfirm,
+  field,
+  topic,
+}: {
+  autoDetected: 'A' | 'B' | null
+  confirmed: 'A' | 'B' | null
+  onConfirm: (t: 'A' | 'B') => void
+  field: string
+  topic: string
+}) {
+  const hasConflict = field && topic && detectConflict(field, topic)
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      {/* Section label */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <div style={{ flex: 1, height: 1, background: C.border }} />
+        <span style={{ fontSize: '.72rem', fontWeight: 700, color: C.muted, whiteSpace: 'nowrap' }}>
+          CONFIRM YOUR RESEARCH APPROACH
+        </span>
+        <div style={{ flex: 1, height: 1, background: C.border }} />
+      </div>
+
+      {/* Conflict alert — shown when field says B but topic signals A */}
+      {hasConflict && (
+        <div style={{
+          display: 'flex', gap: 9, alignItems: 'flex-start',
+          background: C.amberLight, border: `1.5px solid ${C.amberBorder}`,
+          borderRadius: 10, padding: '10px 14px', marginBottom: 12,
+        }}>
+          <AlertTriangle size={14} color={C.amber} style={{ flexShrink: 0, marginTop: 1 }} />
+          <p style={{ margin: 0, fontSize: '.77rem', color: '#92400e', lineHeight: 1.55 }}>
+            <strong>Potential mismatch:</strong> Your field ({field}) suggests a theoretical project, but your topic contains empirical/quantitative language. Pick the approach that matches what your project actually does.
+          </p>
+        </div>
+      )}
+
+      <p style={{ margin: '0 0 12px', fontSize: '.8rem', color: C.muted, lineHeight: 1.55 }}>
+        {autoDetected
+          ? `We auto-detected your project as the ${autoDetected === 'A' ? 'Empirical' : 'Theoretical'} Track. Confirm below — or switch if this is wrong.`
+          : 'Select the approach that matches your project.'}
+        {' '}<strong style={{ color: C.dark }}>This determines your entire methodology.</strong>
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {/* Empirical Track */}
+        <button
+          onClick={() => onConfirm('A')}
+          style={{
+            padding: '16px 14px', borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+            border: `2px solid ${confirmed === 'A' ? C.green : C.border}`,
+            background: confirmed === 'A' ? C.greenLight : C.white,
+            transition: 'all .18s', position: 'relative',
+            boxShadow: confirmed === 'A' ? `0 0 0 3px rgba(22,163,74,.12)` : 'none',
+          }}
+          onMouseEnter={e => { if (confirmed !== 'A') (e.currentTarget as HTMLElement).style.borderColor = C.greenBorder }}
+          onMouseLeave={e => { if (confirmed !== 'A') (e.currentTarget as HTMLElement).style.borderColor = C.border }}
+        >
+          {/* Auto-detected badge */}
+          {autoDetected === 'A' && (
+            <div style={{
+              position: 'absolute', top: -10, left: 14,
+              background: C.green, color: 'white',
+              fontSize: '.6rem', fontWeight: 800, padding: '2px 8px', borderRadius: 999,
+            }}>AUTO-DETECTED</div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+              background: confirmed === 'A' ? C.green : '#f3f4f6',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all .18s',
+            }}>
+              <BarChart3 size={17} color={confirmed === 'A' ? 'white' : C.muted} />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: '.88rem', color: confirmed === 'A' ? C.green : C.dark, fontFamily: 'Fraunces, Georgia, serif' }}>
+                Empirical Track
+              </p>
+              <p style={{ margin: 0, fontSize: '.68rem', color: C.muted, fontWeight: 600 }}>Quantitative / Data</p>
+            </div>
+            {confirmed === 'A' && <CheckCircle size={16} color={C.green} style={{ marginLeft: 'auto' }} />}
+          </div>
+          <p style={{ margin: 0, fontSize: '.74rem', color: C.muted, lineHeight: 1.5 }}>
+            Dataset, algorithms, statistical analysis, regression, models, evaluation metrics.
+          </p>
+          <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {['ML / AI', 'Econometrics', 'Survey data', 'Causal study', 'System design'].map(tag => (
+              <span key={tag} style={{ fontSize: '.65rem', padding: '2px 7px', borderRadius: 999, background: confirmed === 'A' ? '#dcfce7' : '#f3f4f6', color: confirmed === 'A' ? C.green : C.muted, fontWeight: 700 }}>{tag}</span>
+            ))}
+          </div>
+        </button>
+
+        {/* Theoretical Track */}
+        <button
+          onClick={() => onConfirm('B')}
+          style={{
+            padding: '16px 14px', borderRadius: 14, cursor: 'pointer', textAlign: 'left',
+            border: `2px solid ${confirmed === 'B' ? C.purple : C.border}`,
+            background: confirmed === 'B' ? C.purpleLight : C.white,
+            transition: 'all .18s', position: 'relative',
+            boxShadow: confirmed === 'B' ? `0 0 0 3px rgba(124,58,237,.12)` : 'none',
+          }}
+          onMouseEnter={e => { if (confirmed !== 'B') (e.currentTarget as HTMLElement).style.borderColor = C.purpleBorder }}
+          onMouseLeave={e => { if (confirmed !== 'B') (e.currentTarget as HTMLElement).style.borderColor = C.border }}
+        >
+          {autoDetected === 'B' && (
+            <div style={{
+              position: 'absolute', top: -10, left: 14,
+              background: C.purple, color: 'white',
+              fontSize: '.6rem', fontWeight: 800, padding: '2px 8px', borderRadius: 999,
+            }}>AUTO-DETECTED</div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+              background: confirmed === 'B' ? C.purple : '#f3f4f6',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all .18s',
+            }}>
+              <Brain size={17} color={confirmed === 'B' ? 'white' : C.muted} />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: '.88rem', color: confirmed === 'B' ? C.purple : C.dark, fontFamily: 'Fraunces, Georgia, serif' }}>
+                Theoretical Track
+              </p>
+              <p style={{ margin: 0, fontSize: '.68rem', color: C.muted, fontWeight: 600 }}>Qualitative / Humanities</p>
+            </div>
+            {confirmed === 'B' && <CheckCircle size={16} color={C.purple} style={{ marginLeft: 'auto' }} />}
+          </div>
+          <p style={{ margin: 0, fontSize: '.74rem', color: C.muted, lineHeight: 1.5 }}>
+            Theoretical framework, scholarly debates, argument development, positionality, literature analysis.
+          </p>
+          <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {['History', 'Law', 'Policy', 'Literature', 'Education theory', 'Sociology'].map(tag => (
+              <span key={tag} style={{ fontSize: '.65rem', padding: '2px 7px', borderRadius: 999, background: confirmed === 'B' ? '#ede9fe' : '#f3f4f6', color: confirmed === 'B' ? C.purple : C.muted, fontWeight: 700 }}>{tag}</span>
+            ))}
+          </div>
+        </button>
+      </div>
+
+      {/* Prompt if nothing selected yet */}
+      {!confirmed && (
+        <p style={{ marginTop: 10, fontSize: '.74rem', color: C.amber, fontWeight: 700, textAlign: 'center' }}>
+          ↑ Select one to continue — this cannot be changed after Step 1
+        </p>
+      )}
     </div>
   )
 }
 
 // ─── Shared input style ───────────────────────────────────────────────────────
 const inp: React.CSSProperties = {
-  width: '100%', padding: '10px 13px', borderRadius: 10,
-  border: '1.5px solid #e8ede8', fontSize: '.87rem', color: '#0f1f0f',
-  outline: 'none', transition: 'all .2s', background: 'white', boxSizing: 'border-box',
+  width: '100%', padding: '11px 14px', borderRadius: 10,
+  border: `1.5px solid ${C.border}`, fontSize: '.87rem', color: C.dark,
+  outline: 'none', transition: 'all .2s', background: C.white, boxSizing: 'border-box',
+  fontFamily: 'inherit',
 }
-const focusInp = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
-  e.target.style.borderColor = '#16a34a'; e.target.style.boxShadow = '0 0 0 3px rgba(22,163,74,.1)'
+const focusInp = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>, track: 'A' | 'B' = 'A') => {
+  const color = track === 'B' ? C.purple : C.green
+  const shadow = track === 'B' ? 'rgba(124,58,237,.12)' : 'rgba(22,163,74,.12)'
+  e.target.style.borderColor = color; e.target.style.boxShadow = `0 0 0 3px ${shadow}`
 }
 const blurInp = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
-  e.target.style.borderColor = '#e8ede8'; e.target.style.boxShadow = 'none'
+  e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none'
+}
+
+function SectionHead({ title, sub }: { title: string; sub: string }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <h2 style={{ margin: '0 0 4px', fontWeight: 800, color: C.dark, fontSize: '1.18rem', fontFamily: 'Fraunces, Georgia, serif', letterSpacing: '-.01em' }}>{title}</h2>
+      <p style={{ margin: 0, fontSize: '.84rem', color: C.muted }}>{sub}</p>
+    </div>
+  )
+}
+
+function FieldCard({ children, accent = C.green }: { children: React.ReactNode; accent?: string }) {
+  return (
+    <div style={{ background: C.white, borderRadius: 14, border: `1.5px solid ${C.border}`, borderLeft: `4px solid ${accent}`, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
+      {children}
+    </div>
+  )
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -115,15 +361,18 @@ export default function GeneratePage() {
   const searchParams = useSearchParams()
   const { mutateAsync: generateSpec, isPending } = useGenerateSpecification()
 
-  // Step
   const [step, setStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [fromTopicsBanner, setFromTopicsBanner] = useState(false)
 
-  // Track (auto-detected)
-  const [track, setTrack] = useState<'A' | 'B'>('A')
+  // Track state: autoDetected is what the algorithm thinks, confirmedTrack is what
+  // the student explicitly clicked. Both are null until field+topic are entered.
+  const [autoDetectedTrack, setAutoDetectedTrack] = useState<'A' | 'B' | null>(null)
+  const [confirmedTrack, setConfirmedTrack] = useState<'A' | 'B' | null>(null)
 
-  // Step 1 data
+  // The active track for routing purposes — confirmed if set, auto-detected otherwise
+  const track: 'A' | 'B' = confirmedTrack ?? autoDetectedTrack ?? 'A'
+
   const [formData, setFormData] = useState({
     field_of_study: '',
     research_topic: '',
@@ -137,40 +386,30 @@ export default function GeneratePage() {
     max_iterations: 3,
     num_web_searches: 5,
     notification_email: '',
-    // Step 2 dataset
     dataset_source: 'public' as 'uploaded' | 'public' | 'scout' | 'self_collected',
     dataset_name: '',
     dataset_url: '',
     dataset_description: '',
     dataset_size: '',
-    // Step 3 answers
     data_sensitivity: 'public' as 'public' | 'self_collected' | 'sensitive',
     student_success_statement: '',
-    preferred_algorithms: '',  
-    research_nature: '',       // WEEK 2: Track A Q3
+    preferred_algorithms: '',
+    research_nature: '',
     theoretical_framework: '',
     central_argument: '',
     primary_source_focus: '',
   })
 
-  // Step 2 files
   const [files, setFiles] = useState<{ guidelines?: File; pastProjects: File[]; datasetFile?: File }>({ pastProjects: [] })
   const [datasetState, setDatasetState] = useState<{ mode: any; file?: File; name?: string; url?: string; description?: string }>({ mode: null })
 
-  // Step 3 answers — preferred_algorithms included from week 2
   const [answersA, setAnswersA] = useState<TrackAAnswers>({
-    data_sensitivity: '',
-    student_success_statement: '',
-    preferred_algorithms: '',
-    research_nature: '',          // NEW Q4 — empty = auto-detect (safe default)
+    data_sensitivity: '', student_success_statement: '', preferred_algorithms: '', research_nature: '',
   })
   const [answersB, setAnswersB] = useState<TrackBAnswers>({
-    theoretical_framework: '',
-    central_argument: '',
-    primary_source_focus: '',
+    theoretical_framework: '', central_argument: '', primary_source_focus: '',
   })
 
-  // Topic Lab prefill
   const paramTopic     = searchParams.get('topic') || ''
   const paramField     = searchParams.get('field') || ''
   const paramLevel     = searchParams.get('level') || ''
@@ -184,26 +423,37 @@ export default function GeneratePage() {
       setFromTopicsBanner(true)
       const level = (['BSc','MSc','PhD'].includes(paramLevel) ? paramLevel : 'MSc') as any
       setFormData(p => ({ ...p, research_topic: paramTopic, field_of_study: paramField, academic_level: level }))
-      setTrack(detectTrack(paramField, paramTopic))
+      const detected = detectTrackAuto(paramField, paramTopic)
+      setAutoDetectedTrack(detected)
+      // For Topic Lab pre-fills, auto-confirm the detected track as a convenience
+      // but it's still shown as "auto-detected" so the student can override it
     }
   }, [])
 
-  // Re-detect track when field/topic changes
   const updateForm = (k: string, v: any) => {
     setFormData(p => {
       const next = { ...p, [k]: v }
       if (k === 'field_of_study' || k === 'research_topic') {
-        setTrack(detectTrack(next.field_of_study, next.research_topic))
+        const f = k === 'field_of_study' ? v : next.field_of_study
+        const t = k === 'research_topic' ? v : next.research_topic
+        if (f || t) {
+          const detected = detectTrackAuto(f, t)
+          setAutoDetectedTrack(detected)
+          // Reset confirmed track when field/topic changes so student re-confirms
+          setConfirmedTrack(null)
+        } else {
+          setAutoDetectedTrack(null)
+          setConfirmedTrack(null)
+        }
       }
       return next
     })
   }
 
+  const handleConfirmTrack = (t: 'A' | 'B') => setConfirmedTrack(t)
+
   const updateFiles = (update: any) => setFiles(p => ({ ...p, ...update }))
 
-  // Sync dataset state into formData
-  // BUG FIX: also auto-set data_sensitivity for scout and self_collected modes
-  // so the user isn't blocked at Step 3 asking about data they haven't picked yet
   useEffect(() => {
     setFormData(p => ({
       ...p,
@@ -212,18 +462,13 @@ export default function GeneratePage() {
       dataset_url: datasetState.url || '',
       dataset_description: datasetState.description || '',
     }))
-
-    // Auto-answer data_sensitivity based on dataset mode so Step 3 doesn't block
     if (datasetState.mode === 'self_collected') {
-      // Self-collected means they ARE collecting data — sensitivity is 'self_collected'
       setAnswersA(prev => ({ ...prev, data_sensitivity: 'self_collected' }))
     } else if (datasetState.mode === 'scout') {
-      // AI will find a public dataset — default to 'public', user can override in Step 3
       setAnswersA(prev => ({ ...prev, data_sensitivity: 'public' }))
     }
   }, [datasetState])
 
-  // Sync Step 3 answers into formData
   useEffect(() => {
     if (track === 'A') {
       setFormData(p => ({
@@ -231,7 +476,7 @@ export default function GeneratePage() {
         data_sensitivity: (answersA.data_sensitivity || 'public') as any,
         student_success_statement: answersA.student_success_statement,
         preferred_algorithms: answersA.preferred_algorithms,
-        research_nature: answersA.research_nature || '',    // NEW Q4
+        research_nature: answersA.research_nature || '',
       }))
     } else {
       setFormData(p => ({
@@ -243,18 +488,18 @@ export default function GeneratePage() {
     }
   }, [answersA, answersB, track])
 
-  // ── canProceed per step ────────────────────────────────────────────────────
   const canProceed = () => {
-    if (step === 1) return !!(formData.field_of_study.trim() && formData.academic_level)
+    if (step === 1) {
+      // Must have field, level, AND a confirmed track selection
+      if (!formData.field_of_study.trim() || !formData.academic_level) return false
+      if (!confirmedTrack) return false   // The confirmation selector is mandatory
+      return true
+    }
     if (step === 2) {
       if (track === 'A') {
-        // Track A: must pick a dataset mode
         if (!datasetState.mode) return false
-        // If uploaded mode, must have actual file
         if (datasetState.mode === 'uploaded' && !files.datasetFile) return false
-        // If public mode, must have a name
         if (datasetState.mode === 'public' && !datasetState.name?.trim()) return false
-        // scout and self_collected: no further input required at Step 2
       }
       return true
     }
@@ -262,17 +507,15 @@ export default function GeneratePage() {
     return true
   }
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     setError(null)
     try {
       const config = { ...formData }
-      // Clean empty strings to undefined
       if (!config.notification_email)        delete (config as any).notification_email
       if (!config.dataset_name)              delete (config as any).dataset_name
       if (!config.dataset_url)               delete (config as any).dataset_url
       if (!config.student_success_statement) delete (config as any).student_success_statement
-      if (!config.preferred_algorithms)      delete (config as any).preferred_algorithms  // WEEK 2
+      if (!config.preferred_algorithms)      delete (config as any).preferred_algorithms
       if (!config.research_nature)           delete (config as any).research_nature
       if (!config.theoretical_framework)     delete (config as any).theoretical_framework
       if (!config.central_argument)          delete (config as any).central_argument
@@ -305,65 +548,88 @@ export default function GeneratePage() {
   const clearTopicFill = () => {
     setFromTopicsBanner(false)
     setFormData(p => ({ ...p, research_topic: '', field_of_study: '', academic_level: 'MSc' }))
-    setTrack('A')
+    setAutoDetectedTrack(null)
+    setConfirmedTrack(null)
   }
+
+  const trackColor = track === 'B' ? C.purple : C.green
 
   // ─── Step 1 ───────────────────────────────────────────────────────────────
   const renderStep1 = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      <div style={{ marginBottom: 22 }}>
-        <h2 style={{ margin: '0 0 4px', fontWeight: 800, color: '#0f1f0f', fontSize: '1.15rem' }}>Basic Information</h2>
-        <p style={{ margin: 0, fontSize: '.84rem', color: '#9ca3af' }}>Tell us about your project</p>
-      </div>
-
+    <div>
+      <SectionHead title="Basic Information" sub="Tell us about your project — the more specific, the better." />
       {fromTopicsBanner && <TopicLabBanner topic={formData.research_topic} onClear={clearTopicFill} />}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div>
-          <label style={{ display: 'block', fontWeight: 700, fontSize: '.8rem', color: '#374151', marginBottom: 6 }}>Field of Study *</label>
-          <input style={inp} placeholder="e.g. Computer Science — Machine Learning" value={formData.field_of_study}
-            onChange={e => updateForm('field_of_study', e.target.value)} onFocus={focusInp} onBlur={blurInp} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontWeight: 700, fontSize: '.8rem', color: '#374151', marginBottom: 6 }}>Research Topic</label>
-          <input style={inp} placeholder="e.g. Heart Disease Prediction using Ensemble Machine Learning" value={formData.research_topic}
-            onChange={e => updateForm('research_topic', e.target.value)} onFocus={focusInp} onBlur={blurInp} />
-          <p style={{ margin: '4px 0 0', fontSize: '.72rem', color: '#9ca3af' }}>Leave blank and we'll suggest topics based on your field.</p>
-        </div>
+        <FieldCard accent={C.green}>
+          <label style={{ display: 'block', fontWeight: 700, fontSize: '.8rem', color: C.dark, marginBottom: 7 }}>
+            Field of Study <span style={{ color: C.red }}>*</span>
+          </label>
+          <input style={inp} placeholder="e.g. Education, Computer Science, Economics"
+            value={formData.field_of_study}
+            onChange={e => updateForm('field_of_study', e.target.value)}
+            onFocus={e => focusInp(e, track)} onBlur={blurInp} />
+          <p style={{ margin: '6px 0 0', fontSize: '.72rem', color: C.muted }}>
+            Include your department or sub-discipline — e.g. "Education Policy" not just "Education".
+          </p>
+        </FieldCard>
+
+        <FieldCard accent={trackColor}>
+          <label style={{ display: 'block', fontWeight: 700, fontSize: '.8rem', color: C.dark, marginBottom: 7 }}>Research Topic</label>
+          <input style={inp} placeholder="e.g. The Impact of Teacher Quality on Academic Performance: An Econometric Analysis"
+            value={formData.research_topic}
+            onChange={e => updateForm('research_topic', e.target.value)}
+            onFocus={e => focusInp(e, track)} onBlur={blurInp} />
+          <p style={{ margin: '6px 0 0', fontSize: '.72rem', color: C.muted }}>
+            Leave blank to have topics suggested. Including your method in the title (e.g. "Econometric Analysis", "Systematic Review") helps us detect your approach.
+          </p>
+        </FieldCard>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div>
-            <label style={{ display: 'block', fontWeight: 700, fontSize: '.8rem', color: '#374151', marginBottom: 6 }}>Academic Level *</label>
-            <select style={{ ...inp, appearance: 'none', cursor: 'pointer' }} value={formData.academic_level}
-              onChange={e => updateForm('academic_level', e.target.value)} onFocus={focusInp} onBlur={blurInp}>
+          <FieldCard accent={C.muted}>
+            <label style={{ display: 'block', fontWeight: 700, fontSize: '.8rem', color: C.dark, marginBottom: 7 }}>
+              Academic Level <span style={{ color: C.red }}>*</span>
+            </label>
+            <select style={{ ...inp, cursor: 'pointer', appearance: 'none' }}
+              value={formData.academic_level}
+              onChange={e => updateForm('academic_level', e.target.value)}
+              onFocus={e => focusInp(e, track)} onBlur={blurInp}>
               <option value="BSc">BSc</option>
               <option value="MSc">MSc</option>
               <option value="PhD">PhD</option>
             </select>
-          </div>
-          <div>
-            <label style={{ display: 'block', fontWeight: 700, fontSize: '.8rem', color: '#374151', marginBottom: 6 }}>Effort Level</label>
-            <select style={{ ...inp, appearance: 'none', cursor: 'pointer' }} value={formData.effort_level}
-              onChange={e => updateForm('effort_level', e.target.value)} onFocus={focusInp} onBlur={blurInp}>
+          </FieldCard>
+
+          <FieldCard accent={C.muted}>
+            <label style={{ display: 'block', fontWeight: 700, fontSize: '.8rem', color: C.dark, marginBottom: 7 }}>Effort Level</label>
+            <select style={{ ...inp, cursor: 'pointer', appearance: 'none' }}
+              value={formData.effort_level}
+              onChange={e => updateForm('effort_level', e.target.value)}
+              onFocus={e => focusInp(e, track)} onBlur={blurInp}>
               <option value="low">Low — fast and safe</option>
               <option value="medium">Medium — standard depth</option>
               <option value="high">High — ambitious and thorough</option>
             </select>
-          </div>
-        </div>
-        <div>
-          <label style={{ display: 'block', fontWeight: 700, fontSize: '.8rem', color: '#374151', marginBottom: 6 }}>Email for delivery</label>
-          <input style={inp} type="email" placeholder="your@email.com (optional)" value={formData.notification_email}
-            onChange={e => updateForm('notification_email', e.target.value)} onFocus={focusInp} onBlur={blurInp} />
+          </FieldCard>
         </div>
 
-        {/* Track indicator */}
-        {(formData.field_of_study || formData.research_topic) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 13px', borderRadius: 9, background: track === 'A' ? '#f0fdf4' : '#faf5ff', border: `1px solid ${track === 'A' ? '#bbf7d0' : '#e9d5ff'}` }}>
-            <Sparkles size={12} color={track === 'A' ? '#16a34a' : '#7c3aed'} />
-            <span style={{ fontSize: '.74rem', fontWeight: 700, color: track === 'A' ? '#16a34a' : '#7c3aed' }}>
-              {track === 'A' ? 'Empirical / Data project detected — dataset questions ahead' : 'Theoretical / Humanities project detected — framework questions ahead'}
-            </span>
-          </div>
+        <FieldCard accent={C.muted}>
+          <label style={{ display: 'block', fontWeight: 700, fontSize: '.8rem', color: C.dark, marginBottom: 7 }}>Email for delivery</label>
+          <input style={inp} type="email" placeholder="your@email.com (optional)"
+            value={formData.notification_email}
+            onChange={e => updateForm('notification_email', e.target.value)}
+            onFocus={e => focusInp(e, track)} onBlur={blurInp} />
+        </FieldCard>
+
+        {/* Track confirmation — only shown once field is entered */}
+        {formData.field_of_study.trim() && (
+          <TrackConfirmation
+            autoDetected={autoDetectedTrack}
+            confirmed={confirmedTrack}
+            onConfirm={handleConfirmTrack}
+            field={formData.field_of_study}
+            topic={formData.research_topic}
+          />
         )}
       </div>
     </div>
@@ -372,106 +638,197 @@ export default function GeneratePage() {
   // ─── Step 4: Configure ────────────────────────────────────────────────────
   const renderStep4 = () => {
     const MODES = [
-      { value: 'user_provided', label: 'My uploaded files only', sub: 'Use only the past projects you uploaded' },
-      { value: 'auto_discover', label: 'Auto-discover online', sub: 'AI finds similar theses online' },
-      { value: 'hybrid', label: 'Both (Recommended)', sub: 'Your files + online discovery' },
+      { value: 'user_provided', label: 'My uploaded files only', sub: 'Use only the past projects you uploaded', icon: '📂' },
+      { value: 'auto_discover', label: 'Auto-discover online', sub: 'AI finds similar theses online', icon: '🔍' },
+      { value: 'hybrid', label: 'Both (Recommended)', sub: 'Your files + online discovery', icon: '⚡' },
     ]
     return (
       <div>
-        <div style={{ marginBottom: 22 }}>
-          <h2 style={{ margin: '0 0 4px', fontWeight: 800, color: '#0f1f0f', fontSize: '1.15rem' }}>Configure Generation</h2>
-          <p style={{ margin: 0, fontSize: '.84rem', color: '#9ca3af' }}>Tweak how the AI researches and builds your spec</p>
-        </div>
+        <SectionHead title="Configure Generation" sub="Tweak how the AI researches and builds your spec." />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ background: 'white', border: '1.5px solid #e8ede8', borderRadius: 14, padding: '18px 20px' }}>
-            <label style={{ display: 'block', fontWeight: 700, fontSize: '.84rem', color: '#0f1f0f', marginBottom: 10 }}>Past Projects Discovery</label>
-            {MODES.map(m => (
-              <button key={m.value} onClick={() => updateForm('past_projects_mode', m.value)}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, width: '100%', padding: '10px 12px', borderRadius: 9, marginBottom: 7, border: `1.5px solid ${formData.past_projects_mode === m.value ? '#16a34a' : '#e8ede8'}`, background: formData.past_projects_mode === m.value ? '#f0fdf4' : 'white', cursor: 'pointer', textAlign: 'left', transition: 'all .15s' }}>
-                <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${formData.past_projects_mode === m.value ? '#16a34a' : '#d1d5db'}`, background: formData.past_projects_mode === m.value ? '#16a34a' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                  {formData.past_projects_mode === m.value && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'white' }} />}
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: '.83rem', color: '#0f1f0f' }}>{m.label}</p>
-                  <p style={{ margin: '2px 0 0', fontSize: '.73rem', color: '#6b7280' }}>{m.sub}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-          <div style={{ background: 'white', border: '1.5px solid #e8ede8', borderRadius: 14, padding: '18px 20px' }}>
-            <label style={{ display: 'block', fontWeight: 700, fontSize: '.84rem', color: '#0f1f0f', marginBottom: 10 }}>Review Iterations</label>
-            <p style={{ margin: '0 0 10px', fontSize: '.76rem', color: '#6b7280', lineHeight: 1.5 }}>How many times should the AI professor review and revise before finalising?</p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[1, 2, 3].map(n => (
-                <button key={n} onClick={() => updateForm('max_iterations', n)}
-                  style={{ flex: 1, padding: '9px', borderRadius: 9, border: `1.5px solid ${formData.max_iterations === n ? '#16a34a' : '#e8ede8'}`, background: formData.max_iterations === n ? '#f0fdf4' : 'white', fontWeight: 700, fontSize: '.84rem', color: formData.max_iterations === n ? '#16a34a' : '#374151', cursor: 'pointer', transition: 'all .15s' }}>
-                  {n}×
+          <FieldCard accent={trackColor}>
+            <label style={{ display: 'block', fontWeight: 700, fontSize: '.86rem', color: C.dark, marginBottom: 12 }}>Past Projects Discovery</label>
+            {MODES.map(m => {
+              const selected = formData.past_projects_mode === m.value
+              return (
+                <button key={m.value} onClick={() => updateForm('past_projects_mode', m.value)}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%',
+                    padding: '12px 14px', borderRadius: 10, marginBottom: 8, cursor: 'pointer',
+                    border: `1.5px solid ${selected ? trackColor : C.border}`,
+                    background: selected ? (track === 'B' ? C.purpleLight : C.greenLight) : C.white,
+                    textAlign: 'left', transition: 'all .15s',
+                  }}>
+                  <span style={{ fontSize: '1rem' }}>{m.icon}</span>
+                  <div>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: '.84rem', color: selected ? trackColor : C.dark }}>{m.label}</p>
+                    <p style={{ margin: '2px 0 0', fontSize: '.73rem', color: C.muted }}>{m.sub}</p>
+                  </div>
+                  {selected && <CheckCircle size={15} color={trackColor} style={{ marginLeft: 'auto', flexShrink: 0, marginTop: 2 }} />}
                 </button>
-              ))}
+              )
+            })}
+          </FieldCard>
+
+          <FieldCard accent={trackColor}>
+            <label style={{ display: 'block', fontWeight: 700, fontSize: '.86rem', color: C.dark, marginBottom: 6 }}>Review Iterations</label>
+            <p style={{ margin: '0 0 12px', fontSize: '.76rem', color: C.muted, lineHeight: 1.55 }}>
+              How many times should the AI professor review and revise before finalising?
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[1, 2, 3].map(n => {
+                const sel = formData.max_iterations === n
+                return (
+                  <button key={n} onClick={() => updateForm('max_iterations', n)}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer',
+                      border: `1.5px solid ${sel ? trackColor : C.border}`,
+                      background: sel ? (track === 'B' ? C.purpleLight : C.greenLight) : C.white,
+                      fontWeight: 800, fontSize: '.88rem', color: sel ? trackColor : C.muted, transition: 'all .15s',
+                    }}>
+                    {n}×
+                  </button>
+                )
+              })}
             </div>
-          </div>
+          </FieldCard>
         </div>
       </div>
     )
   }
 
   // ─── Step 5: Review ───────────────────────────────────────────────────────
-  const renderStep5 = () => (
-    <div>
-      <div style={{ marginBottom: 22 }}>
-        <h2 style={{ margin: '0 0 4px', fontWeight: 800, color: '#0f1f0f', fontSize: '1.15rem' }}>Review & Generate</h2>
-        <p style={{ margin: 0, fontSize: '.84rem', color: '#9ca3af' }}>Everything looks good — ready to go</p>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {[
-          ['Research Topic', formData.research_topic || 'AI will suggest a topic'],
-          ['Field', formData.field_of_study],
-          ['Level', formData.academic_level],
-          ['Track', track === 'A' ? 'Empirical / Data (Track A)' : 'Theoretical / Humanities (Track B)'],
-          ['Effort', formData.effort_level],
-          ['Dataset', formData.dataset_name || formData.dataset_source || 'AI will scout'],
-          ...(formData.preferred_algorithms ? [['Algorithms', formData.preferred_algorithms]] : []),
-          ...(formData.research_nature && formData.research_nature !== 'not_sure'
-            ? [['Study Type', RESEARCH_NATURE_LABELS[formData.research_nature] || formData.research_nature]]
-            : []),
-          ['Guidelines', files.guidelines?.name || 'Using standard defaults'],
-          ['Past Projects', files.pastProjects.length ? `${files.pastProjects.length} file(s) uploaded` : 'AI auto-discover'],
-          ['Iterations', `${formData.max_iterations}`],
-          ...(formData.notification_email ? [['Email', formData.notification_email]] : []),
-        ].map(([label, value]) => (
-          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'white', border: '1.5px solid #e8ede8', borderRadius: 10 }}>
-            <span style={{ fontSize: '.82rem', color: '#6b7280', fontWeight: 600 }}>{label}</span>
-            <span style={{ fontSize: '.82rem', color: '#0f1f0f', fontWeight: 700, maxWidth: '55%', textAlign: 'right' }}>{value}</span>
+  const renderStep5 = () => {
+    const trackLabel = track === 'A' ? '📊 Empirical Track' : '📚 Theoretical Track'
+    const rows = [
+      ['Research Topic', formData.research_topic || 'AI will suggest a topic'],
+      ['Field', formData.field_of_study],
+      ['Level', formData.academic_level],
+      ['Research Approach', trackLabel],
+      ['Effort', formData.effort_level],
+      ...(track === 'A' ? [['Dataset', formData.dataset_name || formData.dataset_source || 'AI will scout']] : []),
+      ...(formData.preferred_algorithms ? [['Methods', formData.preferred_algorithms]] : []),
+      ...(formData.research_nature && formData.research_nature !== 'not_sure'
+        ? [['Study Type', RESEARCH_NATURE_LABELS[formData.research_nature] || formData.research_nature]] : []),
+      ...(track === 'B' && formData.central_argument ? [['Argument', formData.central_argument.slice(0, 60) + '…']] : []),
+      ['Guidelines', files.guidelines?.name || 'Using standard defaults'],
+      ['Past Projects', files.pastProjects.length ? `${files.pastProjects.length} file(s) uploaded` : 'AI auto-discover'],
+      ['Iterations', `${formData.max_iterations}×`],
+      ...(formData.notification_email ? [['Email', formData.notification_email]] : []),
+    ] as [string, string][]
+
+    return (
+      <div>
+        <SectionHead title="Review & Generate" sub="Check everything looks right before we begin." />
+
+        {/* Track summary card */}
+        <div style={{
+          background: `linear-gradient(135deg, ${track === 'B' ? '#faf5ff' : '#f0fdf4'}, ${track === 'B' ? '#ede9fe' : '#dcfce7'})`,
+          border: `1.5px solid ${track === 'B' ? C.purpleBorder : C.greenBorder}`,
+          borderRadius: 14, padding: '16px 20px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <div style={{
+            width: 42, height: 42, borderRadius: 10, flexShrink: 0,
+            background: track === 'B' ? C.purple : C.green,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {track === 'B' ? <Brain size={19} color="white" /> : <BarChart3 size={19} color="white" />}
           </div>
-        ))}
-      </div>
-      {error && (
-        <div style={{ marginTop: 14, padding: '11px 14px', background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: 10 }}>
-          <p style={{ margin: 0, fontSize: '.82rem', color: '#dc2626', fontWeight: 600 }}>{error}</p>
+          <div>
+            <p style={{ margin: '0 0 2px', fontWeight: 800, fontSize: '.92rem', color: C.dark, fontFamily: 'Fraunces, Georgia, serif' }}>
+              {track === 'A' ? 'Empirical Track' : 'Theoretical Track'}
+            </p>
+            <p style={{ margin: 0, fontSize: '.75rem', color: C.muted }}>
+              {track === 'A'
+                ? 'Will generate: dataset methodology, algorithms, evaluation metrics, baseline comparison'
+                : 'Will generate: theoretical framework, scholarly debates, analytical methodology, positionality'}
+            </p>
+          </div>
         </div>
-      )}
-    </div>
-  )
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {rows.map(([label, value]) => (
+            <div key={label} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '10px 14px', background: C.white,
+              border: `1.5px solid ${C.border}`, borderRadius: 10,
+            }}>
+              <span style={{ fontSize: '.81rem', color: C.muted, fontWeight: 600 }}>{label}</span>
+              <span style={{ fontSize: '.81rem', color: C.dark, fontWeight: 700, maxWidth: '56%', textAlign: 'right', lineHeight: 1.3 }}>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        {error && (
+          <div style={{
+            marginTop: 14, padding: '12px 16px',
+            background: '#fef2f2', border: `1.5px solid #fecaca`, borderRadius: 10,
+            display: 'flex', gap: 8, alignItems: 'flex-start',
+          }}>
+            <AlertTriangle size={14} color={C.red} style={{ flexShrink: 0, marginTop: 1 }} />
+            <p style={{ margin: 0, fontSize: '.82rem', color: C.red, fontWeight: 600 }}>{error}</p>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // ─── Layout ───────────────────────────────────────────────────────────────
   return (
-    <div style={{ maxWidth: 680, margin: '0 auto', padding: '0 0 80px' }}>
-      <style>{`.spin{animation:sp .9s linear infinite;display:inline-block}@keyframes sp{to{transform:rotate(360deg)}}`}</style>
+    <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 0 100px' }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&display=swap');
+        * { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        .gen-spin { animation: genspin .9s linear infinite; display: inline-block; }
+        @keyframes genspin { to { transform: rotate(360deg); } }
+        .gen-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+      `}</style>
 
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <button onClick={() => router.push('/dashboard')} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: '.8rem', fontWeight: 600, padding: 0, marginBottom: 12 }}>
-          <ArrowLeft size={14} /> Dashboard
+      <div style={{ marginBottom: 32 }}>
+        <button onClick={() => router.push('/dashboard')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: '.8rem', fontWeight: 600, padding: '0 0 14px' }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = C.dark}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = C.muted}
+        >
+          <ArrowLeft size={13} /> Dashboard
         </button>
-        <h1 style={{ margin: '0 0 4px', fontWeight: 900, fontSize: '1.5rem', color: '#0f1f0f', letterSpacing: '-.02em' }}>Generate Specification</h1>
-        <p style={{ margin: 0, fontSize: '.87rem', color: '#9ca3af' }}>AI builds your academic project specification in minutes</p>
+
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <h1 style={{ margin: '0 0 6px', fontWeight: 900, fontSize: 'clamp(1.4rem,2.5vw,1.8rem)', color: C.dark, letterSpacing: '-.03em', fontFamily: 'Fraunces, Georgia, serif' }}>
+              Generate Your Spec
+            </h1>
+            <p style={{ margin: 0, fontSize: '.87rem', color: C.muted, lineHeight: 1.5 }}>
+              AI builds your research specification — properly, not generically.
+            </p>
+          </div>
+
+          {/* Live track badge — uses Empirical/Theoretical labels */}
+          {confirmedTrack && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 14px', borderRadius: 999,
+              background: track === 'B' ? C.purple : C.green,
+              color: 'white', fontSize: '.75rem', fontWeight: 700,
+            }}>
+              {track === 'B' ? <Brain size={12} color="white" /> : <BarChart3 size={12} color="white" />}
+              {track === 'A' ? 'Empirical Track' : 'Theoretical Track'}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stepper */}
-      <Stepper step={step} />
+      <Stepper step={step} track={track} />
 
       {/* Card */}
-      <div style={{ background: '#fafafa', border: '1.5px solid #e8ede8', borderRadius: 18, padding: '26px 28px', minHeight: 400 }}>
+      <div style={{
+        background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 20,
+        padding: '28px 30px', minHeight: 420,
+        boxShadow: '0 2px 8px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.04)',
+      }}>
         {step === 1 && renderStep1()}
         {step === 2 && (
           <Step2FileUploads
@@ -498,34 +855,59 @@ export default function GeneratePage() {
       </div>
 
       {/* Navigation */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, alignItems: 'center' }}>
         <button
           onClick={() => { setError(null); setStep(s => Math.max(1, s - 1)) }}
           disabled={step === 1}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '11px 20px', borderRadius: 11, border: '1.5px solid #e8ede8', background: 'white', color: step === 1 ? '#d1d5db' : '#374151', fontWeight: 700, fontSize: '.85rem', cursor: step === 1 ? 'default' : 'pointer' }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '12px 22px', borderRadius: 12,
+            border: `1.5px solid ${C.border}`, background: C.white,
+            color: step === 1 ? C.border : C.muted,
+            fontWeight: 700, fontSize: '.85rem', cursor: step === 1 ? 'default' : 'pointer', transition: 'all .15s',
+          }}
+          onMouseEnter={e => { if (step > 1) (e.currentTarget as HTMLElement).style.borderColor = C.dark }}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.borderColor = C.border}
         >
-          <ArrowLeft size={14} /> Back
+          <ArrowLeft size={13} /> Back
         </button>
+
+        <span style={{ fontSize: '.75rem', color: C.muted, fontWeight: 600 }}>{step} of {STEPS.length}</span>
 
         {step < 5 ? (
           <button
             onClick={() => { setError(null); setStep(s => s + 1) }}
             disabled={!canProceed()}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '11px 22px', borderRadius: 11, border: 'none', background: canProceed() ? '#0f1f0f' : '#e8ede8', color: canProceed() ? 'white' : '#9ca3af', fontWeight: 700, fontSize: '.85rem', cursor: canProceed() ? 'pointer' : 'default', transition: 'all .15s' }}
+            className="gen-btn"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '12px 24px', borderRadius: 12, border: 'none',
+              background: canProceed() ? (track === 'B' ? C.purple : C.dark) : C.border,
+              color: canProceed() ? 'white' : C.muted,
+              fontWeight: 700, fontSize: '.85rem',
+              cursor: canProceed() ? 'pointer' : 'default',
+              transition: 'all .15s', boxShadow: canProceed() ? '0 2px 8px rgba(0,0,0,.15)' : 'none',
+            }}
           >
-            Continue <ArrowRight size={14} />
+            Continue <ArrowRight size={13} />
           </button>
         ) : (
           <button
             onClick={handleSubmit}
             disabled={isPending}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 26px', borderRadius: 11, border: 'none', background: isPending ? '#e8ede8' : '#16a34a', color: isPending ? '#9ca3af' : 'white', fontWeight: 800, fontSize: '.9rem', cursor: isPending ? 'default' : 'pointer', transition: 'all .15s' }}
+            className="gen-btn"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '13px 28px', borderRadius: 12, border: 'none',
+              background: isPending ? C.border : `linear-gradient(135deg, ${C.green}, #22c55e)`,
+              color: isPending ? C.muted : 'white',
+              fontWeight: 800, fontSize: '.92rem',
+              cursor: isPending ? 'default' : 'pointer',
+              transition: 'all .2s',
+              boxShadow: isPending ? 'none' : '0 4px 16px rgba(22,163,74,.35)',
+            }}
           >
-            {isPending ? (
-              <><span className="spin">◌</span> Generating…</>
-            ) : (
-              <><Sparkles size={15} /> Generate My Spec</>
-            )}
+            {isPending ? <><span className="gen-spin">◌</span> Generating…</> : <><Sparkles size={15} /> Generate My Spec</>}
           </button>
         )}
       </div>

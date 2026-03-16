@@ -11,7 +11,7 @@ Model assignments:
 
 from agents import Agent, WebSearchTool
 from app.models.resources import DiscoveredResources
-from app.models.projects import AnalyzedProjectSpecSections
+from app.models.projects import AnalyzedProjectSpecSections, ProjectFinderOutput
 from app.core.agents.instructions.phase1_resource_discovery import RESOURCE_FINDER_INSTRUCTIONS
 from app.core.agents.instructions.phase1_project_finder import PROJECT_FINDER_INSTRUCTIONS
 from app.core.agents.instructions.phase1_project_analyzer import PROJECT_ANALYZER_INSTRUCTIONS
@@ -39,7 +39,8 @@ project_finder_agent = Agent(
     name="ProjectFinder",
     instructions=PROJECT_FINDER_INSTRUCTIONS,
     model="gpt-4o-mini",
-    tools=[WebSearchTool()]
+    tools=[WebSearchTool()],
+    output_type=ProjectFinderOutput,
 )
 
 # Project Analyzer Agent — gpt-4o: deep extraction of project details
