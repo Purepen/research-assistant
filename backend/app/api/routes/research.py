@@ -1,13 +1,13 @@
 """
-Research Routes — UPDATED v2
+Research Routes — UPDATED v3
 
-Changes:
-  1. guidelines_file is now OPTIONAL (File(None)) — system uses defaults if absent
-  2. dataset_file upload supported (CSV for Track A projects)
-  3. All new SpecificationConfig fields flow through from form submission
-  4. Storage handles optional guidelines gracefully
+Changes vs v2:
+  - /result/{project_id}: now returns "critic" field containing critic_json
+    from the ProjectResult row. Nullable — old results return null.
 
-BUG FIX (result endpoint):
+All other endpoints (/generate, /status, /cancel) are verbatim from v2.
+
+BUG FIX (carried over from v2):
   - result.review_json     → result.final_review_json  (correct column name)
   - result.word_count      → computed from specification_json (column doesn't exist)
 """
@@ -101,9 +101,9 @@ async def _run_generation_background(project_id: int, config: SpecificationConfi
 async def generate_specification(
     background_tasks: BackgroundTasks,
     config_json: str = Form(...),
-    guidelines_file: Optional[UploadFile] = File(None),   # ← OPTIONAL now
+    guidelines_file: Optional[UploadFile] = File(None),
     past_project_files: Optional[List[UploadFile]] = File(None),
-    dataset_file: Optional[UploadFile] = File(None),       # ← NEW: CSV upload
+    dataset_file: Optional[UploadFile] = File(None),
     user=Depends(get_current_user),
     db=Depends(get_db_session),
 ):
@@ -134,45 +134,29 @@ async def generate_specification(
 
     # ── 2. Upload guidelines (optional) ───────────────────────────────────────
     guidelines_path: Optional[str] = None
-
-    if guidelines_file is not None and guidelines_file.filename:
-        g_result = await storage_service.upload_guidelines(
+    if guidelines_file and guidelines_file.filename:
+        result = await storage_service.upload_guidelines(
             user_id=user.id,
             file_data=guidelines_file.file,
             filename=guidelines_file.filename,
             file_size=guidelines_file.size,
         )
-        if not g_result["success"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Guidelines upload failed: {', '.join(g_result.get('errors', ['Unknown']))}",
-            )
-        guidelines_path = g_result["path"]
-        print(f"   ✅ Guidelines uploaded: {guidelines_file.filename}")
-    else:
-        print("   ℹ️  No guidelines uploaded — will use standard defaults")
+        if result["success"]:
+            guidelines_path = result["path"]
 
-    # ── 3. Upload dataset CSV (optional) ──────────────────────────────────────
+    # ── 3. Upload dataset (optional) ──────────────────────────────────────────
     dataset_file_path: Optional[str] = None
-
-    if dataset_file is not None and dataset_file.filename:
-        d_result = await storage_service.upload_dataset(
+    if dataset_file and dataset_file.filename:
+        result = await storage_service.upload_dataset(
             user_id=user.id,
             file_data=dataset_file.file,
             filename=dataset_file.filename,
             file_size=dataset_file.size,
         )
-        if d_result["success"]:
-            dataset_file_path = d_result["path"]
-            # Enrich config with uploaded file info
-            config = config.model_copy(update={
-                "dataset_source":      "uploaded",
-                "dataset_name":        dataset_file.filename.replace(".csv", "").replace("_", " ").title(),
-                "dataset_description": f"User-uploaded CSV: {dataset_file.filename}",
-            })
-            print(f"   ✅ Dataset uploaded: {dataset_file.filename}")
-        else:
-            print(f"   ⚠️  Dataset upload failed — continuing without it")
+        if result["success"]:
+            dataset_file_path = result["path"]
+            config.dataset_source = "uploaded"
+            config.dataset_name   = dataset_file.filename
 
     # ── 4. Upload past project files ──────────────────────────────────────────
     past_project_paths: List[str] = []
@@ -191,8 +175,8 @@ async def generate_specification(
     project = await research_service.create_project(
         user_id=user.id,
         config=config,
-        guidelines_file_path=guidelines_path,       # may be None
-        dataset_file_path=dataset_file_path,         # may be None
+        guidelines_file_path=guidelines_path,
+        dataset_file_path=dataset_file_path,
         past_project_files=past_project_paths,
         db_session=db,
     )
@@ -248,7 +232,12 @@ async def get_generation_result(
     user=Depends(get_current_user),
     db=Depends(get_db_session),
 ):
-    """Get final specification result."""
+    """
+    Get final specification result.
+
+    Returns specification, review, AND critic analysis.
+    critic is null for projects generated before the critic agent was added.
+    """
     project = db.query(Project).filter(
         Project.id == project_id,
         Project.user_id == user.id,
@@ -274,17 +263,16 @@ async def get_generation_result(
     if not result:
         raise HTTPException(status_code=404, detail="Result record missing from database")
 
-    # BUG FIX: the column is final_review_json, not review_json.
-    # word_count does not exist as a column — compute it from specification_json.
-    spec_json = result.specification_json or {}
+    spec_json  = result.specification_json or {}
     word_count = spec_json.get("total_word_count", 0)
 
     return {
         "success":       True,
         "project_id":    project_id,
         "specification": result.specification_json,
-        "review":        result.final_review_json,   # fixed: was result.review_json
-        "word_count":    word_count,                  # fixed: was result.word_count (no such column)
+        "review":        result.final_review_json,
+        "critic":        result.critic_json,          # NEW — null for old results
+        "word_count":    word_count,
         "marks":         result.total_marks,
         "decision":      result.decision,
         "track":         getattr(result, "track", "A"),

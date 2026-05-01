@@ -1,5 +1,14 @@
 """
 Main Pipeline — REDESIGNED v2
+
+Critic + Humanizer Addition (Apr 2026):
+  After the professor review loop completes, two new agents run:
+    1. Critic       — brutal gap analysis stored as critic_json
+    2. Human Writer — rewrites every section in natural human voice
+
+  The humanized spec REPLACES specification_results["final_specification"]
+  before results are returned to research_service.py.
+  Both agents fail gracefully — the pipeline cannot be broken by them.
 """
 
 from __future__ import annotations
@@ -21,6 +30,9 @@ from app.core.pipelines.phase5_workflow import run_specification_with_review_loo
 from app.core.agents.definitions.phase1_paper_fetcher import build_verified_citation_pool
 from app.core.pipelines.locked_requirements_builder import build_locked_requirements, detect_track
 from app.core.pipelines.dataset_profiler import profile_dataset, DatasetProfile
+
+# ── NEW: Humanizer + Critic ───────────────────────────────────────────────────
+from app.core.pipelines.phase6_humanizer_critic import run_humanizer_and_critic
 
 ProgressCallback = Callable[[int, str], Awaitable[None]]
 
@@ -94,48 +106,52 @@ async def run_complete_specification_system(
         config=config,
     )
 
+    # PHASE 1: Track Detection
     track = detect_track(config.field_of_study, final_topic)
+    print(f"   🎯 Track detected: {track}")
 
-    # PHASE 2: Resource Discovery + Paper Abstract Fetching
-    # Skip dataset search if student already has a dataset (saves cost)
-    _dataset_source = getattr(config, "dataset_source", "scout") or "scout"
-    await _progress(15, "Discovering resources via web search")
+    # PHASE 2: Resource Discovery
+    await _progress(15, "Discovering resources and papers")
+    user_projects = []
+    auto_projects = []
+    stream_stats  = {}
+
+    # Stream 1 — User-provided past projects
+    if past_project_files:
+        await _progress(18, "Analysing your uploaded projects")
+        user_projects = await analyze_user_dumps(
+            file_paths=past_project_files,
+            research_topic=final_topic,
+        )
+        stream_stats["user_provided_count"] = len(user_projects)
+        print(f"   ✅ Stream 1: {len(user_projects)} user projects analysed")
+    else:
+        print("\n⏭️  Stream 1: No user projects uploaded")
+
+    # Stream 3 — Web search for papers, methods, tools
+    await _progress(22, "Searching the web for papers and resources")
     discovered_resources = await discover_resources(
         research_topic=final_topic,
         guidelines=guidelines,
         num_searches=config.num_web_searches,
-        dataset_source=_dataset_source,
+        dataset_source=getattr(config, "dataset_source", "public"),
         track=track,
     )
+    stream_stats["web_search_count"] = config.num_web_searches
 
-    await _progress(22, "Fetching paper abstracts and verifying citations")
+    # Build verified citation pool from discovered papers
+    await _progress(28, "Verifying paper citations")
     citation_pool = await build_verified_citation_pool(
-        discovered_papers=discovered_resources.papers,
         research_topic=final_topic,
-        max_papers=10,
+        discovered_resources=discovered_resources,
     )
     print(f"   ✅ Citation pool: {len(citation_pool)} verified papers")
 
-    # PHASE 3: Past Projects
-    stream_stats = {"user_provided_count": 0, "auto_discovered_count": 0, "final_count": 0}
-
-    user_projects = []
-    if past_project_files and config.past_projects_mode in ("user_provided", "hybrid"):
-        await _progress(28, "Analysing your uploaded projects")
-        user_projects = await analyze_user_dumps(
-            dump_files=past_project_files,
-            research_topic=final_topic,
-        )
-        stream_stats["user_provided_count"] = len(user_projects)
-    else:
-        print("\n⏭️  Stream 1: Skipped")
-
-    auto_projects = []
-    if config.past_projects_mode in ("auto_discover", "hybrid"):
-        await _progress(34, "Finding similar projects online")
+    # Stream 2 — Auto-discovered similar projects
+    if config.past_projects_mode in ("auto", "hybrid"):
+        await _progress(32, "Finding similar student projects")
         auto_projects = await find_and_analyze_projects(
             research_topic=final_topic,
-            guidelines=guidelines,
             num_projects=config.num_auto_projects_target,
         )
         if config.deduplicate_auto_vs_user:
@@ -157,7 +173,7 @@ async def run_complete_specification_system(
         analyzed_projects=all_analyzed_projects,
         guidelines=guidelines,
         track=track,
-        field_of_study=config.field_of_study,   # ← add this line
+        field_of_study=config.field_of_study,
     )
 
     # PHASE 4.5: Build Locked Requirements
@@ -174,10 +190,11 @@ async def run_complete_specification_system(
         dataset_profile=dataset_profile,
         data_sensitivity=getattr(config, "data_sensitivity", "public"),
         student_success_statement=getattr(config, "student_success_statement", None),
+        preferred_algorithms=getattr(config, "preferred_algorithms", None),
+        research_nature=getattr(config, "research_nature", None),
         theoretical_framework=getattr(config, "theoretical_framework", None),
         central_argument=getattr(config, "central_argument", None),
         primary_source_focus=getattr(config, "primary_source_focus", None),
-        research_nature=getattr(config, "research_nature", None),
         citation_pool=citation_pool,
         analyzed_projects=all_analyzed_projects,
         guidelines=guidelines,
@@ -198,6 +215,39 @@ async def run_complete_specification_system(
     )
 
     await _progress(90, "Professor review complete")
+
+    # ── PHASE 6a: Critic Analysis ─────────────────────────────────────────────
+    # ── PHASE 6b: Human Writer ────────────────────────────────────────────────
+    #
+    # Both agents run after the review loop and before results are saved.
+    # The humanized spec replaces the original in specification_results.
+    # The critic output is stored separately as critic_output in the dict.
+    # Neither can crash the pipeline — both fail with logged errors + fallback.
+
+    final_spec = specification_results.get("final_specification")
+    if final_spec is not None:
+        await _progress(92, "Running critic analysis…")
+        try:
+            post_results = await run_humanizer_and_critic(final_spec)
+
+            # Replace the final spec with the humanized version
+            specification_results["final_specification"] = post_results["humanized_spec"]
+
+            # Store critic output so _save_results can persist it
+            specification_results["critic_output"]       = post_results["critic_output"]
+            specification_results["critic_generated_at"] = post_results["critic_generated_at"]
+
+            await _progress(97, "Human rewrite complete")
+
+        except Exception as exc:
+            # Non-fatal — log and continue with original spec
+            print(f"\n⚠️  Humanizer/Critic block failed (non-fatal): {exc}")
+            specification_results["critic_output"]       = f"Analysis unavailable: {exc}"
+            specification_results["critic_generated_at"] = datetime.utcnow().isoformat()
+    else:
+        print("\n⚠️  No final_specification found — skipping humanizer/critic")
+        specification_results["critic_output"]       = "No specification to analyse."
+        specification_results["critic_generated_at"] = datetime.utcnow().isoformat()
 
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()

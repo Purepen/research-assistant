@@ -8,19 +8,21 @@ import { useQueryClient } from '@tanstack/react-query'
 
 /* ─── Icons ─────────────────────────────────────────────────────────────── */
 const I = {
-  Back:     ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>,
-  Download: ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-  Refresh:  ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
-  Trash:    ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
-  Spin:     ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
-  Check:    ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>,
-  File:     ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
-  Star:     ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
-  Book:     ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
-  Link:     ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>,
-  Info:     ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
-  X:        ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-  Chart:    ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  Back:          ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>,
+  Download:      ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  Refresh:       ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
+  Trash:         ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  Spin:          ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+  Check:         ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  File:          ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
+  Star:          ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  Book:          ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
+  Link:          ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>,
+  Info:          ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
+  X:             ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  Chart:         ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  // ── NEW ────────────────────────────────────────────────────────────────
+  AlertTriangle: ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
 }
 
 const ACTIVE = new Set(['queued','generating','reviewing'])
@@ -47,16 +49,16 @@ function Pill({ status }: { status:string }) {
 
 function scoreColor(n:number) { return n>=75?'#16a34a':n>=55?'#d97706':'#dc2626' }
 function scoreLabel(n:number) { return n>=75?'Excellent — supervisor-ready':n>=55?'Good — minor improvements needed':'Needs Work — consider revisions' }
-function scoreBg(n:number) { return n>=75?'#f0fdf4':n>=55?'#fffbeb':'#fef2f2' }
-function scoreBorder(n:number) { return n>=75?'#bbf7d0':n>=55?'#fde68a':'#fecaca' }
+function scoreBg(n:number)    { return n>=75?'#f0fdf4':n>=55?'#fffbeb':'#fef2f2' }
+function scoreBorder(n:number){ return n>=75?'#bbf7d0':n>=55?'#fde68a':'#fecaca' }
 
 /* ─── Progress Tracker ───────────────────────────────────────────────────── */
 function ProgressTracker({ progress, phase, status }: { progress:number; phase:string; status:string }) {
   const phases = [
-    { key:'queued',     label:'Queued',           icon:<I.Info/> },
-    { key:'generating', label:'Researching',       icon:<I.Book/> },
-    { key:'reviewing',  label:'AI Review',         icon:<I.Star/> },
-    { key:'complete',   label:'Complete',          icon:<I.Check/> },
+    { key:'queued',     label:'Queued',      icon:<I.Info/> },
+    { key:'generating', label:'Researching', icon:<I.Book/> },
+    { key:'reviewing',  label:'AI Review',   icon:<I.Star/> },
+    { key:'complete',   label:'Complete',    icon:<I.Check/> },
   ]
   const currentIdx = phases.findIndex(p => status.includes(p.key))
   return (
@@ -70,19 +72,16 @@ function ProgressTracker({ progress, phase, status }: { progress:number; phase:s
           {progress}%
         </div>
       </div>
-      {/* Progress bar */}
       <div style={{ height:8, background:'#f3f4f6', borderRadius:999, overflow:'hidden', marginBottom:20 }}>
         <motion.div initial={{ width:0 }} animate={{ width:`${progress}%` }} transition={{ duration:.5, ease:'easeOut' }}
           style={{ height:'100%', background:'linear-gradient(90deg,#16a34a,#22c55e)', borderRadius:999 }}/>
       </div>
-      {/* Phase steps */}
       <div style={{ display:'flex', gap:0 }}>
         {phases.map((ph, i) => {
-          const done = i < currentIdx
+          const done   = i < currentIdx
           const active = i === currentIdx
           return (
             <div key={ph.key} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', position:'relative' }}>
-              {/* connector */}
               {i < phases.length-1 && <div style={{ position:'absolute', top:14, left:'50%', width:'100%', height:2, background: done?'#16a34a':'#e5e7eb', zIndex:0 }}/>}
               <div style={{ width:28, height:28, borderRadius:'50%', background: done?'#16a34a':active?'#dcfce7':'#f3f4f6', border:`2px solid ${done||active?'#16a34a':'#e5e7eb'}`, display:'flex', alignItems:'center', justifyContent:'center', color: done?'white':active?'#16a34a':'#9ca3af', zIndex:1, position:'relative', boxShadow:active?'0 0 0 4px rgba(22,163,74,.15)':'none', transition:'all .3s', flexShrink:0 }}>
                 {done ? <I.Check/> : ph.icon}
@@ -178,13 +177,11 @@ function ReviewView({ review, marks }: { review:any; marks?:number }) {
   const cats = review.section_scores || {}
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-      {/* Overall */}
       <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, padding:'20px', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
         <h3 style={{ margin:'0 0 6px', fontWeight:700, color:'#0f1f0f', fontSize:'.95rem' }}>Overall Assessment</h3>
         <p style={{ margin:'0 0 14px', fontSize:'.88rem', color:'#374151', lineHeight:1.7 }}>{review.overall_feedback || review.strengths?.join('. ')}</p>
         {marks && <div style={{ display:'flex', alignItems:'center', gap:8 }}><I.Star/><span style={{ fontWeight:800, color:scoreColor(marks), fontFamily:'Fraunces,serif', fontSize:'1.1rem' }}>{marks}/100</span><span style={{ fontSize:'.8rem', color:'#6b7280' }}>{scoreLabel(marks).split(' — ')[0]}</span></div>}
       </div>
-      {/* Section scores */}
       {Object.keys(cats).length>0 && (
         <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, padding:'20px', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
           <h3 style={{ margin:'0 0 14px', fontWeight:700, color:'#0f1f0f', fontSize:'.95rem' }}>Section Scores</h3>
@@ -204,7 +201,6 @@ function ReviewView({ review, marks }: { review:any; marks?:number }) {
           </div>
         </div>
       )}
-      {/* Feedback areas */}
       {[{label:'Strengths', key:'strengths', color:'#16a34a', bg:'#f0fdf4', border:'#bbf7d0'},
         {label:'Areas for Improvement', key:'improvement_priorities', color:'#d97706', bg:'#fffbeb', border:'#fde68a'},
       ].map(s => review[s.key]?.length>0 && (
@@ -223,36 +219,74 @@ function ReviewView({ review, marks }: { review:any; marks?:number }) {
   )
 }
 
-/* ─── Sources ────────────────────────────────────────────────────────────── */
-function SourcesView({ resources }: { resources:any }) {
-  if (!resources?.length) return (
+/* ─── Critic View — NEW ──────────────────────────────────────────────────── */
+function CriticView({ critic }: { critic: { text: string; generated_at: string } | null }) {
+  if (!critic || !critic.text) return (
     <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, padding:'48px 24px', textAlign:'center', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
-      <div style={{ color:'#9ca3af', fontSize:'.9rem' }}>No sources recorded for this specification</div>
+      <div style={{ fontSize:'2rem', marginBottom:12 }}>🔍</div>
+      <p style={{ fontWeight:700, color:'#0f1f0f', marginBottom:6, fontSize:'.95rem' }}>No critic analysis available</p>
+      <p style={{ color:'#9ca3af', fontSize:'.84rem' }}>This spec was generated before the critic agent was added. New generations include a full critic analysis.</p>
     </div>
   )
+
+  const lines  = critic.text.split('\n')
+  const blocks: { type:'section'|'verdict'|'header'|'bullet'|'gap'|'text'; content:string }[] = []
+  for (const line of lines) {
+    const s = line.trim()
+    if (!s) continue
+    if (s.startsWith('SECTION:'))                                        blocks.push({ type:'section', content:s.replace('SECTION:','').trim() })
+    else if (s.startsWith('VERDICT:'))                                   blocks.push({ type:'verdict', content:s.replace('VERDICT:','').trim() })
+    else if (s.startsWith('PROBLEMS:')||s.startsWith('WHAT TO FIX:'))   blocks.push({ type:'header',  content:s })
+    else if (s.startsWith('OVERALL GAPS'))                               blocks.push({ type:'gap',     content:s })
+    else if (s.startsWith('- '))                                         blocks.push({ type:'bullet',  content:s.slice(2) })
+    else                                                                 blocks.push({ type:'text',    content:s })
+  }
+
+  const vc = (v:string) => v==='FAILING'?'#dc2626':v==='WEAK'?'#d97706':'#16a34a'
+
   return (
-    <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
-      <div className="g-section-head">
-        <span style={{ fontWeight:700, color:'#0f1f0f', fontSize:'.9rem' }}>Discovered Resources</span>
-        <span style={{ fontSize:'.76rem', color:'#9ca3af' }}>{resources.length} sources</span>
-      </div>
-      <div style={{ display:'flex', flexDirection:'column', divide:'y' }}>
-        {resources.map((r:any, i:number) => (
-          <div key={i} style={{ padding:'13px 20px', borderBottom: i<resources.length-1?'1px solid #f0f4f0':'none', display:'flex', alignItems:'flex-start', gap:12 }}>
-            <div style={{ width:30, height:30, borderRadius:8, background:'#f0fdf4', border:'1px solid #bbf7d0', display:'flex', alignItems:'center', justifyContent:'center', color:'#16a34a', flexShrink:0, marginTop:1 }}><I.Link/></div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <p style={{ margin:'0 0 2px', fontWeight:600, color:'#0f1f0f', fontSize:'.86rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.title || r.url}</p>
-              {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ fontSize:'.74rem', color:'#16a34a', textDecoration:'none', display:'flex', alignItems:'center', gap:4 }}><I.Link/>{r.url.slice(0,60)}…</a>}
-              {r.description && <p style={{ margin:'4px 0 0', fontSize:'.76rem', color:'#6b7280', lineHeight:1.5 }}>{r.description}</p>}
-            </div>
-            {r.confidence_score && (
-              <div style={{ textAlign:'right', flexShrink:0 }}>
-                <span style={{ fontSize:'.7rem', fontWeight:700, color:r.confidence_score>=0.7?'#16a34a':'#d97706' }}>{Math.round(r.confidence_score*100)}%</span>
-                <p style={{ margin:0, fontSize:'.62rem', color:'#9ca3af' }}>confidence</p>
-              </div>
-            )}
+    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      <div style={{ background:'#fef2f2', border:'1.5px solid #fecaca', borderRadius:14, padding:'18px 20px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+          <div style={{ width:32, height:32, borderRadius:9, background:'#fee2e2', display:'flex', alignItems:'center', justifyContent:'center', color:'#dc2626', flexShrink:0 }}><I.AlertTriangle/></div>
+          <div>
+            <p style={{ margin:0, fontWeight:800, color:'#dc2626', fontSize:'.95rem' }}>Critic Analysis</p>
+            <p style={{ margin:0, fontSize:'.72rem', color:'#9ca3af' }}>Generated {critic.generated_at?.slice(0,10)||''}</p>
           </div>
-        ))}
+        </div>
+        <p style={{ margin:0, fontSize:'.82rem', color:'#7f1d1d', lineHeight:1.6 }}>
+          Brutal, honest assessment of every gap in this specification. Not encouraging — a map of what still needs work before submission.
+        </p>
+      </div>
+      <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
+        <div style={{ padding:'16px 20px', display:'flex', flexDirection:'column', gap:8 }}>
+          {blocks.map((b, i) => {
+            if (b.type==='section') return (
+              <div key={i} style={{ marginTop:i>0?16:0, paddingBottom:8, borderBottom:'2px solid #fee2e2' }}>
+                <p style={{ margin:0, fontWeight:800, color:'#dc2626', fontSize:'.95rem', fontFamily:'Fraunces,serif' }}>{b.content}</p>
+              </div>
+            )
+            if (b.type==='verdict') return (
+              <div key={i} style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                <span style={{ fontWeight:700, color:'#374151', fontSize:'.8rem' }}>Verdict:</span>
+                <span style={{ padding:'2px 10px', borderRadius:999, background:`${vc(b.content)}15`, border:`1px solid ${vc(b.content)}30`, fontSize:'.78rem', fontWeight:800, color:vc(b.content) }}>{b.content}</span>
+              </div>
+            )
+            if (b.type==='header') return <p key={i} style={{ margin:'8px 0 2px', fontWeight:700, color:'#0f1f0f', fontSize:'.84rem' }}>{b.content}</p>
+            if (b.type==='gap') return (
+              <div key={i} style={{ marginTop:20, paddingTop:12, borderTop:'2px solid #7c3aed20' }}>
+                <p style={{ margin:0, fontWeight:800, color:'#7c3aed', fontSize:'.95rem' }}>{b.content}</p>
+              </div>
+            )
+            if (b.type==='bullet') return (
+              <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:8, paddingLeft:8 }}>
+                <span style={{ color:'#dc2626', flexShrink:0, marginTop:3, fontSize:'.7rem' }}>▸</span>
+                <p style={{ margin:0, fontSize:'.84rem', color:'#374151', lineHeight:1.65 }}>{b.content}</p>
+              </div>
+            )
+            return <p key={i} style={{ margin:0, fontSize:'.84rem', color:'#6b7280', lineHeight:1.65 }}>{b.content}</p>
+          })}
+        </div>
       </div>
     </div>
   )
@@ -267,7 +301,8 @@ export default function ProjectDetailPage() {
   const queryClient = useQueryClient()
   const projectId = parseInt(params.id as string)
 
-  const [activeTab, setActiveTab] = useState<'specification'|'review'|'sources'>('specification')
+  // CHANGED: 'sources' → 'critic'
+  const [activeTab, setActiveTab] = useState<'specification'|'review'|'critic'>('specification')
   const [downloading, setDownloading] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -378,7 +413,7 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* ── Progress tracker (generating) ── */}
+      {/* ── Progress tracker ── */}
       {isGenerating && <ProgressTracker progress={liveProgress} phase={livePhase} status={project.status}/>}
 
       {/* ── Failed state ── */}
@@ -400,14 +435,14 @@ export default function ProjectDetailPage() {
       {isComplete && (
         <div style={{ display:'grid', gridTemplateColumns:'1fr 260px', gap:18, alignItems:'start' }}>
 
-          {/* Left: spec/review/sources */}
+          {/* Left: spec/review/critic */}
           <div>
-            {/* Tab bar */}
+            {/* Tab bar — CHANGED: Sources → Critic */}
             <div style={{ display:'flex', gap:4, marginBottom:18, background:'white', border:'1px solid #e8ede8', borderRadius:11, padding:5, boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
               {([
-                { key:'specification', label:'Specification', icon:<I.File/> },
-                { key:'review',        label:'AI Review',     icon:<I.Star/> },
-                { key:'sources',       label:'Sources',       icon:<I.Link/> },
+                { key:'specification', label:'Specification', icon:<I.File/>          },
+                { key:'review',        label:'AI Review',     icon:<I.Star/>          },
+                { key:'critic',        label:'Critic',        icon:<I.AlertTriangle/> },
               ] as const).map(t => (
                 <button key={t.key} onClick={()=>setActiveTab(t.key)} className={`g-tab ${activeTab===t.key?'active':''}`} style={{ flex:1, justifyContent:'center' }}>
                   {t.icon}{t.label}
@@ -424,7 +459,6 @@ export default function ProjectDetailPage() {
                 <motion.div key={activeTab} initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0 }} transition={{ duration:.2 }}>
                   {activeTab==='specification' && spec ? (
                     <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                      {/* Title card */}
                       <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, padding:'18px 20px', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
                         <h2 style={{ margin:'0 0 8px', fontSize:'1.15rem', fontWeight:800, color:'#0f1f0f', fontFamily:'Fraunces,serif' }}>{spec.project_title}</h2>
                         <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
@@ -433,7 +467,6 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
                       {sections.map(s => <SpecSection key={s.label} label={s.label} data={s.data}/>)}
-                      {/* References */}
                       {spec.references?.length>0 && (
                         <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
                           <div className="g-section-head">
@@ -454,7 +487,8 @@ export default function ProjectDetailPage() {
                   ) : activeTab==='review' ? (
                     <ReviewView review={result.review} marks={result.total_marks}/>
                   ) : (
-                    <SourcesView resources={result.discovered_resources}/>
+                    // CHANGED: was <SourcesView resources={result.discovered_resources}/>
+                    <CriticView critic={result.critic || null}/>
                   )}
                 </motion.div>
               </AnimatePresence>
@@ -469,17 +503,16 @@ export default function ProjectDetailPage() {
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
             {result?.total_marks!=null && <ScoreCard marks={result.total_marks} decision={result.decision}/>}
 
-            {/* Meta */}
             <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>
               <div style={{ padding:'13px 16px', borderBottom:'1px solid #f0f4f0' }}>
                 <span style={{ fontWeight:700, color:'#0f1f0f', fontSize:'.84rem' }}>Project Info</span>
               </div>
               {[
-                { label:'Field',         value:project.field_of_study },
-                { label:'Level',         value:project.academic_level },
-                { label:'Effort',        value:project.effort_level },
-                { label:'Created',       value:new Date(project.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) },
-                { label:'Completed',     value:project.completed_at ? new Date(project.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—' },
+                { label:'Field',     value:project.field_of_study },
+                { label:'Level',     value:project.academic_level },
+                { label:'Effort',    value:project.effort_level },
+                { label:'Created',   value:new Date(project.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) },
+                { label:'Completed', value:project.completed_at ? new Date(project.completed_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—' },
               ].map((row, i, arr) => (
                 <div key={row.label} style={{ padding:'9px 14px', display:'flex', justifyContent:'space-between', borderBottom:i<arr.length-1?'1px solid #f9fafb':'none' }}>
                   <span style={{ fontSize:'.76rem', color:'#9ca3af', fontWeight:600 }}>{row.label}</span>
@@ -488,7 +521,6 @@ export default function ProjectDetailPage() {
               ))}
             </div>
 
-            {/* Download CTA */}
             {isComplete && (
               <button className="g-btn" onClick={handleDownload} disabled={downloading} style={{ width:'100%', justifyContent:'center', fontSize:'.86rem', padding:'11px' }}>
                 {downloading ? 'Downloading…' : <><I.Download/> Download as DOCX</>}

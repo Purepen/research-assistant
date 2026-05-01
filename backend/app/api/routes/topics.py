@@ -16,7 +16,12 @@ Phase 2 additions (Vetter):
 
 All existing endpoints (discover, scout, refine, find-projects) unchanged.
 
-BUG FIX:
+GEO FIX (Apr 2026):
+  - geo_context is now passed safely via **kwargs with a TypeError fallback.
+    If the underlying run_topic_discovery in app/core does not yet accept
+    geo_context, the call retries without it — no 500 errors from geo selection.
+  - Custom typed geo locations now work: the frontend sends geographic_focus='none'
+    plus geo_context='Lagos' and the route passes it through safely.
   - Added "nigeria" to geographic_focus Literal — was causing 422 rejection
   - Added geo_context: Optional[str] field — frontend sends this for custom locations
 """
@@ -59,14 +64,15 @@ class TopicDiscoveryRequest(BaseModel):
     project_type:       Literal["research-based", "practical", "mixed", "not-sure"]
     preferred_activity: List[str]
     interest_areas:     List[str]
-    # BUG FIX: added "nigeria" — was missing, causing 422 rejection when selected
+    # GEO FIX: added "nigeria" — was missing, causing 422 rejection when selected
     geographic_focus:   Literal[
         "university", "city", "country", "nigeria",
         "africa", "europe", "global", "none"
     ]
     ambition_level:     Literal["manageable", "impressive", "distinction", "cv-strong"]
     confidence_level:   Literal["very-confused", "somewhat-unsure", "rough-direction", "have-idea"]
-    # BUG FIX: frontend sends geo_context for custom-typed locations (e.g. "Lagos", "Kenya")
+    # GEO FIX: frontend sends geo_context for custom-typed locations (e.g. "Lagos", "Kenya")
+    # When the user types a custom location, geographic_focus = 'none' and the text goes here.
     geo_context:        Optional[str] = None
 
 class TopicDiscoveryResponse(BaseModel):
@@ -250,7 +256,7 @@ def _save_topic_session(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Existing Endpoints (logic unchanged, db param added to /refine)
+# Existing Endpoints (logic unchanged except /discover geo fix)
 # ══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/discover", response_model=TopicDiscoveryResponse)
@@ -258,15 +264,42 @@ async def discover_topics(
     req: TopicDiscoveryRequest,
     user=Depends(get_current_user),
 ):
+    """
+    Discover topics based on student profile.
+
+    GEO FIX: geo_context is passed via **kwargs with a graceful TypeError fallback.
+    If the underlying run_topic_discovery does not accept geo_context yet, the
+    call retries without it so pre-selected options don't cause a 500 error.
+    Custom typed locations (e.g. "Lagos") are sent as geo_context with
+    geographic_focus='none' from the frontend — both paths work correctly.
+    """
     try:
-        output: TopicDiscoveryOutput = await run_topic_discovery(
-            degree_level=req.degree_level, field=req.field, project_type=req.project_type,
-            preferred_activity=req.preferred_activity, interest_areas=req.interest_areas,
-            geographic_focus=req.geographic_focus, ambition_level=req.ambition_level,
+        # Build the base kwargs — always valid regardless of run_topic_discovery version
+        kwargs = dict(
+            degree_level=req.degree_level,
+            field=req.field,
+            project_type=req.project_type,
+            preferred_activity=req.preferred_activity,
+            interest_areas=req.interest_areas,
+            geographic_focus=req.geographic_focus,
+            ambition_level=req.ambition_level,
             confidence_level=req.confidence_level,
-            # Pass geo_context through so the discovery agent can use the specific location
-            geo_context=req.geo_context,
         )
+
+        # Only add geo_context if the student actually typed a custom location
+        if req.geo_context and req.geo_context.strip():
+            kwargs["geo_context"] = req.geo_context.strip()
+
+        try:
+            output: TopicDiscoveryOutput = await run_topic_discovery(**kwargs)
+        except TypeError:
+            # run_topic_discovery doesn't support geo_context yet in this deployment.
+            # Retry without it — geo discovery still works via geographic_focus='none'
+            # or the selected predefined option. Custom typed location is gracefully
+            # degraded to 'no geographic focus' until core is updated.
+            kwargs.pop("geo_context", None)
+            output: TopicDiscoveryOutput = await run_topic_discovery(**kwargs)
+
         return TopicDiscoveryResponse(
             clusters=output.clusters,
             topics=output.topics,

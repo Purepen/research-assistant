@@ -4,6 +4,13 @@
  * Changes (Phase 1 — Mar 2026):
  *   - Added topicsApi with history(), linkProject(), deleteSession()
  *   - downloadProject already present, kept intact
+ *
+ * Changes (Apr 2026 — Model Tier + BYOK):
+ *   - Added userApi.getModelSettings()
+ *   - Added userApi.updateModelSettings()
+ *   - Added userApi.getApiKeyStatus()
+ *   - Added userApi.saveApiKey()
+ *   - Added shared types: ModelSettingsResponse, AgentModelSetting, ApiKeyStatus
  */
 
 import axios from 'axios'
@@ -199,6 +206,56 @@ export const userApi = {
     const response = await api.delete('/user/account')
     return response.data
   },
+
+  // ── Model tier settings (Apr 2026) ─────────────────────────────────────────
+
+  /**
+   * GET /user/settings/models
+   * Returns the user's selected tier, all agent metadata, and the resolved
+   * per-agent model map. Powers the settings UI.
+   */
+  getModelSettings: async (): Promise<ModelSettingsResponse> => {
+    const response = await api.get('/user/settings/models')
+    return response.data
+  },
+
+  /**
+   * PUT /user/settings/models
+   * Save the user's tier. When tier === 'custom', pass customConfig mapping
+   * agent_key → model_id.
+   */
+  updateModelSettings: async (
+    tier: 'testing' | 'production' | 'custom',
+    customConfig?: Record<string, string>,
+  ) => {
+    const response = await api.put('/user/settings/models', {
+      tier,
+      custom_config: customConfig ?? null,
+    })
+    return response.data
+  },
+
+  // ── BYOK (bring-your-own-key) API key (Apr 2026) ───────────────────────────
+
+  /**
+   * GET /user/api-key
+   * Returns whether the user has a key set and a masked preview.
+   * Never returns the raw key.
+   */
+  getApiKeyStatus: async (): Promise<ApiKeyStatus> => {
+    const response = await api.get('/user/api-key')
+    return response.data
+  },
+
+  /**
+   * PUT /user/api-key
+   * Save or clear the user's personal OpenAI API key.
+   * Pass null or empty string to clear.
+   */
+  saveApiKey: async (apiKey: string | null) => {
+    const response = await api.put('/user/api-key', { api_key: apiKey })
+    return response.data
+  },
 }
 
 // ── Shared Types ──────────────────────────────────────────────────────────────
@@ -214,6 +271,37 @@ export interface TopicHistoryItem {
   original_topic:    string | null
   linked_project_id: number | null
   created_at:        string  // ISO-8601
+}
+
+// ── Model Settings Types (Apr 2026) ───────────────────────────────────────────
+export interface AgentModelSetting {
+  key:              string
+  display_name:     string
+  description:      string
+  phase:            string
+  cost_impact:      'Low' | 'Medium' | 'High'
+  current_model:    string
+  production_model: string
+  testing_model:    string
+}
+
+export interface AvailableModel {
+  id:          string
+  label:       string
+  description: string
+  tier_badge:  string
+}
+
+export interface ModelSettingsResponse {
+  tier:             'testing' | 'production' | 'custom'
+  available_models: AvailableModel[]
+  agents:           AgentModelSetting[]
+}
+
+export interface ApiKeyStatus {
+  has_key:    boolean
+  masked_key: string | null
+  key_source: 'user' | 'system'
 }
 
 export default api

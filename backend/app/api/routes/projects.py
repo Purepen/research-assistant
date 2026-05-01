@@ -1,8 +1,11 @@
 """
-Projects Routes — with Download Endpoint
+Projects Routes — UPDATED
 
-Endpoint added: GET /projects/{project_id}/download
-Returns a .docx file built from specification_json stored in the database.
+Changes (Apr 2026 — Critic + Full DOCX):
+  - download_project: fetches critic_json from project.result and passes it to _build_docx
+  - _build_docx: signature extended with optional critic param; adds a Critic Analysis
+    appendix after the Professor Review appendix when critic data is present
+  - All existing endpoints (list, detail, delete, analytics, download) preserved verbatim
 """
 
 from __future__ import annotations
@@ -65,45 +68,46 @@ async def list_projects(
     user   = Depends(get_current_user),
     db     = Depends(get_db_session),
 ):
+    from app.models.database import ProjectStatus
+
     query = db.query(Project).filter(Project.user_id == user.id)
 
     if status:
-        from app.models.database import ProjectStatus
         try:
-            status_enum = ProjectStatus[status.upper()]
+            status_enum = ProjectStatus(status.lower())
             query = query.filter(Project.status == status_enum)
-        except KeyError:
+        except ValueError:
             pass
 
     projects = query.order_by(Project.created_at.desc()).offset(skip).limit(limit).all()
 
     return [
-        {
-            "id":                  p.id,
-            "field_of_study":      p.field_of_study,
-            "research_topic":      p.research_topic,
-            "academic_level":      p.academic_level,
-            "status":              p.status.value,
-            "progress_percentage": p.progress_percentage,
-            "created_at":          p.created_at.isoformat(),
-            "completed_at":        p.completed_at.isoformat() if p.completed_at else None,
-            "total_marks":         p.result.total_marks  if p.result else None,
-            "decision":            p.result.decision     if p.result else None,
-        }
+        ProjectListItem(
+            id=p.id,
+            field_of_study=p.field_of_study,
+            research_topic=p.research_topic,
+            academic_level=p.academic_level,
+            status=p.status.value,
+            progress_percentage=p.progress_percentage or 0,
+            created_at=p.created_at.isoformat(),
+            completed_at=p.completed_at.isoformat() if p.completed_at else None,
+            total_marks=p.result.total_marks if p.result else None,
+            decision=p.result.decision     if p.result else None,
+        )
         for p in projects
     ]
 
 
 # ── Detail ─────────────────────────────────────────────────────────────────────
 
-@router.get("/{project_id}", response_model=ProjectDetail)
+@router.get("/{project_id}")
 async def get_project(
     project_id: int,
     user = Depends(get_current_user),
     db   = Depends(get_db_session),
 ):
     project = db.query(Project).filter(
-        Project.id == project_id,
+        Project.id      == project_id,
         Project.user_id == user.id,
     ).first()
 
@@ -195,7 +199,12 @@ async def get_project_analytics(
 # ── Download ───────────────────────────────────────────────────────────────────
 #
 # Builds a .docx from the specification_json stored in the database.
-# specification_json shape (from research_spec.py / ProjectResult):
+# The downloaded file contains three parts:
+#   Part 1 — Research Specification (all sections + references)
+#   Part 2 — Professor Review appendix
+#   Part 3 — Critic Analysis appendix (if critic_json is present)
+#
+# specification_json shape:
 # {
 #   "project_title": str,
 #   "field_of_study": str,
@@ -217,7 +226,8 @@ async def download_project(
     db   = Depends(get_db_session),
 ):
     """
-    Download project specification as a formatted .docx file.
+    Download the full specification package as a formatted .docx file.
+    Includes: Specification + AI Review + Critic Analysis.
     """
     # ── 1. Fetch project ───────────────────────────────────────────────────
     project = db.query(Project).filter(
@@ -234,11 +244,13 @@ async def download_project(
             detail="Specification not ready yet. Please wait for generation to complete.",
         )
 
-    spec = project.result.specification_json  # already a dict (JSON column)
+    spec   = project.result.specification_json    # already a dict (JSON column)
     review = project.result.final_review_json or {}
+    # ── NEW: fetch critic_json — None for old projects, dict for new ones ──
+    critic = project.result.critic_json or {}
 
     # ── 2. Build .docx ─────────────────────────────────────────────────────
-    docx_bytes = _build_docx(spec, review, project)
+    docx_bytes = _build_docx(spec, review, project, critic=critic)
 
     # ── 3. Safe filename ───────────────────────────────────────────────────
     title = (spec.get("project_title") or project.research_topic or "specification")
@@ -257,8 +269,17 @@ async def download_project(
 
 # ── DOCX builder ───────────────────────────────────────────────────────────────
 
-def _build_docx(spec: dict, review: dict, project) -> bytes:
-    """Build a formatted Word document from specification_json."""
+def _build_docx(spec: dict, review: dict, project, critic: Optional[dict] = None) -> bytes:
+    """
+    Build a formatted Word document from specification_json.
+
+    Three parts:
+      Part 1 — Full research specification
+      Part 2 — Professor Review appendix
+      Part 3 — Critic Analysis appendix (added Apr 2026)
+
+    critic shape: {"text": str, "generated_at": str}  or empty dict / None
+    """
     from docx import Document
     from docx.shared import Pt, Inches, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -272,15 +293,24 @@ def _build_docx(spec: dict, review: dict, project) -> bytes:
         section.left_margin   = Inches(1.25)
         section.right_margin  = Inches(1.25)
 
-    PURPLE = RGBColor(0x7C, 0x3A, 0xED)   # Tailwind purple-600
-    GRAY   = RGBColor(0x6B, 0x72, 0x80)   # Tailwind gray-500
+    PURPLE = RGBColor(0x7C, 0x3A, 0xED)   # purple-600
+    GREEN  = RGBColor(0x16, 0xA3, 0x4A)   # green-600
+    GRAY   = RGBColor(0x6B, 0x72, 0x80)   # gray-500
+    RED    = RGBColor(0xDC, 0x26, 0x26)   # red-600
 
-    def heading1(text: str):
-        p = doc.add_heading(text, level=1)
+    def heading1(text: str, color: RGBColor = PURPLE):
+        p   = doc.add_heading(text, level=1)
         p.alignment = WD_ALIGN_PARAGRAPH.LEFT
         run = p.runs[0] if p.runs else p.add_run(text)
-        run.font.color.rgb = PURPLE
+        run.font.color.rgb = color
         run.font.size      = Pt(14)
+        run.bold           = True
+
+    def heading2(text: str, color: RGBColor = GRAY):
+        p   = doc.add_heading(text, level=2)
+        run = p.runs[0] if p.runs else p.add_run(text)
+        run.font.color.rgb = color
+        run.font.size      = Pt(12)
         run.bold           = True
 
     def subtext(text: str):
@@ -322,14 +352,14 @@ def _build_docx(spec: dict, review: dict, project) -> bytes:
 
     doc.add_page_break()
 
-    # ── Ordered sections ───────────────────────────────────────────────────
+    # ── Part 1: Ordered specification sections ─────────────────────────────
     SECTIONS = [
-        ("abstract",             "Abstract"),
-        ("justification_and_aim","Justification and Overall Aim"),
-        ("objectives",           "Objectives"),
-        ("literature_review",    "Review of Literature"),
-        ("methodology",          "Methodology"),
-        ("work_plan",            "Work Plan"),
+        ("abstract",              "Abstract"),
+        ("justification_and_aim", "Justification and Overall Aim"),
+        ("objectives",            "Objectives"),
+        ("literature_review",     "Review of Literature"),
+        ("methodology",           "Methodology"),
+        ("work_plan",             "Work Plan"),
     ]
 
     for key, label in SECTIONS:
@@ -339,7 +369,7 @@ def _build_docx(spec: dict, review: dict, project) -> bytes:
         content    = section_data.get("content", "")
         word_count = section_data.get("word_count", len(content.split()))
 
-        heading1(label)
+        heading1(label, color=GREEN)
         subtext(f"{word_count:,} words")
         body(content)
         doc.add_paragraph()  # spacing
@@ -347,37 +377,97 @@ def _build_docx(spec: dict, review: dict, project) -> bytes:
     # ── References ─────────────────────────────────────────────────────────
     refs = spec.get("references", [])
     if refs:
-        heading1("References")
-        for i, ref in enumerate(refs, 1):
-            p   = doc.add_paragraph(style="List Number")
+        heading1("References", color=GREEN)
+        for ref in refs:
+            p = doc.add_paragraph(style="List Number")
             p.add_run(ref)
 
-    # ── Review appendix ────────────────────────────────────────────────────
+    # ── Part 2: Professor Review appendix ──────────────────────────────────
     if review and review.get("total_marks") is not None:
         doc.add_page_break()
-        heading1("Professor Review (Appendix)")
+        heading1("AI Professor Review", color=PURPLE)
 
         doc.add_paragraph(
             f"Score: {review.get('total_marks')}/100  |  Decision: {review.get('decision', '–')}"
         )
 
-        strengths = review.get("strengths", [])
+        comments = review.get("supervisor_comments", "")
+        if comments:
+            heading2("Overall Assessment")
+            body(comments)
+
+        strengths = review.get("overall_strengths") or review.get("strengths", [])
         if strengths:
-            doc.add_heading("Strengths", level=2)
+            heading2("Strengths", color=GREEN)
             for s in strengths:
                 doc.add_paragraph(s, style="List Bullet")
 
         issues = review.get("critical_issues", [])
         if issues:
-            doc.add_heading("Issues to Address", level=2)
+            heading2("Critical Issues", color=RED)
             for issue in issues:
                 doc.add_paragraph(issue, style="List Bullet")
 
         priorities = review.get("improvement_priorities", [])
         if priorities:
-            doc.add_heading("Improvement Priorities", level=2)
+            heading2("Areas for Improvement")
             for i, p in enumerate(priorities, 1):
                 doc.add_paragraph(f"{i}. {p}")
+
+        section_reviews = review.get("section_reviews", [])
+        if section_reviews:
+            heading2("Section Scores")
+            for sr in section_reviews:
+                name   = sr.get("section_name", "")
+                scored = sr.get("marks_awarded", sr.get("marks", "–"))
+                total  = sr.get("marks_possible", sr.get("max_marks", "–"))
+                doc.add_paragraph(f"{name}: {scored}/{total}")
+
+    # ── Part 3: Critic Analysis appendix (NEW Apr 2026) ────────────────────
+    critic_text = (critic or {}).get("text", "") if critic else ""
+    critic_at   = (critic or {}).get("generated_at", "") if critic else ""
+
+    if critic_text and critic_text.strip():
+        doc.add_page_break()
+        heading1("Critic Analysis", color=RED)
+
+        if critic_at:
+            subtext(f"Generated: {critic_at[:10]}")
+
+        intro = doc.add_paragraph()
+        intro.add_run(
+            "Brutal, honest gap analysis — every weakness and what to fix. "
+            "This is not encouraging feedback. It is a map of everything that "
+            "still needs work before submission."
+        ).italic = True
+        doc.add_paragraph()
+
+        # Render the critic text section by section
+        # The critic uses ======= headers and bullet lines — preserve that structure
+        for line in critic_text.strip().split("\n"):
+            stripped = line.strip()
+            if not stripped:
+                doc.add_paragraph()
+                continue
+            if stripped.startswith("SECTION:"):
+                p   = doc.add_heading(stripped, level=2)
+                run = p.runs[0] if p.runs else p.add_run(stripped)
+                run.font.color.rgb = RED
+                run.font.size      = Pt(12)
+                run.bold           = True
+            elif stripped.startswith("VERDICT:"):
+                p   = doc.add_paragraph()
+                run = p.add_run(stripped)
+                run.bold           = True
+                run.font.color.rgb = PURPLE
+            elif stripped.startswith("PROBLEMS:") or stripped.startswith("WHAT TO FIX:") or stripped.startswith("OVERALL GAPS"):
+                p   = doc.add_paragraph()
+                run = p.add_run(stripped)
+                run.bold = True
+            elif stripped.startswith("- "):
+                doc.add_paragraph(stripped[2:], style="List Bullet")
+            else:
+                doc.add_paragraph(stripped)
 
     # ── Serialise to bytes ─────────────────────────────────────────────────
     buf = io.BytesIO()

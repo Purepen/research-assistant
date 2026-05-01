@@ -12,6 +12,22 @@ Phase 1 Addition (Mar 2026):
   Added TopicSession model — persists every completed topic from the
   Topic Lab to the database, linked to the user.
   User.topic_sessions relationship added.
+
+Model Tier Addition (Apr 2026):
+  Two new columns on User:
+    model_tier          — which tier the user has selected (testing / production / custom)
+    custom_model_config — JSON dict mapping agent_key → model_id for CUSTOM tier
+  These columns have safe defaults so no migration data backfill is needed.
+
+API Key Addition (Apr 2026):
+  One new column on User:
+    openai_api_key — user's own OpenAI API key (stored encrypted in production).
+
+Critic Addition (Apr 2026):
+  One new column on ProjectResult:
+    critic_json — JSON — stores the brutal critic agent analysis.
+                  Shape: {"text": str, "generated_at": ISO str}
+                  Nullable — old results without critic analysis show a placeholder.
 """
 
 from __future__ import annotations
@@ -43,9 +59,9 @@ class ProjectStatus(enum.Enum):
 
 class TopicOrigin(enum.Enum):
     """How the topic was arrived at."""
-    DISCOVERED = "discovered"   # User had no idea → AI generated topics → picked one
-    VETTED     = "vetted"       # User had a rough idea → AI vetted/refined it
-    PROVIDED   = "provided"     # User had a topic → AI vetted but user kept original
+    DISCOVERED = "discovered"
+    VETTED     = "vetted"
+    PROVIDED   = "provided"
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +143,13 @@ class User(Base):
     # Status
     is_active = Column(Boolean, default=True, nullable=False)
 
+    # ── Model tier settings (Apr 2026) ────────────────────────────────────────
+    model_tier          = Column(String(20), default="production", nullable=False, server_default="production")
+    custom_model_config = Column(JSON, nullable=True)
+
+    # ── User's own OpenAI API key (Apr 2026) ──────────────────────────────────
+    openai_api_key = Column(String(255), nullable=True)
+
     # Relationships
     projects       = relationship("Project",      back_populates="user", cascade="all, delete-orphan")
     topic_sessions = relationship("TopicSession", back_populates="user", cascade="all, delete-orphan",
@@ -140,12 +163,7 @@ class TopicSession(Base):
     """
     A completed topic discovery or vetting session.
 
-    One row is created automatically whenever a user finalises a topic
-    (i.e. the /topics/refine endpoint receives stage='final' and the AI
-    returns is_final=True, OR the /topics/vet endpoint completes).
-
-    This gives every user a permanent, cross-device history of every topic
-    they have ever explored — independent of whether a spec was generated.
+    One row is created automatically whenever a user finalises a topic.
     """
     __tablename__ = "topic_sessions"
 
@@ -153,16 +171,16 @@ class TopicSession(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
     # ── The finalised topic ─────────────────────────────────────────────────
-    final_topic       = Column(Text, nullable=False)          # confirmed title
-    description       = Column(Text, nullable=True)           # 1-2 sentence summary
-    field             = Column(String(255), nullable=False)   # field / department
-    degree_level      = Column(String(10),  nullable=False)   # BSc / MSc / PhD
-    academic_level    = Column(String(10),  nullable=True)    # alias, same as degree_level
+    final_topic       = Column(Text, nullable=False)
+    description       = Column(Text, nullable=True)
+    field             = Column(String(255), nullable=False)
+    degree_level      = Column(String(10),  nullable=False)
+    academic_level    = Column(String(10),  nullable=True)
 
     # ── Context captured during the session ────────────────────────────────
-    original_topic    = Column(Text, nullable=True)           # what the user typed first (vetting path)
-    project_type      = Column(String(50), nullable=True)     # practical / research-based / mixed
-    ambition_level    = Column(String(50), nullable=True)     # manageable / impressive / distinction / cv-strong
+    original_topic    = Column(Text, nullable=True)
+    project_type      = Column(String(50), nullable=True)
+    ambition_level    = Column(String(50), nullable=True)
     geographic_focus  = Column(String(50), nullable=True)
 
     # ── How the topic came to exist ─────────────────────────────────────────
@@ -172,11 +190,10 @@ class TopicSession(Base):
         nullable=False,
     )
 
-    # ── Resources found during scouting (stored as JSON for easy display) ───
-    scout_data_json   = Column(JSON, nullable=True)   # full ScoutData dict
+    # ── Resources found during scouting ─────────────────────────────────────
+    scout_data_json   = Column(JSON, nullable=True)
 
     # ── Link to spec if the user went on to generate one ────────────────────
-    # Nullable — a topic session can exist without ever becoming a spec.
     linked_project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
 
     # ── Timestamps ──────────────────────────────────────────────────────────
@@ -228,13 +245,12 @@ class Project(Base):
     result_id = Column(Integer, ForeignKey("project_results.id"), nullable=True)
 
     # ── Optional back-link to originating topic session ─────────────────────
-    # Set automatically when the user navigates from Topic Lab → Generate.
     topic_session_id = Column(Integer, ForeignKey("topic_sessions.id"), nullable=True)
 
     # Relationships
-    user      = relationship("User",    back_populates="projects")
-    result    = relationship("ProjectResult",   back_populates="project",   uselist=False)
-    analytics = relationship("ProjectAnalytics",back_populates="project",   uselist=False)
+    user      = relationship("User",             back_populates="projects")
+    result    = relationship("ProjectResult",    back_populates="project",  uselist=False)
+    analytics = relationship("ProjectAnalytics", back_populates="project",  uselist=False)
 
     def __repr__(self):
         return f"<Project(id={self.id}, status={self.status}, field='{self.field_of_study}')>"
@@ -254,6 +270,11 @@ class ProjectResult(Base):
     final_review_json          = Column(JSON, nullable=True)
     total_marks                = Column(Integer, nullable=True)
     decision                   = Column(String(50), nullable=True)
+
+    # ── Critic analysis (Apr 2026) ────────────────────────────────────────────
+    # Stored as {"text": str, "generated_at": ISO str}
+    # Nullable so existing rows without critic data continue to work.
+    critic_json                = Column(JSON, nullable=True)
 
     # Resources
     discovered_resources_json  = Column(JSON, nullable=True)
