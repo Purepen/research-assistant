@@ -1,23 +1,36 @@
 """
-Research Service — UPDATED v5
+Research Service — UPDATED v6
 
-Changes vs v4:
-  1. _save_results: saves critic_json from specification_results to ProjectResult.
-  2. _format_full_email_html: new method — builds HTML for email and DOCX that
-     includes the full specification, AI review, and critic analysis in one document.
-  3. Email notification now calls _format_full_email_html instead of
-     _format_specification_html, so the email matches the DOCX download exactly.
-  4. _format_specification_html: preserved verbatim for backward compatibility
-     (still used by other callers if any).
+Changes vs v5 (BYOK + Model Tier wiring):
+
+  1. generate_specification:
+       - Queries the User row from the DB using project.user_id
+       - If user.openai_api_key is set, calls set_default_openai_key() from the
+         OpenAI Agents SDK before the pipeline runs. This makes every Runner.run()
+         call in the pipeline — across all phases — use the user's own key.
+       - Falls back to the system OPENAI_API_KEY env var if no user key is set.
+       - Builds an AgentModelConfig from the user's model_tier + custom_model_config
+         using build_agent_config_for_user().
+       - Passes agent_model_config into run_complete_specification_system().
+
+  2. _save_results: saves critic_json (unchanged from v5).
+
+  3. Email: uses _format_full_email_html (unchanged from v5).
+
+  4. _format_specification_html / _format_full_email_html: preserved verbatim.
+
+  All other methods (create_project, get_project_status, get_project_results,
+  _save_analytics) are preserved verbatim.
 """
 
 from __future__ import annotations
 
+import os
 from typing import Optional, Dict, List
 from datetime import datetime
 
 from app.models.config import SpecificationConfig
-from app.models.database import Project, ProjectResult, ProjectAnalytics, ProjectStatus
+from app.models.database import Project, ProjectResult, ProjectAnalytics, ProjectStatus, User
 from app.core.pipelines.main_pipeline import run_complete_specification_system
 from app.adapters.storage_adapter import get_storage_adapter
 from app.adapters.email_adapter import get_email_adapter
@@ -83,6 +96,7 @@ class ResearchService:
             if db_session:
                 db_session.commit()
 
+            # ── Load guidelines doc ────────────────────────────────────────────
             guidelines_doc = None
             if project.guidelines_file_path:
                 try:
@@ -92,6 +106,49 @@ class ResearchService:
                 except Exception as exc:
                     print(f"   ⚠️  Could not load guidelines ({exc}) — using defaults")
 
+            # ── Resolve user's API key and model tier ──────────────────────────
+            #
+            # Look up the user row so we can read openai_api_key and model_tier.
+            # These are stored per-user in the DB and not passed through config.
+            agent_model_config = None
+            user_key_used      = False
+
+            if db_session:
+                try:
+                    user = db_session.query(User).filter(User.id == project.user_id).first()
+
+                    if user:
+                        # ── BYOK: set the user's key as the active OpenAI key ──
+                        # set_default_openai_key() from the Agents SDK makes every
+                        # subsequent Runner.run() call use this key instead of the
+                        # system OPENAI_API_KEY environment variable.
+                        if user.openai_api_key:
+                            try:
+                                from agents import set_default_openai_key
+                                set_default_openai_key(user.openai_api_key)
+                                user_key_used = True
+                                print(f"   🔑 Using user's own API key (sk-...{user.openai_api_key[-4:]})")
+                            except ImportError:
+                                # agents SDK doesn't export set_default_openai_key in this version
+                                # Fall back to setting the env var for this process
+                                os.environ["OPENAI_API_KEY"] = user.openai_api_key
+                                user_key_used = True
+                                print(f"   🔑 Using user's own API key via env (sk-...{user.openai_api_key[-4:]})")
+                        else:
+                            print(f"   🔑 Using system OPENAI_API_KEY (no user key set)")
+
+                        # ── Model tier: build AgentModelConfig ─────────────────
+                        from app.models.agent_config import build_agent_config_for_user
+                        agent_model_config = build_agent_config_for_user(
+                            model_tier=user.model_tier or "production",
+                            custom_model_config=user.custom_model_config,
+                        )
+                        print(f"   🤖 Model tier: {user.model_tier or 'production'}")
+
+                except Exception as exc:
+                    print(f"   ⚠️  Could not load user settings ({exc}) — using system defaults")
+
+            # ── Run pipeline ───────────────────────────────────────────────────
             start_time = datetime.utcnow()
 
             results = await run_complete_specification_system(
@@ -100,9 +157,22 @@ class ResearchService:
                 past_project_files=project.user_dumps_paths or [],
                 progress_callback=_progress,
                 dataset_file_path=dataset_file_path,
+                agent_model_config=agent_model_config,   # NEW — passes tier config in
             )
 
             duration = (datetime.utcnow() - start_time).total_seconds()
+
+            # ── If we set the user's key, restore the system key ───────────────
+            # This prevents the user's key from leaking into other requests
+            # that share this process (relevant for concurrent generations).
+            if user_key_used:
+                try:
+                    from agents import set_default_openai_key
+                    system_key = os.environ.get("OPENAI_API_KEY", "")
+                    if system_key:
+                        set_default_openai_key(system_key)
+                except Exception:
+                    pass
 
             project.status              = ProjectStatus.COMPLETE
             project.progress_percentage = 100
@@ -114,12 +184,12 @@ class ResearchService:
             result_obj = await self._save_results(project, results, db_session)
             await self._save_analytics(project, results, duration, config, db_session)
 
-            # Email notification — same content as DOCX download
+            # ── Email notification ─────────────────────────────────────────────
             spec_results = results.get("specification_results") or {}
             if config.notification_email and spec_results.get("final_specification"):
                 try:
-                    email       = self._get_email()
-                    final_spec  = spec_results["final_specification"]
+                    email        = self._get_email()
+                    final_spec   = spec_results["final_specification"]
                     final_review = spec_results.get("final_review")
                     critic_text  = spec_results.get("critic_output", "")
 
@@ -132,7 +202,7 @@ class ResearchService:
                             critic_text=critic_text,
                         ),
                         marks=final_review.total_marks if final_review else 0,
-                        decision=final_review.decision if final_review else "UNKNOWN",
+                        decision=final_review.decision  if final_review else "UNKNOWN",
                     )
                     if not email_result.get("success"):
                         print(f"⚠️  Email failed: {email_result.get('error')}")
@@ -171,10 +241,9 @@ class ResearchService:
 
     async def _save_results(self, project, results, db_session=None):
         """
-        Save spec + review + critic to ProjectResult row, then link Project.result_id.
-
-        IMPORTANT: ProjectResult has NO project_id column.
-        The link is one-way: Project.result_id → ProjectResult.id
+        Save spec + review + critic to ProjectResult row.
+        ProjectResult has NO project_id column.
+        Link is one-way: Project.result_id → ProjectResult.id
         """
         import traceback
         try:
@@ -185,15 +254,11 @@ class ResearchService:
             resources    = results.get("input_sources", {}).get("web_search")
             track        = results.get("track", "A")
 
-            # ── Build review dict ─────────────────────────────────────────────
             review_dict = None
             if final_review:
                 review_dict = final_review.model_dump()
                 review_dict["track"] = track
 
-            # ── Build critic dict ─────────────────────────────────────────────
-            # critic_output and critic_generated_at are injected into
-            # specification_results by main_pipeline.py after phase 6.
             critic_text = spec_results.get("critic_output")
             critic_at   = spec_results.get("critic_generated_at")
             critic_dict = None
@@ -203,13 +268,12 @@ class ResearchService:
                     "generated_at": critic_at or datetime.utcnow().isoformat(),
                 }
 
-            # ── Create row ────────────────────────────────────────────────────
             result = ProjectResult(
                 specification_json=(final_spec.model_dump() if final_spec else {}),
                 synthesis_json=(synthesis.model_dump() if synthesis else None),
                 final_review_json=review_dict,
                 total_marks=(final_review.total_marks if final_review else None),
-                decision=(final_review.decision if final_review else None),
+                decision=(final_review.decision     if final_review else None),
                 critic_json=critic_dict,
                 discovered_resources_json=(resources.model_dump() if resources else None),
                 generated_at=datetime.utcnow(),
@@ -219,7 +283,6 @@ class ResearchService:
                 db_session.add(result)
                 db_session.commit()
                 db_session.refresh(result)
-                # Link Project → ProjectResult
                 project.result_id = result.id
                 db_session.commit()
                 print(
@@ -227,7 +290,6 @@ class ResearchService:
                     f"linked to Project id={project.id}"
                     + (f", critic: {len(critic_text):,} chars" if critic_text else ", no critic")
                 )
-
             return result
 
         except Exception as exc:
@@ -294,8 +356,7 @@ class ResearchService:
             "discovered_resources": project.result.discovered_resources_json,
         }
 
-    # ── _format_specification_html ────────────────────────────────────────────
-    # Preserved verbatim — used for spec-only display if needed elsewhere.
+    # ── Email formatters — UNCHANGED ──────────────────────────────────────────
 
     def _format_specification_html(self, spec) -> str:
         try:
@@ -319,10 +380,6 @@ class ResearchService:
         except Exception:
             return "<p>Specification generated successfully.</p>"
 
-    # ── _format_full_email_html ───────────────────────────────────────────────
-    # NEW — builds the complete deliverable HTML used for email and DOCX.
-    # Includes: Specification + AI Review + Critic Analysis.
-
     def _format_full_email_html(
         self,
         spec,
@@ -330,17 +387,12 @@ class ResearchService:
         critic_text: Optional[str] = None,
     ) -> str:
         """
-        Build full HTML document containing:
-          Part 1 — Research Specification (all sections)
-          Part 2 — AI Professor Review
-          Part 3 — Critic Analysis
-
-        This is the canonical content for both the email and the DOCX download.
+        Full HTML document: Specification + AI Review + Critic Analysis.
+        Used for both email delivery and as the source of truth for DOCX content.
         """
         try:
             nl = "<br>"
 
-            # ── Part 1: Specification ─────────────────────────────────────────
             html = f"<h1 style='color:#0f1f0f'>{spec.project_title}</h1>\n"
 
             sections = [
@@ -363,7 +415,6 @@ class ResearchService:
                     html += f"  <li style='margin-bottom:6px'>{ref}</li>\n"
                 html += "</ol>\n"
 
-            # ── Part 2: AI Review ─────────────────────────────────────────────
             if review:
                 html += (
                     "<hr style='margin:40px 0;border-color:#e8ede8'>\n"
@@ -403,7 +454,6 @@ class ResearchService:
                 except Exception as rev_exc:
                     html += f"<p>Review data partially unavailable: {rev_exc}</p>\n"
 
-            # ── Part 3: Critic Analysis ───────────────────────────────────────
             if critic_text:
                 html += (
                     "<hr style='margin:40px 0;border-color:#e8ede8'>\n"

@@ -17,6 +17,12 @@ Step 2 — Human Writer:
   This is the version saved to the database, shown on the dashboard,
   downloaded as DOCX, and sent by email.
 
+Model Tier Addition (Apr 2026):
+  run_humanizer_and_critic() now accepts an optional agent_model_config param.
+  When present, build_post_agents(config) is called and the critic and human
+  writer agents use the user's chosen model instead of the module-level defaults.
+  When None, the module-level singletons are used as before.
+
 Both agents fail gracefully — if either crashes, the original spec and an
 error message are returned instead. The pipeline never stops because of them.
 """
@@ -29,20 +35,24 @@ from typing import Optional
 from agents import Runner
 
 from app.models.specification import ProjectSpecification, SpecificationSection
-from app.core.agents.definitions.post_agents import critic_agent, human_writer_agent
+from app.core.agents.definitions.post_agents import (
+    critic_agent,
+    human_writer_agent,
+    build_post_agents,
+)
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _format_spec_for_agents(spec: ProjectSpecification) -> str:
-    """Convert a ProjectSpecification into readable text for agent input."""
+    """Convert a ProjectSpecification into readable plain text for agent input."""
     sections = [
-        ("ABSTRACT",                    spec.abstract.content),
-        ("JUSTIFICATION AND AIM",       spec.justification_and_aim.content),
-        ("OBJECTIVES",                  spec.objectives.content),
-        ("LITERATURE REVIEW",           spec.literature_review.content),
-        ("METHODOLOGY",                 spec.methodology.content),
-        ("WORK PLAN",                   spec.work_plan.content),
+        ("ABSTRACT",              spec.abstract.content),
+        ("JUSTIFICATION AND AIM", spec.justification_and_aim.content),
+        ("OBJECTIVES",            spec.objectives.content),
+        ("LITERATURE REVIEW",     spec.literature_review.content),
+        ("METHODOLOGY",           spec.methodology.content),
+        ("WORK PLAN",             spec.work_plan.content),
     ]
     lines = [
         f"PROJECT TITLE: {spec.project_title}",
@@ -121,26 +131,24 @@ def _rebuild_spec(
         ),
         references=original.references,
         total_word_count=(
-            _wc(abstract)
-            + _wc(justification)
-            + _wc(objectives)
-            + _wc(literature)
-            + _wc(methodology)
-            + _wc(work_plan)
+            _wc(abstract) + _wc(justification) + _wc(objectives)
+            + _wc(literature) + _wc(methodology) + _wc(work_plan)
         ),
     )
 
 
 # ─── Critic ──────────────────────────────────────────────────────────────────
 
-async def run_critic(spec: ProjectSpecification) -> str:
+async def run_critic(spec: ProjectSpecification, active_critic_agent=None) -> str:
     """
     Run the brutal gap analysis critic on the assembled specification.
     Returns the critic's plain-text output as a string.
+    Uses active_critic_agent if provided, otherwise falls back to module singleton.
     """
+    agent = active_critic_agent or critic_agent
     spec_text = _format_spec_for_agents(spec)
     result = await Runner.run(
-        starting_agent=critic_agent,
+        starting_agent=agent,
         input=(
             "Analyse this research specification section by section. "
             "Be brutal and specific. Do not soften anything.\n\n"
@@ -152,16 +160,22 @@ async def run_critic(spec: ProjectSpecification) -> str:
 
 # ─── Human Writer ─────────────────────────────────────────────────────────────
 
-async def _humanize_section(content: str, section_name: str) -> str:
+async def _humanize_section(
+    content: str,
+    section_name: str,
+    active_writer_agent=None,
+) -> str:
     """
     Rewrite one section in human voice.
-    Falls back to original content if the agent fails or returns empty output.
+    Falls back to original content if the agent fails or returns suspiciously short output.
+    Uses active_writer_agent if provided, otherwise falls back to module singleton.
     """
     if not content or len(content.strip()) < 50:
         return content
 
+    agent  = active_writer_agent or human_writer_agent
     result = await Runner.run(
-        starting_agent=human_writer_agent,
+        starting_agent=agent,
         input=(
             f"Rewrite this {section_name} section in natural human voice. "
             "Apply every rule strictly: no em-dashes, no AI writing patterns, "
@@ -173,37 +187,56 @@ async def _humanize_section(content: str, section_name: str) -> str:
     )
     humanized = str(result.final_output).strip()
 
-    # Safety: if agent returns empty or clearly wrong output, use original
+    # Safety: if agent returns empty or clearly truncated output, keep original
     if len(humanized) < len(content) * 0.4:
-        print(f"   ⚠️  Humanizer returned suspiciously short output for {section_name} — keeping original")
+        print(
+            f"   ⚠️  Humanizer returned suspiciously short output for "
+            f"{section_name} — keeping original"
+        )
         return content
 
     return humanized
 
 
-async def run_humanizer(spec: ProjectSpecification) -> ProjectSpecification:
+async def run_humanizer(
+    spec: ProjectSpecification,
+    active_writer_agent=None,
+) -> ProjectSpecification:
     """
-    Rewrite every prose section of the specification in human voice.
+    Rewrite every prose section in human voice.
     Sections are processed sequentially for reliability.
     References are never touched — only prose content is rewritten.
+    Uses active_writer_agent if provided, otherwise falls back to module singleton.
     """
     print("   Humanizing: Abstract")
-    abstract      = await _humanize_section(spec.abstract.content,                  "Abstract")
+    abstract = await _humanize_section(
+        spec.abstract.content, "Abstract", active_writer_agent
+    )
 
     print("   Humanizing: Justification and Aim")
-    justification = await _humanize_section(spec.justification_and_aim.content,     "Justification and Aim")
+    justification = await _humanize_section(
+        spec.justification_and_aim.content, "Justification and Aim", active_writer_agent
+    )
 
     print("   Humanizing: Objectives")
-    objectives    = await _humanize_section(spec.objectives.content,                "Objectives")
+    objectives = await _humanize_section(
+        spec.objectives.content, "Objectives", active_writer_agent
+    )
 
     print("   Humanizing: Literature Review")
-    literature    = await _humanize_section(spec.literature_review.content,         "Literature Review")
+    literature = await _humanize_section(
+        spec.literature_review.content, "Literature Review", active_writer_agent
+    )
 
     print("   Humanizing: Methodology")
-    methodology   = await _humanize_section(spec.methodology.content,               "Methodology")
+    methodology = await _humanize_section(
+        spec.methodology.content, "Methodology", active_writer_agent
+    )
 
     print("   Humanizing: Work Plan")
-    work_plan     = await _humanize_section(spec.work_plan.content,                 "Work Plan")
+    work_plan = await _humanize_section(
+        spec.work_plan.content, "Work Plan", active_writer_agent
+    )
 
     return _rebuild_spec(
         original=spec,
@@ -218,19 +251,43 @@ async def run_humanizer(spec: ProjectSpecification) -> ProjectSpecification:
 
 # ─── Main entry point ─────────────────────────────────────────────────────────
 
-async def run_humanizer_and_critic(spec: ProjectSpecification) -> dict:
+async def run_humanizer_and_critic(
+    spec: ProjectSpecification,
+    agent_model_config=None,   # Optional[AgentModelConfig]
+) -> dict:
     """
     Run both post-assembly agents on the final specification.
 
-    Called by main_pipeline.py after run_specification_with_review_loop returns.
+    agent_model_config: when present, builds agents using the user's model tier
+      via build_post_agents(config). When None, uses module-level singletons.
 
-    Returns a dict with:
-        humanized_spec      — ProjectSpecification with rewritten prose
-        critic_output       — str, the brutal gap analysis text
-        critic_generated_at — ISO timestamp string
+    Returns:
+        {
+            humanized_spec:       ProjectSpecification — rewritten in human voice
+            critic_output:        str — brutal section-by-section gap analysis
+            critic_generated_at:  str — ISO timestamp
+        }
 
-    Neither agent can crash the pipeline. Both fail gracefully.
+    Neither agent can crash the pipeline. Both fail with logged errors + fallback.
     """
+
+    # ── Resolve agents: tier-aware or singleton ───────────────────────────────
+    active_critic_agent  = None
+    active_writer_agent  = None
+
+    if agent_model_config is not None:
+        try:
+            post = build_post_agents(agent_model_config)
+            active_critic_agent = post["critic"]
+            active_writer_agent = post["human_writer"]
+            from app.models.agent_config import AgentKey
+            print(
+                f"   🤖 Post agents — "
+                f"critic: {agent_model_config.get(AgentKey.CRITIC_AGENT)}, "
+                f"writer: {agent_model_config.get(AgentKey.HUMAN_WRITER_AGENT)}"
+            )
+        except Exception as exc:
+            print(f"   ⚠️  Could not build tier-aware post agents ({exc}) — using defaults")
 
     # ── Step 1: Critic ────────────────────────────────────────────────────────
     print("\n" + "=" * 80)
@@ -239,7 +296,7 @@ async def run_humanizer_and_critic(spec: ProjectSpecification) -> dict:
 
     critic_output: str
     try:
-        critic_output = await run_critic(spec)
+        critic_output = await run_critic(spec, active_critic_agent)
         print(f"   ✅ Critic complete — {len(critic_output):,} characters")
     except Exception as exc:
         print(f"   ❌ Critic failed: {exc}")
@@ -256,7 +313,7 @@ async def run_humanizer_and_critic(spec: ProjectSpecification) -> dict:
 
     humanized_spec: ProjectSpecification
     try:
-        humanized_spec = await run_humanizer(spec)
+        humanized_spec = await run_humanizer(spec, active_writer_agent)
         print(
             f"   ✅ Humanizer complete — "
             f"{humanized_spec.total_word_count:,} words "

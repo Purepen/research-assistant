@@ -1,9 +1,6 @@
 """
 Phase 2 Workflows
 
-Extracted from: Notebook Cell 8
-Purpose: Strategic synthesis from all 3 streams
-
 TRACK B ADDITION:
   create_strategic_synthesis() now accepts track: str = "A".
 
@@ -18,6 +15,12 @@ TRACK B ADDITION:
   can tell the agent the exact academic discipline — education, sociology,
   law, etc. — which is essential for producing field-specific frameworks
   and debates rather than generic ones.
+
+Model Tier Addition (Apr 2026):
+  create_strategic_synthesis() now accepts an optional agent_model_config
+  parameter. When present, tier-aware synthesizer agents are built via
+  build_phase2_agents() and used instead of the module-level singletons.
+  When None, all existing behaviour is unchanged.
 """
 
 from typing import Optional, List, Union
@@ -39,6 +42,7 @@ async def create_strategic_synthesis(
     guidelines: ProjectGuidelines,
     track: str = "A",
     field_of_study: Optional[str] = None,
+    agent_model_config=None,   # NEW — Optional[AgentModelConfig]
 ) -> Union[StrategicSynthesis, TheoreticalSynthesisB]:
     """
     Create strategic synthesis from all discovered resources.
@@ -46,6 +50,9 @@ async def create_strategic_synthesis(
     Routes to the correct agent based on track:
       Track A → StrategicSynthesis  (empirical / data / ML — original behaviour)
       Track B → TheoreticalSynthesisB (theoretical / humanities — new)
+
+    agent_model_config: when present, tier-aware synthesizer agents are built via
+      build_phase2_agents(). When None, module-level singletons are used.
 
     Args:
         research_topic:      Final confirmed topic string
@@ -55,15 +62,30 @@ async def create_strategic_synthesis(
         track:               "A" or "B" — detected in main_pipeline.py
         field_of_study:      Student's field (e.g. "Education", "Sociology")
                              Used in Track B prompt for field-specific output.
+        agent_model_config:  Optional AgentModelConfig for model tier routing.
     """
 
     print("\n🎯 STRATEGIC SYNTHESIS")
-    print(f"   Track: {track} | Topic: {research_topic[:60]}")
+    print(f"   Track: {track}")
     print("-" * 80)
 
-    # ── Track A: original behaviour, completely unchanged ─────────────────────
-    if track != "B":
-        resources_summary = f"""
+    # ── Resolve which agents to use ───────────────────────────────────────────
+    _strategic_agent     = strategic_synthesizer_agent
+    _theoretical_agent   = theoretical_synthesizer_b_agent
+
+    if agent_model_config is not None:
+        try:
+            from app.core.agents.definitions.phase2_agents import build_phase2_agents
+            _agents = build_phase2_agents(agent_model_config)
+            _strategic_agent   = _agents["strategic_synthesizer"]
+            _theoretical_agent = _agents["theoretical_synthesizer"]
+            from app.models.agent_config import AgentKey
+            print(f"   🤖 Phase 2 model: {agent_model_config.get(AgentKey.STRATEGIC_SYNTHESIZER)}")
+        except Exception as exc:
+            print(f"   ⚠️  Could not build tier-aware phase2 agents ({exc}) — using defaults")
+
+    # ── Build context — UNCHANGED ─────────────────────────────────────────────
+    resources_summary = f"""
 DISCOVERED RESOURCES:
 Datasets ({len(discovered_resources.datasets)}): {', '.join(d.name for d in discovered_resources.datasets[:5])}
 Methods ({len(discovered_resources.methods)}): {', '.join(m.name for m in discovered_resources.methods[:5])}
@@ -71,13 +93,15 @@ Tools ({len(discovered_resources.tools)}): {', '.join(t.name for t in discovered
 Papers ({len(discovered_resources.papers)}): {', '.join(p.title[:50] for p in discovered_resources.papers[:5])}
 """
 
-        projects_summary = f"\nANALYZED PROJECTS ({len(analyzed_projects)}):\n"
-        for proj in analyzed_projects[:3]:
-            projects_summary += f"- {proj.project_title}\n"
+    projects_summary = f"\nANALYZED PROJECTS ({len(analyzed_projects)}):\n"
+    for proj in analyzed_projects[:3]:
+        projects_summary += f"- {proj.project_title}\n"
 
+    # ── Track A: Empirical / Data / ML ────────────────────────────────────────
+    if track != "B":
         try:
             result = await Runner.run(
-                starting_agent=strategic_synthesizer_agent,
+                starting_agent=_strategic_agent,
                 input=f"""
 Create strategic positioning for:
 
@@ -93,7 +117,7 @@ Create a strategic synthesis that positions this research uniquely.
 
             synthesis = result.final_output
 
-            print(f"✅ Strategic synthesis complete")
+            print(f"✅ Strategic synthesis complete (Track A)")
             print(f"   Novel contributions: {len(synthesis.novel_contributions)}")
             print(f"   Risks identified: {len(synthesis.risk_factors)}")
 
@@ -103,54 +127,42 @@ Create a strategic synthesis that positions this research uniquely.
             print(f"❌ Error creating synthesis: {e}")
             raise
 
-    # ── Track B: humanities/theoretical synthesis ─────────────────────────────
-    else:
-        # Build a papers summary focused on scholarly sources, not datasets or tools
-        papers_found = discovered_resources.papers
-        papers_summary = ""
-        if papers_found:
-            papers_summary = f"PAPERS AND SCHOLARLY SOURCES FOUND ({len(papers_found)}):\n"
-            for p in papers_found[:8]:
-                papers_summary += f"  - {p.title[:80]} ({getattr(p, 'year', 'n.d.')})\n"
-        else:
-            papers_summary = "PAPERS: No papers retrieved yet — synthesise from topic knowledge.\n"
+    # ── Track B: Theoretical / Humanities ─────────────────────────────────────
+    field_context = f"Field of Study: {field_of_study}" if field_of_study else ""
 
-        projects_summary = ""
-        if analyzed_projects:
-            projects_summary = f"\nSIMILAR PROJECTS FOUND ({len(analyzed_projects)}):\n"
-            for proj in analyzed_projects[:3]:
-                projects_summary += f"  - {proj.project_title}\n"
-
-        field_line = f"FIELD OF STUDY: {field_of_study}" if field_of_study else ""
-
-        try:
-            result = await Runner.run(
-                starting_agent=theoretical_synthesizer_b_agent,
-                input=f"""
-Create a theoretical synthesis for this humanities/social science research project.
+    try:
+        result = await Runner.run(
+            starting_agent=_theoretical_agent,
+            input=f"""
+Create a theoretical/humanities synthesis for:
 
 RESEARCH TOPIC: {research_topic}
-{field_line}
+{field_context}
 PROJECT TYPE: {guidelines.project_type}
 
-{papers_summary}
+{resources_summary}
 {projects_summary}
 
-Produce a TheoreticalSynthesisB object with all 9 fields fully populated.
-Every field must be specific to this exact topic and field — no generic placeholders.
+Create a TheoreticalSynthesisB object with:
+- scholarly_debates: major ongoing debates in this field relevant to the topic
+- key_theoretical_frameworks: frameworks the student should engage with
+- key_scholars: most cited and influential scholars in this area
+- analytical_approaches: appropriate methodological approaches for this study
+- primary_source_suggestions: recommended primary sources or archives
+- research_gaps: specific gaps in the existing scholarly literature
+
+Be field-specific — use discipline-appropriate terminology, not generic social science language.
 """,
-            )
+        )
 
-            synthesis = result.final_output
+        synthesis = result.final_output
 
-            print(f"✅ Theoretical synthesis complete (Track B)")
-            print(f"   Scholarly debates: {len(synthesis.scholarly_debates)}")
-            print(f"   Key frameworks: {len(synthesis.key_theoretical_frameworks)}")
-            print(f"   Key scholars: {len(synthesis.key_scholars)}")
-            print(f"   Research gaps: {len(synthesis.research_gaps)}")
+        print(f"✅ Theoretical synthesis complete (Track B)")
+        print(f"   Scholarly debates: {len(synthesis.scholarly_debates)}")
+        print(f"   Key frameworks: {len(synthesis.key_theoretical_frameworks)}")
 
-            return synthesis
+        return synthesis
 
-        except Exception as e:
-            print(f"❌ Error creating theoretical synthesis: {e}")
-            raise
+    except Exception as e:
+        print(f"❌ Error creating theoretical synthesis: {e}")
+        raise

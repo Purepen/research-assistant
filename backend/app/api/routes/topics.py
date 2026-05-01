@@ -24,6 +24,14 @@ GEO FIX (Apr 2026):
     plus geo_context='Lagos' and the route passes it through safely.
   - Added "nigeria" to geographic_focus Literal — was causing 422 rejection
   - Added geo_context: Optional[str] field — frontend sends this for custom locations
+
+BYOK Fix (Apr 2026):
+  - apply_openai_key(user) called at the start of every endpoint that triggers
+    agent calls. This ensures the user's personal OpenAI key (if set) is used,
+    falling back to the system .env key. Fixes 401 errors when OPENAI_API_KEY
+    is not in .env but the user has a key saved in Settings.
+  - Endpoints with NO agent calls (vet/save, history, link-project, delete) are
+    left unchanged — no key resolution needed there.
 """
 
 from __future__ import annotations
@@ -214,7 +222,7 @@ class LinkProjectRequest(BaseModel):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Internal Helper — persist TopicSession
+# Internal Helper — persist TopicSession — UNCHANGED
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _save_topic_session(
@@ -256,7 +264,8 @@ def _save_topic_session(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Existing Endpoints (logic unchanged except /discover geo fix)
+# Existing Endpoints — unchanged except apply_openai_key(user) added at top
+#                      of every endpoint that calls agents
 # ══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/discover", response_model=TopicDiscoveryResponse)
@@ -268,11 +277,12 @@ async def discover_topics(
     Discover topics based on student profile.
 
     GEO FIX: geo_context is passed via **kwargs with a graceful TypeError fallback.
-    If the underlying run_topic_discovery does not accept geo_context yet, the
-    call retries without it so pre-selected options don't cause a 500 error.
-    Custom typed locations (e.g. "Lagos") are sent as geo_context with
-    geographic_focus='none' from the frontend — both paths work correctly.
+    BYOK FIX: apply_openai_key(user) sets the correct key before any agent call.
     """
+    # ── BYOK: resolve correct OpenAI key before any agent call ───────────────
+    from app.utils.openai_key import apply_openai_key
+    apply_openai_key(user)
+
     try:
         # Build the base kwargs — always valid regardless of run_topic_discovery version
         kwargs = dict(
@@ -294,9 +304,6 @@ async def discover_topics(
             output: TopicDiscoveryOutput = await run_topic_discovery(**kwargs)
         except TypeError:
             # run_topic_discovery doesn't support geo_context yet in this deployment.
-            # Retry without it — geo discovery still works via geographic_focus='none'
-            # or the selected predefined option. Custom typed location is gracefully
-            # degraded to 'no geographic focus' until core is updated.
             kwargs.pop("geo_context", None)
             output: TopicDiscoveryOutput = await run_topic_discovery(**kwargs)
 
@@ -314,6 +321,10 @@ async def scout_topic_data(
     req: TopicScoutRequest,
     user=Depends(get_current_user),
 ):
+    # ── BYOK: resolve correct OpenAI key before any agent call ───────────────
+    from app.utils.openai_key import apply_openai_key
+    apply_openai_key(user)
+
     try:
         output = await run_data_scout(
             topic_title=req.topic_title,
@@ -345,6 +356,10 @@ async def refine_topic(
     AI advisor conversation loop.
     When stage='final', a TopicSession is auto-saved and its id returned.
     """
+    # ── BYOK: resolve correct OpenAI key before any agent call ───────────────
+    from app.utils.openai_key import apply_openai_key
+    apply_openai_key(user)
+
     try:
         output = await run_topic_advisor(
             topic_title=req.topic_title,
@@ -404,6 +419,10 @@ async def find_similar_projects(
     req: ProjectScoutRequest,
     user=Depends(get_current_user),
 ):
+    # ── BYOK: resolve correct OpenAI key before any agent call ───────────────
+    from app.utils.openai_key import apply_openai_key
+    apply_openai_key(user)
+
     try:
         output = await run_project_scout(
             topic_title=req.topic_title,
@@ -437,6 +456,10 @@ async def vet_topic(
     The frontend shows both the original and refined title side by side,
     lets the user choose, then calls POST /topics/vet/save to persist.
     """
+    # ── BYOK: resolve correct OpenAI key before any agent call ───────────────
+    from app.utils.openai_key import apply_openai_key
+    apply_openai_key(user)
+
     try:
         result: VetTopicOutput = await run_topic_vet(
             original_topic=req.original_topic,
@@ -470,13 +493,7 @@ async def save_vetted_topic(
 ):
     """
     Persists the user's final decision after seeing the vet result.
-
-    Called once the user taps "Use this topic" or "Keep my original"
-    on the vet result screen. The chosen_title becomes final_topic in
-    the DB. origin reflects whether they took the AI's suggestion or not.
-
-    Returns topic_session_id so the frontend can pass it to /generate
-    for linking later.
+    No agent calls here — no key resolution needed.
     """
     try:
         origin_enum = (
@@ -510,7 +527,7 @@ async def save_vetted_topic(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Phase 1 — History / Link Endpoints (unchanged logic)
+# Phase 1 — History / Link Endpoints — UNCHANGED (no agent calls)
 # ══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/history", response_model=TopicHistoryResponse)

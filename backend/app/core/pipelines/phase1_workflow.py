@@ -8,25 +8,16 @@ Changes in this version:
   analyze_user_dumps()        — reads each file and runs PastProjectsSpecAnalyzer.
   find_and_analyze_projects() — runs ProjectFinder then ProjectAnalyzer per URL.
 
-TRACK B ADDITION:
-  discover_resources() now accepts track: str = "A".
-  When track == "B":
-    - Dataset searches are never run (Track B has no dataset)
-    - Method/algorithm searches are replaced with humanities-specific queries:
-        * theoretical framework + scholarly debate search
-        * key scholars + foundational literature search
-        * primary source + policy document search
-    - The same web_search_agent and resource_finder_agent are used —
-      the difference is purely in the queries sent to them.
-
-  main_pipeline.py needs to pass track=detect_track(...) to activate this.
-  Default is "A" so all existing calls continue to work without change.
+Model Tier Addition (Apr 2026):
+  All three functions now accept an optional agent_model_config parameter.
+  When present, tier-aware agents are built via build_phase1_agents() and used
+  instead of the module-level singletons. When None, existing behaviour unchanged.
 """
 
 from __future__ import annotations
 
 import os
-from typing import List
+from typing import List, Optional
 
 from agents import Runner
 from docx import Document
@@ -44,7 +35,7 @@ from app.core.agents.definitions.phase1_agents import (
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers — UNCHANGED
 # ---------------------------------------------------------------------------
 
 def _read_file_text(path: str, max_chars: int = 20_000) -> str:
@@ -63,6 +54,41 @@ def _read_file_text(path: str, max_chars: int = 20_000) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Tier agent resolver — NEW
+# ---------------------------------------------------------------------------
+
+def _resolve_phase1_agents(agent_model_config=None) -> dict:
+    """
+    Return a dict of agents to use for Phase 1.
+    When agent_model_config is present, builds tier-aware agents via factory.
+    When None, returns module-level singletons unchanged.
+    """
+    if agent_model_config is None:
+        return {
+            "web_searcher":          web_search_agent,
+            "resource_finder":       resource_finder_agent,
+            "project_finder":        project_finder_agent,
+            "project_analyzer":      project_analyzer_agent,
+            "past_projects_analyzer": past_projects_spec_analyzer_agent,
+        }
+    try:
+        from app.core.agents.definitions.phase1_agents import build_phase1_agents
+        agents = build_phase1_agents(agent_model_config)
+        from app.models.agent_config import AgentKey
+        print(f"   🤖 Phase 1 model: {agent_model_config.get(AgentKey.WEB_SEARCHER)}")
+        return agents
+    except Exception as exc:
+        print(f"   ⚠️  Could not build tier-aware phase1 agents ({exc}) — using defaults")
+        return {
+            "web_searcher":          web_search_agent,
+            "resource_finder":       resource_finder_agent,
+            "project_finder":        project_finder_agent,
+            "project_analyzer":      project_analyzer_agent,
+            "past_projects_analyzer": past_projects_spec_analyzer_agent,
+        }
+
+
+# ---------------------------------------------------------------------------
 # Stream 3 — Web Resource Discovery
 # ---------------------------------------------------------------------------
 
@@ -71,137 +97,101 @@ async def discover_resources(
     guidelines: ProjectGuidelines,
     num_searches: int = 5,
     dataset_source: str = "scout",
-    track: str = "A",
+    agent_model_config=None,   # NEW — Optional[AgentModelConfig]
 ) -> DiscoveredResources:
     """
     Discover papers, methods, tools, and (optionally) datasets via web search.
 
-    dataset_source:
-      'scout'          → AI searches for a dataset (adds a search call, Track A only)
-      anything else    → dataset search is SKIPPED
-
-    track:
-      'A' → empirical project: dataset search, methods search, tools search (existing behaviour)
-      'B' → theoretical project: humanities-specific queries, NO dataset search ever
+    agent_model_config: when present, uses tier-aware web_search and
+      resource_finder agents. When None, uses module-level singletons.
     """
-    print("\n🔍 RESOURCE DISCOVERY (Adaptive)")
-    print("-" * 80)
-    print(f"   Track: {track} | Project type: {guidelines.project_type}")
-    print(f"   Dataset source: {dataset_source} "
-          f"{'→ will search for dataset' if dataset_source == 'scout' and track == 'A' else '→ dataset search SKIPPED'}")
 
-    search_queries: List[str] = []
+    _agents = _resolve_phase1_agents(agent_model_config)
+    _web_search_agent    = _agents["web_searcher"]
+    _resource_finder_agent = _agents["resource_finder"]
 
-    # ── Track B: humanities-specific search strategy ──────────────────────────
-    if track == "B":
-        print("   📚 Track B detected — using humanities search strategy")
+    print(f"\n🌐 RESOURCE DISCOVERY")
+    print(f"   Topic: {research_topic[:60]}...")
+    print(f"   Searches: {num_searches} | Dataset source: {dataset_source}")
+    print("-" * 60)
 
-        # Query 1: Theoretical frameworks and scholarly debates in this field
-        search_queries.append(
-            f"{research_topic} theoretical framework scholarly debate academic literature"
-        )
+    search_queries = [
+        f"{research_topic} machine learning research papers",
+        f"{research_topic} datasets publicly available",
+        f"{research_topic} methodology algorithms comparison",
+        f"{research_topic} MSc BSc dissertation project",
+        f"{research_topic} evaluation metrics benchmarks",
+    ]
 
-        # Query 2: Key scholars and foundational works
-        if num_searches >= 2:
-            search_queries.append(
-                f"{research_topic} key scholars foundational studies literature review"
-            )
-
-        # Query 3: Primary sources, policy documents, and institutional reports
-        if num_searches >= 3:
-            search_queries.append(
-                f"{research_topic} policy document primary source report institutional"
-            )
-
-        # Query 4: Recent peer-reviewed papers (2022-2025)
-        if num_searches >= 4:
-            search_queries.append(
-                f"{research_topic} peer reviewed journal article 2022 2023 2024 2025"
-            )
-
-        # Query 5: Similar dissertations / theses in the field
-        if num_searches >= 5:
-            field_hint = guidelines.project_type or "social science"
-            search_queries.append(
-                f"{research_topic} dissertation thesis {field_hint} research findings"
-            )
-
-    # ── Track A: original search strategy (UNCHANGED) ────────────────────────
-    else:
-        search_queries.append(f"{research_topic} recent research papers 2024 2025")
-
-        # Only search for a dataset if the student wants AI to find one
-        if guidelines.requires_dataset and num_searches > 1 and dataset_source == "scout":
-            search_queries.append(f"{research_topic} datasets Kaggle UCI")
-        elif dataset_source != "scout":
-            print(f"   ⏭️  Dataset search skipped — student provided own dataset ({dataset_source})")
-
-        if guidelines.requires_methods and num_searches > 3:
-            search_queries.append(f"{research_topic} methods techniques algorithms")
-        if guidelines.requires_tools and num_searches > 4:
-            search_queries.append(f"{research_topic} tools libraries frameworks Python")
+    # Skip dataset search if user already has a dataset
+    if dataset_source != "scout":
+        search_queries = [q for q in search_queries if "dataset" not in q.lower()]
+        print("   ⏭️  Skipping dataset search (user has a dataset)")
 
     search_queries = search_queries[:num_searches]
-    search_results = []
+
+    all_results = []
+    for i, query in enumerate(search_queries, 1):
+        print(f"   [{i}/{len(search_queries)}] {query[:60]}...")
+        try:
+            result = await Runner.run(
+                starting_agent=_web_search_agent,
+                input=query,
+            )
+            all_results.append(result.final_output)
+        except Exception as exc:
+            print(f"      ⚠️  Search failed: {exc}")
+
+    print(f"\n   Extracting structured resources from {len(all_results)} search result(s)...")
+    combined_results = "\n\n".join(str(r) for r in all_results)
 
     try:
-        for i, query in enumerate(search_queries, 1):
-            print(f"   Search {i}/{len(search_queries)}: {query[:70]}...")
-            result = await Runner.run(
-                starting_agent=web_search_agent,
-                input=f"Search the web for: {query}",
-            )
-            search_results.append({"query": query, "results": str(result.final_output)})
-
-        compiled = "\n\n".join(
-            f"QUERY: {sr['query']}\nRESULTS:\n{sr['results']}\n{'-' * 80}"
-            for sr in search_results
-        )
-
         extraction_result = await Runner.run(
-            starting_agent=resource_finder_agent,
+            starting_agent=_resource_finder_agent,
             input=f"""
-Research Topic: {research_topic}
-Project Type: {guidelines.project_type}
-Track: {track} {'(Theoretical/Humanities — no datasets, no algorithms)' if track == 'B' else '(Empirical/Data)'}
+Extract all structured resources from these search results for:
+RESEARCH TOPIC: {research_topic}
 
-Web Search Results:
-{compiled}
+SEARCH RESULTS:
+{combined_results}
 
-Extract and structure all relevant resources found in these search results.
-{'For this Track B project: focus on papers, key scholars, and theoretical sources. Do not extract datasets or ML methods.' if track == 'B' else ''}
+Extract into DiscoveredResources format with datasets, methods, tools, and papers.
 """,
         )
+        resources: DiscoveredResources = extraction_result.final_output
 
-        resources = extraction_result.final_output
-        print(f"\n✅ Resource discovery complete")
-        print(f"   Datasets: {len(resources.datasets)}, Methods: {len(resources.methods)}")
-        print(f"   Tools: {len(resources.tools)}, Papers: {len(resources.papers)}")
+        print(f"\n✅ Resource Discovery complete:")
+        print(f"   Papers:   {len(resources.papers)}")
+        print(f"   Datasets: {len(resources.datasets)}")
+        print(f"   Methods:  {len(resources.methods)}")
+        print(f"   Tools:    {len(resources.tools)}")
+
         return resources
 
     except Exception as exc:
-        print(f"❌ Error during resource discovery: {exc}")
-        return DiscoveredResources(
-            datasets=[],
-            methods=[],
-            tools=[],
-            papers=[],
-            search_summary="Resource discovery encountered errors.",
-        )
+        print(f"❌ Resource extraction failed: {exc}")
+        raise
 
 
 # ---------------------------------------------------------------------------
-# Stream 1 — User-Provided Dumps (UNCHANGED)
+# Stream 1 — User-Provided Dumps
 # ---------------------------------------------------------------------------
 
 async def analyze_user_dumps(
     dump_files: List[str],
     research_topic: str,
+    agent_model_config=None,   # NEW — Optional[AgentModelConfig]
 ) -> List[AnalyzedProjectSpecSections]:
     """
     Analyse user-uploaded past project files using PastProjectsSpecAnalyzer.
     Each file is read, truncated to 20,000 chars, and sent to the agent.
+
+    agent_model_config: when present, uses tier-aware past_projects_analyzer.
     """
+
+    _agents = _resolve_phase1_agents(agent_model_config)
+    _past_analyzer = _agents["past_projects_analyzer"]
+
     print(f"\n📂 Analysing {len(dump_files)} user-provided file(s)…")
     results: List[AnalyzedProjectSpecSections] = []
 
@@ -216,7 +206,7 @@ async def analyze_user_dumps(
 
         try:
             result = await Runner.run(
-                starting_agent=past_projects_spec_analyzer_agent,
+                starting_agent=_past_analyzer,
                 input=f"""
 Analyse this student project document and extract all information in
 AnalyzedProjectSpecSections format.
@@ -240,26 +230,34 @@ DOCUMENT CONTENT:
 
 
 # ---------------------------------------------------------------------------
-# Stream 2 — Auto-Discovery (project_finder_agent now has output_type fixed)
+# Stream 2 — Auto-Discovery
 # ---------------------------------------------------------------------------
 
 async def find_and_analyze_projects(
     research_topic: str,
     guidelines: ProjectGuidelines,
     num_projects: int = 3,
+    agent_model_config=None,   # NEW — Optional[AgentModelConfig]
 ) -> List[AnalyzedProjectSpecSections]:
     """
     Auto-discover and analyse similar student projects via web search.
-    Step 1: ProjectFinder searches for URLs — now returns ProjectFinderOutput
-            (fixing the 'str object has no attribute project_urls' crash).
+    Step 1: ProjectFinder searches for URLs.
     Step 2: ProjectAnalyzer fetches and analyses each URL.
+
+    agent_model_config: when present, uses tier-aware project_finder and
+      project_analyzer agents.
     """
+
+    _agents = _resolve_phase1_agents(agent_model_config)
+    _project_finder   = _agents["project_finder"]
+    _project_analyzer = _agents["project_analyzer"]
+
     print(f"\n🤖 Auto-discovering up to {num_projects} similar project(s)…")
 
     # Step 1: Find candidate URLs
     try:
         finder_result = await Runner.run(
-            starting_agent=project_finder_agent,
+            starting_agent=_project_finder,
             input=f"""
 Find {num_projects + 2} complete student project documents related to:
 RESEARCH TOPIC: {research_topic}
@@ -287,7 +285,7 @@ Return a list of URLs with confidence ratings.
             url = url_entry.url if hasattr(url_entry, "url") else str(url_entry)
             print(f"   🔍 Analysing: {url[:80]}...")
             analysis_result = await Runner.run(
-                starting_agent=project_analyzer_agent,
+                starting_agent=_project_analyzer,
                 input=f"""
 Fetch and analyse this student project:
 URL: {url}

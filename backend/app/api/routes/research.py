@@ -4,6 +4,8 @@ Research Routes — UPDATED v3
 Changes vs v2:
   - /result/{project_id}: now returns "critic" field containing critic_json
     from the ProjectResult row. Nullable — old results return null.
+  - _run_generation_background: fixed start_generation → generate_specification
+    (the method was renamed in ResearchService).
 
 All other endpoints (/generate, /status, /cancel) are verbatim from v2.
 
@@ -72,7 +74,8 @@ async def _run_generation_background(project_id: int, config: SpecificationConfi
         print(f"   Field: {config.field_of_study} | Topic: {config.research_topic}")
         print(f"   Dataset: {config.dataset_name or config.dataset_source}")
 
-        await research_service.start_generation(
+        # FIX: was start_generation — correct method name is generate_specification
+        await research_service.generate_specification(
             project=project,
             config=config,
             db_session=db,
@@ -271,7 +274,7 @@ async def get_generation_result(
         "project_id":    project_id,
         "specification": result.specification_json,
         "review":        result.final_review_json,
-        "critic":        result.critic_json,          # NEW — null for old results
+        "critic":        result.critic_json,          # null for old results
         "word_count":    word_count,
         "marks":         result.total_marks,
         "decision":      result.decision,

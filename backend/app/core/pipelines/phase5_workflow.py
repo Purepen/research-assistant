@@ -1,15 +1,28 @@
 """
-Phase 5 Workflows — UPDATED
+Phase 5 Workflows — UPDATED v2
 
-Key change: SpecValidationLayer runs BEFORE professor_reviewer_agent.
-The ValidationReport is prepended to the review input as ground truth.
-The reviewer cannot approve if blockers are present.
+Model Tier Addition (Apr 2026):
+  review_specification() and run_specification_with_review_loop() now accept
+  an optional agent_model_config parameter (AgentModelConfig).
+
+  When present:
+    - review_specification() builds a tier-aware professor reviewer agent using
+      the model string from agent_model_config, cloned from the module singleton
+    - run_specification_with_review_loop() passes agent_model_config into
+      generate_specification() (phase4) and review_specification()
+
+  When None: all existing behaviour is unchanged — module-level singletons are used.
+
+Original behaviour preserved:
+  SpecValidationLayer still runs BEFORE professor_reviewer_agent.
+  The ValidationReport is prepended to the review input as ground truth.
+  The reviewer cannot approve if blockers are present.
 """
 
 from __future__ import annotations
 
 from typing import Optional, Union
-from agents import Runner
+from agents import Runner, Agent
 
 from app.models.specification import ProjectSpecification
 from app.models.review import OverallReview
@@ -29,6 +42,37 @@ from app.core.validation.spec_validator import (
 
 LockedRequirements = Union[LockedRequirementsA, LockedRequirementsB]
 
+
+# ─── Helper: resolve tier-aware reviewer ─────────────────────────────────────
+
+def _get_reviewer_agent(agent_model_config=None):
+    """
+    Return a tier-aware professor reviewer agent when agent_model_config is set,
+    otherwise return the module-level singleton.
+
+    Clones the singleton's name, instructions and output_type — only the model
+    string changes. This keeps all reviewer behaviour identical regardless of tier.
+    """
+    if agent_model_config is None:
+        return professor_reviewer_agent
+
+    try:
+        from app.models.agent_config import AgentKey
+        model = agent_model_config.get(AgentKey.PROFESSOR_REVIEWER)
+        if not model or model == professor_reviewer_agent.model:
+            return professor_reviewer_agent
+        return Agent(
+            name=professor_reviewer_agent.name,
+            instructions=professor_reviewer_agent.instructions,
+            model=model,
+            output_type=professor_reviewer_agent.output_type,
+        )
+    except Exception as exc:
+        print(f"   ⚠️  Could not build tier-aware reviewer ({exc}) — using default")
+        return professor_reviewer_agent
+
+
+# ─── Existing helpers — UNCHANGED ─────────────────────────────────────────────
 
 def format_specification_for_review(spec: ProjectSpecification) -> str:
     """Format specification for professor review."""
@@ -67,32 +111,32 @@ async def review_specification(
     locked: Optional[LockedRequirements] = None,
     iteration: int = 1,
     iteration_history: list = None,
+    agent_model_config=None,   # NEW — Optional[AgentModelConfig]
 ) -> OverallReview:
     """
     Review specification with professor agent.
     ValidationReport runs first — reviewer cannot override it.
+
+    agent_model_config: when present, uses a tier-aware reviewer agent built from
+      the user's model preference. When None, uses the module-level singleton.
     """
 
     print(f"\n👨‍🏫 PROFESSOR REVIEW (Iteration {iteration})")
     print("-" * 80)
 
-    # ── Step 1: Run ValidationLayer ───────────────────────────────────────────
+    # ── Step 1: Run ValidationLayer — UNCHANGED ───────────────────────────────
     print("   Running SpecValidationLayer...")
 
-    # Build section word targets from guidelines
     section_word_targets = {}
     for s in guidelines.sections:
         section_word_targets[s.section_name] = s.word_count
 
-    # Determine track and XAI flag
-    track = "A"
+    track     = "A"
     xai_claimed = False
     if locked:
         track = locked.track
         if locked.track == "A":
-            xai_claimed = bool(
-                getattr(locked, "xai_techniques", None)
-            )
+            xai_claimed = bool(getattr(locked, "xai_techniques", None))
 
     validation_report: ValidationReport = validate_specification(
         spec=specification,
@@ -108,7 +152,7 @@ async def review_specification(
         for b in validation_report.blockers[:3]:
             print(f"   🔴 {b[:80]}")
 
-    # ── Step 2: Prepare review input with report prepended ───────────────────
+    # ── Step 2: Prepare review input — UNCHANGED ──────────────────────────────
     spec_text = format_specification_for_review(specification)
 
     history_text = ""
@@ -137,14 +181,15 @@ You cannot award APPROVED if any blocker is present.
 Your qualitative commentary explains WHY failures matter — it does not replace the facts.
 """
 
-    # ── Step 3: Run professor reviewer ───────────────────────────────────────
+    # ── Step 3: Run professor reviewer — UPDATED (tier-aware) ─────────────────
+    active_reviewer = _get_reviewer_agent(agent_model_config)
+
     try:
         result = await Runner.run(
-            starting_agent=professor_reviewer_agent,
+            starting_agent=active_reviewer,
             input=review_input,
         )
         review = result.final_output
-
         print(f"   ✅ Review complete — {review.total_marks}/100 — {review.decision}")
         return review
 
@@ -162,18 +207,22 @@ async def run_specification_with_review_loop(
     feasibility_calibration: Optional[object],
     config: SpecificationConfig,
     _progress_callback=None,
+    agent_model_config=None,   # NEW — Optional[AgentModelConfig]
 ) -> dict:
     """
     Full specification generation + review loop.
-    Now accepts LockedRequirements and passes it to phase3 and the reviewer.
+    Accepts LockedRequirements and passes it to phase3 and the reviewer.
+
+    agent_model_config: passed through to generate_specification() (phase4) and
+      review_specification() so tier-aware agents are used throughout the loop.
     """
 
     async def _progress(pct: int, msg: str):
         if _progress_callback:
             await _progress_callback(pct, msg)
 
-    max_iterations = config.max_iterations
-    all_iterations = []
+    max_iterations     = config.max_iterations
+    all_iterations     = []
     current_specification = None
 
     for iteration in range(1, max_iterations + 1):
@@ -183,7 +232,7 @@ async def run_specification_with_review_loop(
 
         await _progress(
             50 + (iteration - 1) * 10,
-            f"Generating specification (iteration {iteration})..."
+            f"Generating specification (iteration {iteration})...",
         )
 
         # ── Generate ──────────────────────────────────────────────────────────
@@ -197,22 +246,22 @@ async def run_specification_with_review_loop(
                     feasibility_calibration=feasibility_calibration,
                     previous_feedback=None,
                     locked=locked,
+                    agent_model_config=agent_model_config,   # NEW
                 )
             else:
-                # Build feedback from previous review
-                prev = all_iterations[-1]
-                previous_review = prev["review"]
-                prev_validation = prev.get("validation_report")
+                prev             = all_iterations[-1]
+                previous_review  = prev["review"]
+                prev_validation  = prev.get("validation_report")
 
                 feedback_parts = []
                 if prev_validation and prev_validation.blockers:
                     feedback_parts.append(
-                        "VALIDATION FAILURES TO FIX:\n" +
-                        "\n".join(f"  - {b}" for b in prev_validation.blockers)
+                        "VALIDATION FAILURES TO FIX:\n"
+                        + "\n".join(f"  - {b}" for b in prev_validation.blockers)
                     )
                 feedback_parts.append(
-                    "PROFESSOR FEEDBACK:\n" +
-                    "\n".join(
+                    "PROFESSOR FEEDBACK:\n"
+                    + "\n".join(
                         f"  {i+1}. {p}"
                         for i, p in enumerate(previous_review.improvement_priorities)
                     )
@@ -227,6 +276,7 @@ async def run_specification_with_review_loop(
                     feasibility_calibration=feasibility_calibration,
                     previous_feedback=feedback,
                     locked=locked,
+                    agent_model_config=agent_model_config,   # NEW
                 )
 
         except Exception as exc:
@@ -235,19 +285,20 @@ async def run_specification_with_review_loop(
 
         await _progress(
             60 + (iteration - 1) * 10,
-            f"Reviewing specification (iteration {iteration})..."
+            f"Reviewing specification (iteration {iteration})...",
         )
 
-        # ── Review (with ValidationReport) ───────────────────────────────────
+        # ── Review — UPDATED (tier-aware) ─────────────────────────────────────
         review = await review_specification(
             specification=current_specification,
             guidelines=guidelines,
             locked=locked,
             iteration=iteration,
             iteration_history=all_iterations,
+            agent_model_config=agent_model_config,   # NEW
         )
 
-        # Grab the validation report from the reviewer step for feedback next iteration
+        # Grab validation report for feedback next iteration
         section_word_targets = {s.section_name: s.word_count for s in guidelines.sections}
         val_report = validate_specification(
             spec=current_specification,
@@ -257,11 +308,11 @@ async def run_specification_with_review_loop(
         )
 
         all_iterations.append({
-            "iteration":          iteration,
-            "specification":      current_specification,
-            "review":             review,
-            "marks":              review.total_marks,
-            "validation_report":  val_report,
+            "iteration":         iteration,
+            "specification":     current_specification,
+            "review":            review,
+            "marks":             review.total_marks,
+            "validation_report": val_report,
         })
 
         print(f"\n📊 Iteration {iteration}: {review.total_marks}/100 — {review.decision}")
@@ -273,7 +324,7 @@ async def run_specification_with_review_loop(
         if iteration == max_iterations:
             print(f"\n⚠️  Max iterations ({max_iterations}) reached.")
 
-    # Return best iteration
+    # ── Return best iteration — UNCHANGED ────────────────────────────────────
     best = max(all_iterations, key=lambda x: x["marks"])
 
     print(f"\n{'=' * 80}")
@@ -281,9 +332,9 @@ async def run_specification_with_review_loop(
     print("=" * 80)
 
     return {
-        "final_specification":     best["specification"],
-        "final_review":            best["review"],
-        "all_iterations":          all_iterations,
-        "best_iteration_number":   best["iteration"],
-        "iterations_completed":    iteration,
+        "final_specification":   best["specification"],
+        "final_review":          best["review"],
+        "all_iterations":        all_iterations,
+        "best_iteration_number": best["iteration"],
+        "iterations_completed":  iteration,
     }

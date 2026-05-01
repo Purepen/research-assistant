@@ -11,6 +11,12 @@ Changes from previous version:
 
   3. All other logic is unchanged — same agent calls, same section order, same
      prompt structure for ML_CLASSIFICATION (the default and most common path).
+
+Model Tier Addition (Apr 2026):
+  generate_specification_sections() now accepts an optional agent_model_config
+  parameter. When present, tier-aware agents are built via build_phase3_agents()
+  and used in place of the module-level singletons. When None, all existing
+  behaviour is unchanged.
 """
 
 from __future__ import annotations
@@ -42,7 +48,7 @@ from app.core.agents.definitions.phase3_agents import (
 LockedRequirements = Union[LockedRequirementsA, LockedRequirementsB]
 
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+# ─── Helpers — UNCHANGED ──────────────────────────────────────────────────────
 
 def _build_citation_pool_text(locked: LockedRequirements) -> str:
     """Serialize citation pool into readable text for agent prompts."""
@@ -196,14 +202,13 @@ def _safe_baseline_block_for_methodology(la: LockedRequirementsA) -> str:
     )
 
 
-# ─── Context builders per agent ───────────────────────────────────────────────
+# ─── Context builders — UNCHANGED ─────────────────────────────────────────────
 
 def _justification_context(locked: LockedRequirements, guidelines: ProjectGuidelines) -> str:
     section_target = guidelines.sections[1].word_count if len(guidelines.sections) > 1 else 400
 
     if locked.track == "A":
         la: LockedRequirementsA = locked  # type: ignore
-        # BUG FIX: was `la.baseline.authors` etc. — crashes when baseline is None
         baseline_text = _safe_baseline_text_for_justification(la)
     else:
         baseline_text = "No quantitative baseline (theoretical project)."
@@ -249,7 +254,6 @@ def _objectives_context(locked: LockedRequirements, guidelines: ProjectGuideline
         la: LockedRequirementsA = locked  # type: ignore
         algorithms_text = "\n".join(f"  - {alg}" for alg in la.algorithms)
         dataset_text = f"{la.confirmed_dataset.name} ({la.confirmed_dataset.source})"
-        # BUG FIX: was `la.baseline.paper_title` etc. — crashes when baseline is None
         baseline_text = _safe_baseline_text_short(la)
         xai_text = ", ".join(la.xai_techniques) if la.xai_techniques else "None"
     else:
@@ -299,7 +303,6 @@ def _literature_context(locked: LockedRequirements, guidelines: ProjectGuideline
 
     if locked.track == "A":
         la: LockedRequirementsA = locked  # type: ignore
-        # BUG FIX: was `la.baseline.paper_title` etc. — crashes when baseline is None
         baseline_text = _safe_baseline_text_for_literature(la)
     else:
         baseline_text = "No quantitative baseline — position around the theoretical debate."
@@ -349,7 +352,6 @@ def _methodology_context(locked: LockedRequirements, guidelines: ProjectGuidelin
     if locked.track == "A":
         la: LockedRequirementsA = locked  # type: ignore
 
-        # Paradigm — safe read with fallback to ML_CLASSIFICATION for backward compat
         paradigm_val = la.paradigm.value if hasattr(la, 'paradigm') else ResearchParadigm.ML_CLASSIFICATION.value
 
         algo_justifications = "\n".join(
@@ -357,11 +359,8 @@ def _methodology_context(locked: LockedRequirements, guidelines: ProjectGuidelin
             for alg in la.algorithms
         )
 
-        # BUG FIX: was a direct f-string block reading la.baseline.* attributes.
-        # Now uses null-safe helper that returns appropriate text for any paradigm.
         baseline_block = _safe_baseline_block_for_methodology(la)
 
-        # Paradigm-specific optional fields (None for paradigms where they don't apply)
         paradigm_extras = ""
         if paradigm_val == ResearchParadigm.ECONOMETRIC_CAUSAL.value:
             paradigm_extras = f"""
@@ -411,7 +410,7 @@ DATASET:
   Size: {la.confirmed_dataset.size or 'see source'}
   Public: {'Yes' if la.confirmed_dataset.is_public else 'No'}
   Citation: {la.confirmed_dataset.harvard_citation}
-{('\nVERIFIED DATASET PROFILE (from uploaded file — use these EXACT figures):\n' + la.confirmed_dataset.full_profile_text) if la.confirmed_dataset.profiled and la.confirmed_dataset.full_profile_text else ''}
+{(chr(10) + 'VERIFIED DATASET PROFILE (from uploaded file — use these EXACT figures):' + chr(10) + la.confirmed_dataset.full_profile_text) if la.confirmed_dataset.profiled and la.confirmed_dataset.full_profile_text else ''}
 
 {baseline_block}
 
@@ -553,7 +552,6 @@ def _abstract_context(locked: LockedRequirements, guidelines: ProjectGuidelines,
 
     if locked.track == "A":
         la: LockedRequirementsA = locked  # type: ignore
-        # BUG FIX: was `la.baseline.metric_value` etc. — crashes when baseline is None
         baseline_info = _safe_baseline_text_for_abstract(la)
         xai_info = f"XAI: {', '.join(la.xai_techniques)}" if la.xai_techniques else ""
         dataset_name = la.confirmed_dataset.name
@@ -604,22 +602,56 @@ PROHIBITED:
 """
 
 
-# ─── Main workflow function (unchanged) ───────────────────────────────────────
+# ─── Main workflow function — UPDATED (agent_model_config param added) ────────
 
 async def generate_specification_sections(
     research_topic: str,
     guidelines: ProjectGuidelines,
     synthesis: StrategicSynthesis,
     locked: LockedRequirements,
+    agent_model_config=None,   # NEW — Optional[AgentModelConfig]
 ) -> dict:
     """
     Generate all specification sections using individual specialist agents.
     Each specialist receives a focused locked-context prompt.
     Returns dict of section_name → content string.
+
+    agent_model_config: when present, tier-aware agents are built via
+      build_phase3_agents() and used instead of the module-level singletons.
+      When None, all existing behaviour is unchanged.
     """
 
     print("\n📝 GENERATING SPECIFICATION SECTIONS (individual specialists)")
     print("-" * 80)
+
+    # ── NEW: resolve which agents to use ─────────────────────────────────────
+    # When agent_model_config is present, build tier-aware agents.
+    # Local names shadow the module-level imports for the rest of this function.
+    # When None, the module-level singletons imported at the top are used as-is.
+    _justification_specialist = justification_specialist
+    _objectives_architect     = objectives_architect
+    _literature_strategist    = literature_strategist
+    _methodology_designer     = methodology_designer
+    _timeline_validator       = timeline_validator
+    _references_compiler      = references_compiler
+    _abstract_specialist      = abstract_specialist
+
+    if agent_model_config is not None:
+        try:
+            from app.core.agents.definitions.phase3_agents import build_phase3_agents
+            _agents = build_phase3_agents(agent_model_config)
+            _justification_specialist = _agents["justification_specialist"]
+            _objectives_architect     = _agents["objectives_architect"]
+            _literature_strategist    = _agents["literature_strategist"]
+            _methodology_designer     = _agents["methodology_designer"]
+            _timeline_validator       = _agents["timeline_validator"]
+            _references_compiler      = _agents["references_compiler"]
+            _abstract_specialist      = _agents["abstract_specialist"]
+            from app.models.agent_config import AgentKey
+            print(f"   🤖 Phase 3 model: {agent_model_config.get(AgentKey.JUSTIFICATION_SPECIALIST)}")
+        except Exception as exc:
+            print(f"   ⚠️  Could not build tier-aware phase3 agents ({exc}) — using defaults")
+    # ─────────────────────────────────────────────────────────────────────────
 
     sections: dict = {}
 
@@ -627,7 +659,7 @@ async def generate_specification_sections(
     print("   [1/7] Justification & Aim...")
     try:
         result = await Runner.run(
-            starting_agent=justification_specialist,
+            starting_agent=_justification_specialist,
             input=_justification_context(locked, guidelines),
         )
         sections["justification"] = str(result.final_output)
@@ -641,7 +673,7 @@ async def generate_specification_sections(
     print("   [2/7] Objectives...")
     try:
         result = await Runner.run(
-            starting_agent=objectives_architect,
+            starting_agent=_objectives_architect,
             input=_objectives_context(locked, guidelines, sections["justification"]),
         )
         sections["objectives"] = str(result.final_output)
@@ -655,7 +687,7 @@ async def generate_specification_sections(
     print("   [3/7] Literature Review...")
     try:
         result = await Runner.run(
-            starting_agent=literature_strategist,
+            starting_agent=_literature_strategist,
             input=_literature_context(locked, guidelines),
         )
         sections["literature_review"] = str(result.final_output)
@@ -669,7 +701,7 @@ async def generate_specification_sections(
     print("   [4/7] Methodology...")
     try:
         result = await Runner.run(
-            starting_agent=methodology_designer,
+            starting_agent=_methodology_designer,
             input=_methodology_context(locked, guidelines),
         )
         sections["methodology"] = str(result.final_output)
@@ -683,7 +715,7 @@ async def generate_specification_sections(
     print("   [5/7] Work Plan...")
     try:
         result = await Runner.run(
-            starting_agent=timeline_validator,
+            starting_agent=_timeline_validator,
             input=_timeline_context(locked, guidelines, sections["objectives"]),
         )
         sections["work_plan"] = str(result.final_output)
@@ -698,7 +730,7 @@ async def generate_specification_sections(
     all_section_text = "\n\n".join(sections.values())
     try:
         result = await Runner.run(
-            starting_agent=references_compiler,
+            starting_agent=_references_compiler,
             input=_references_context(locked, all_section_text),
         )
         sections["references"] = str(result.final_output)
@@ -712,7 +744,7 @@ async def generate_specification_sections(
     print("   [7/7] Abstract (last)...")
     try:
         result = await Runner.run(
-            starting_agent=abstract_specialist,
+            starting_agent=_abstract_specialist,
             input=_abstract_context(locked, guidelines, sections),
         )
         sections["abstract"] = str(result.final_output)
