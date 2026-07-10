@@ -1,13 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Brain, Lock, ArrowRight, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 import { authApi } from '@/lib/api'
 import Link from 'next/link'
 
-export default function ResetPasswordPage() {
+// ── Inner component that reads search params ──────────────────────────────────
+// (must be wrapped in Suspense when using useSearchParams in Next.js app router)
+function ResetPasswordInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [token, setToken] = useState('')
@@ -193,5 +195,18 @@ export default function ResetPasswordPage() {
         </div>
       </motion.div>
     </div>
+  )
+}
+
+// ── Page wrapper with Suspense boundary ──────────────────────────────────────
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+      </div>
+    }>
+      <ResetPasswordInner />
+    </Suspense>
   )
 }

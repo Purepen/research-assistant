@@ -11,6 +11,16 @@ export type ProjectTrack      = 'A' | 'B'
 export type ProjectStatus =
   | 'draft' | 'queued' | 'generating' | 'reviewing' | 'complete' | 'failed'
 
+// ── User (mirrors backend UserResponse) ───────────────────────────────────────
+
+export interface User {
+  id:             number
+  email:          string
+  full_name:      string
+  email_verified: boolean
+  created_at?:    string
+}
+
 // ── Config sent to /research/generate ─────────────────────────────────────────
 
 export interface GenerationConfig {

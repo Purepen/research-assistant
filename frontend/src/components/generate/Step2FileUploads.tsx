@@ -74,10 +74,6 @@ export function Step2FileUploads({
     if (datasetFileRef.current) datasetFileRef.current.value = ''
   }
 
-  const s: React.CSSProperties = {
-    sectionCard: { background: 'white', border: '1.5px solid #e8ede8', borderRadius: 14, padding: '20px 22px', marginBottom: 16 } as any
-  }
-
   const DATASET_MODES = [
     {
       id: 'uploaded',
