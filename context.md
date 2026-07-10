@@ -172,7 +172,18 @@ research_service.py → EmailAdapter.send_specification_email() [adapters/email_
 
 ## 7. Dead code / stray duplicates inventory
 
-Safe-to-delete candidates (all verified via repo-wide grep — zero live imports found):
+**Status: executed 2026-07-10 (WS0 items 0.1/0.7/0.8).** Everything below was
+deleted after a fresh re-grep confirmed zero live imports, with these exceptions:
+- `researchApi.cancelGeneration` + `useCancelGeneration` (useProjects.ts) **kept** —
+  the original audit line "never called" was wrong at the hook layer (the mutation
+  exists; only a UI button is missing), and WS1's real cancel (StopExecution) will
+  use this plumbing.
+- `phase6_agents.py` (`email_agent`) **kept** (not in this inventory, related):
+  unused at runtime but `EMAIL_AGENT` is a model-tier registry/UI key.
+- `core/domain/project.py` **kept** as planned (live via routes/projects.py).
+- Also deleted beyond the original list: `phase6_workflow.py` (see Bug #8).
+
+Original inventory (all verified via repo-wide grep — zero live imports found):
 
 **Backend:**
 - `backend/app/api/routes/auth.py.backup` — untouched since the first commit; implements old Google-only auth (no register/login/verify/reset). Not imported.
@@ -187,7 +198,7 @@ Safe-to-delete candidates (all verified via repo-wide grep — zero live imports
 - `src/components/generate/Step1BasicInfo.tsx`, `Step3Configuration.tsx`, `Step4Review.tsx`, `StepIndicator.tsx`, `GenerationLoadingScreen.tsx` — entirely unused; `dashboard/generate/page.tsx` reimplements all steps inline instead (only `Step2FileUploads`/`Step3Questions` are actually imported from this directory). These use a dark Tailwind theme inconsistent with the current light-green UI. `GenerationLoadingScreen.tsx` additionally polls a nonexistent relative API route and reads the wrong localStorage key — would silently fail even if reconnected.
 - `src/components/results/ProgressTracker.tsx`, `ReviewView.tsx`, `SourcesView.tsx`, `SpecificationView.tsx` — entirely unused; `dashboard/projects/[id]/page.tsx` defines its own local versions of all of these inline. Two of these files also reference nonexistent types (see Bug #10).
 - `react-hook-form` — listed in `package.json`, never imported anywhere in `src`.
-- `projectsApi.downloadProject` and `researchApi.cancelGeneration` in `lib/api.ts` — defined, never called (download is reimplemented manually in `projects/[id]/page.tsx`; cancel has no UI entry point).
+- `projectsApi.downloadProject` in `lib/api.ts` — defined, never called (download is reimplemented manually in `projects/[id]/page.tsx`). (`cancelGeneration` was also listed here originally — retained, see status note above.)
 
 ## 8. Backend API surface (reference)
 

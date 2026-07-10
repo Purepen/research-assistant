@@ -3,7 +3,6 @@
  *
  * Changes (Phase 1 — Mar 2026):
  *   - Added topicsApi with history(), linkProject(), deleteSession()
- *   - downloadProject already present, kept intact
  *
  * Changes (Apr 2026 — Model Tier + BYOK):
  *   - Added userApi.getModelSettings()
@@ -138,13 +137,6 @@ export const projectsApi = {
 
   getAnalytics: async (projectId: number) => {
     const response = await api.get(`/projects/${projectId}/analytics`)
-    return response.data
-  },
-
-  downloadProject: async (projectId: number): Promise<Blob> => {
-    const response = await api.get(`/projects/${projectId}/download`, {
-      responseType: 'blob',
-    })
     return response.data
   },
 }
