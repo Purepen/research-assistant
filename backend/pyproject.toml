@@ -1,10 +1,48 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "Research Assistant backend — FastAPI + OpenAI Agents pipeline"
 readme = "README.md"
 requires-python = ">=3.12"
+# Direct deps are pinned to the versions the app was built and tested against
+# (stabilize-first: upgrades are a deliberate task, not a lockfile side effect).
 dependencies = [
-    "openpyxl>=3.1.5",
-    "pandas>=3.0.1",
+    # Web framework
+    "fastapi==0.109.0",
+    "uvicorn[standard]==0.40.0",
+    "python-multipart==0.0.22",
+    # Validation / settings
+    "pydantic[email]==2.12.5",
+    "pydantic-settings==2.12.0",
+    # Database
+    "sqlalchemy==2.0.25",
+    "alembic==1.13.1",
+    # Auth
+    "pyjwt==2.11.0",
+    "passlib[bcrypt]==1.7.4",
+    "bcrypt==4.0.1",  # passlib 1.7.4 misreads bcrypt 4.1+ version metadata
+    "google-auth==2.27.0",
+    "requests==2.31.0",  # required by google.auth.transport.requests
+    # AI pipeline — core orchestration dependency
+    "openai-agents==0.3.3",
+    "openai==1.109.1",
+    # Files / documents
+    "python-docx==1.1.0",
+    "pandas==3.0.1",
+    "openpyxl==3.1.5",
+    # Email
+    "resend==0.7.0",
+    # Storage
+    "boto3==1.34.34",
+    # Lambda entrypoints (Workstream 1)
+    "mangum==0.21.0",
+    # Utilities
+    "python-dotenv==1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==7.4.4",
+    "pytest-asyncio==0.23.3",
+    "httpx==0.28.1",
 ]
