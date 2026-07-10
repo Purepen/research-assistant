@@ -70,3 +70,54 @@ feasibility_analyst = Agent(
     instructions=FEASIBILITY_ANALYST_INSTRUCTIONS,
     model="gpt-4o-mini",
 )
+
+
+# ── Factory function — model-tier-aware ───────────────────────────────────────
+
+def build_phase3_agents(config: "AgentModelConfig") -> dict:  # type: ignore[name-defined]
+    """
+    Build Phase 3 section-writer agents using the user's AgentModelConfig.
+
+    Called by the pipeline when a per-user model config is available.
+    Returns a dict keyed by role name — the same keys generate_specification_sections()
+    in phase3_workflow.py uses for the module-level singletons.
+    """
+    from app.models.agent_config import AgentKey
+
+    return {
+        "justification_specialist": Agent(
+            name="JustificationSpecialist",
+            instructions=JUSTIFICATION_AIM_INSTRUCTIONS,
+            model=config.get(AgentKey.JUSTIFICATION_SPECIALIST),
+        ),
+        "objectives_architect": Agent(
+            name="ObjectivesArchitect",
+            instructions=OBJECTIVES_ARCHITECT_INSTRUCTIONS,
+            model=config.get(AgentKey.OBJECTIVES_ARCHITECT),
+        ),
+        "literature_strategist": Agent(
+            name="LiteratureStrategist",
+            instructions=LITERATURE_STRATEGIST_INSTRUCTIONS,
+            model=config.get(AgentKey.LITERATURE_STRATEGIST),
+        ),
+        "methodology_designer": Agent(
+            name="MethodologyDesigner",
+            instructions=METHODOLOGY_DESIGNER_INSTRUCTIONS,
+            model=config.get(AgentKey.METHODOLOGY_DESIGNER),
+        ),
+        "timeline_validator": Agent(
+            name="TimelineValidator",
+            instructions=TIMELINE_VALIDATOR_INSTRUCTIONS,
+            model=config.get(AgentKey.TIMELINE_VALIDATOR),
+        ),
+        "references_compiler": Agent(
+            name="ReferencesCompiler",
+            instructions=REFERENCES_COMPILER_INSTRUCTIONS,
+            model=config.get(AgentKey.REFERENCES_COMPILER),
+        ),
+        "abstract_specialist": Agent(
+            name="AbstractSpecialist",
+            instructions=ABSTRACT_SPECIALIST_INSTRUCTIONS,
+            model=config.get(AgentKey.ABSTRACT_SPECIALIST),
+        ),
+    }

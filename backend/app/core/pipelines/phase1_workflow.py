@@ -71,21 +71,15 @@ def _resolve_phase1_agents(agent_model_config=None) -> dict:
             "project_analyzer":      project_analyzer_agent,
             "past_projects_analyzer": past_projects_spec_analyzer_agent,
         }
-    try:
-        from app.core.agents.definitions.phase1_agents import build_phase1_agents
-        agents = build_phase1_agents(agent_model_config)
-        from app.models.agent_config import AgentKey
-        print(f"   🤖 Phase 1 model: {agent_model_config.get(AgentKey.WEB_SEARCHER)}")
-        return agents
-    except Exception as exc:
-        print(f"   ⚠️  Could not build tier-aware phase1 agents ({exc}) — using defaults")
-        return {
-            "web_searcher":          web_search_agent,
-            "resource_finder":       resource_finder_agent,
-            "project_finder":        project_finder_agent,
-            "project_analyzer":      project_analyzer_agent,
-            "past_projects_analyzer": past_projects_spec_analyzer_agent,
-        }
+
+    # No try/except here: a user paying for a model tier must get it or see
+    # the failure — silently downgrading to defaults was Bug #2.
+    from app.core.agents.definitions.phase1_agents import build_phase1_agents
+    from app.models.agent_config import AgentKey
+
+    agents = build_phase1_agents(agent_model_config)
+    print(f"   🤖 Phase 1 model: {agent_model_config.get(AgentKey.WEB_SEARCHER)}")
+    return agents
 
 
 # ---------------------------------------------------------------------------

@@ -637,20 +637,20 @@ async def generate_specification_sections(
     _abstract_specialist      = abstract_specialist
 
     if agent_model_config is not None:
-        try:
-            from app.core.agents.definitions.phase3_agents import build_phase3_agents
-            _agents = build_phase3_agents(agent_model_config)
-            _justification_specialist = _agents["justification_specialist"]
-            _objectives_architect     = _agents["objectives_architect"]
-            _literature_strategist    = _agents["literature_strategist"]
-            _methodology_designer     = _agents["methodology_designer"]
-            _timeline_validator       = _agents["timeline_validator"]
-            _references_compiler      = _agents["references_compiler"]
-            _abstract_specialist      = _agents["abstract_specialist"]
-            from app.models.agent_config import AgentKey
-            print(f"   🤖 Phase 3 model: {agent_model_config.get(AgentKey.JUSTIFICATION_SPECIALIST)}")
-        except Exception as exc:
-            print(f"   ⚠️  Could not build tier-aware phase3 agents ({exc}) — using defaults")
+        # No try/except here: a user paying for a model tier must get it or see
+        # the failure — silently downgrading to defaults was Bug #2.
+        from app.core.agents.definitions.phase3_agents import build_phase3_agents
+        from app.models.agent_config import AgentKey
+
+        _agents = build_phase3_agents(agent_model_config)
+        _justification_specialist = _agents["justification_specialist"]
+        _objectives_architect     = _agents["objectives_architect"]
+        _literature_strategist    = _agents["literature_strategist"]
+        _methodology_designer     = _agents["methodology_designer"]
+        _timeline_validator       = _agents["timeline_validator"]
+        _references_compiler      = _agents["references_compiler"]
+        _abstract_specialist      = _agents["abstract_specialist"]
+        print(f"   🤖 Phase 3 model: {agent_model_config.get(AgentKey.JUSTIFICATION_SPECIALIST)}")
     # ─────────────────────────────────────────────────────────────────────────
 
     sections: dict = {}

@@ -58,3 +58,50 @@ past_projects_spec_analyzer_agent = Agent(
     model="gpt-4o-mini",
     output_type=AnalyzedProjectSpecSections
 )
+
+
+# ── Factory function — model-tier-aware ───────────────────────────────────────
+
+def build_phase1_agents(config: "AgentModelConfig") -> dict:  # type: ignore[name-defined]
+    """
+    Build Phase 1 discovery agents using the user's AgentModelConfig.
+
+    Called by the pipeline when a per-user model config is available.
+    Returns a dict keyed by role name — the same keys _resolve_phase1_agents()
+    in phase1_workflow.py uses for the module-level singletons.
+    """
+    from app.models.agent_config import AgentKey
+
+    return {
+        "web_searcher": Agent(
+            name="WebSearcher",
+            instructions="Perform web searches to find relevant resources.",
+            model=config.get(AgentKey.WEB_SEARCHER),
+            tools=[WebSearchTool()],
+        ),
+        "resource_finder": Agent(
+            name="ResourceFinder",
+            instructions=RESOURCE_FINDER_INSTRUCTIONS,
+            model=config.get(AgentKey.RESOURCE_FINDER),
+            output_type=DiscoveredResources,
+        ),
+        "project_finder": Agent(
+            name="ProjectFinder",
+            instructions=PROJECT_FINDER_INSTRUCTIONS,
+            model=config.get(AgentKey.PROJECT_FINDER),
+            tools=[WebSearchTool()],
+            output_type=ProjectFinderOutput,
+        ),
+        "project_analyzer": Agent(
+            name="ProjectAnalyzer",
+            instructions=PROJECT_ANALYZER_INSTRUCTIONS,
+            model=config.get(AgentKey.PROJECT_ANALYZER),
+            output_type=AnalyzedProjectSpecSections,
+        ),
+        "past_projects_analyzer": Agent(
+            name="PastProjectsSpecAnalyzer",
+            instructions=PAST_PROJECTS_SPEC_ANALYZER_INSTRUCTIONS,
+            model=config.get(AgentKey.PAST_PROJECTS_ANALYZER),
+            output_type=AnalyzedProjectSpecSections,
+        ),
+    }
