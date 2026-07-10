@@ -23,8 +23,15 @@ from app.models.database import User, Project
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# JWT settings
-JWT_SECRET = os.getenv("JWT_SECRET_KEY", "your-secret-key")
+# JWT settings — fail fast at startup: refusing to boot beats signing tokens
+# with a guessable default (the "your-secret-key" fallback was Bug #7).
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "")
+if len(JWT_SECRET) < 32:
+    raise RuntimeError(
+        "JWT_SECRET_KEY must be set to a secret of at least 32 characters "
+        "(see backend/.env.example). Generate one with:\n"
+        '  python -c "import secrets; print(secrets.token_urlsafe(48))"'
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
