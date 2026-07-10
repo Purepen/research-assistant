@@ -21,7 +21,8 @@ Model Tier Addition (Apr 2026):
 
 API Key Addition (Apr 2026):
   One new column on User:
-    openai_api_key — user's own OpenAI API key (stored encrypted in production).
+    openai_api_key — user's own OpenAI API key, stored as a Fernet token
+                     (see app/core/crypto.py). Never store or log plaintext.
 
 Critic Addition (Apr 2026):
   One new column on ProjectResult:
@@ -148,7 +149,8 @@ class User(Base):
     custom_model_config = Column(JSON, nullable=True)
 
     # ── User's own OpenAI API key (Apr 2026) ──────────────────────────────────
-    openai_api_key = Column(String(255), nullable=True)
+    # Text, not String(255): a Fernet token of a long sk-proj- key exceeds 255 chars
+    openai_api_key = Column(Text, nullable=True)
 
     # Relationships
     projects       = relationship("Project",      back_populates="user", cascade="all, delete-orphan")

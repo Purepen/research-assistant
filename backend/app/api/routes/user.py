@@ -287,10 +287,19 @@ async def get_api_key_status(
     Return whether the user has a personal API key stored.
     NEVER returns the raw key — only a masked preview and a boolean.
     """
+    from app.core.crypto import SecretDecryptionError, decrypt_secret
+
     has_key = bool(user.openai_api_key)
     masked  = None
-    if has_key and user.openai_api_key and len(user.openai_api_key) >= 8:
-        masked = f"sk-...{user.openai_api_key[-4:]}"
+    if has_key:
+        try:
+            raw = decrypt_secret(user.openai_api_key)
+            if len(raw) >= 8:
+                masked = f"sk-...{raw[-4:]}"
+        except SecretDecryptionError:
+            # Unmigrated or re-keyed row — key exists but can't be previewed;
+            # the user can re-save it from the UI.
+            masked = None
 
     return ApiKeyStatusResponse(
         has_key=has_key,
@@ -345,7 +354,8 @@ async def save_api_key(
     except Exception as network_exc:
         # Network / timeout error — save the key but flag as unverified
         print(f"   ⚠️  Key validation network error: {network_exc}")
-        user.openai_api_key = raw_key
+        from app.core.crypto import encrypt_secret
+        user.openai_api_key = encrypt_secret(raw_key)
         db.commit()
         masked = f"sk-...{raw_key[-4:]}"
         return {
@@ -370,7 +380,8 @@ async def save_api_key(
         )
 
     # ── Valid — save ───────────────────────────────────────────────────────────
-    user.openai_api_key = raw_key
+    from app.core.crypto import encrypt_secret
+    user.openai_api_key = encrypt_secret(raw_key)
     db.commit()
     masked = f"sk-...{raw_key[-4:]}"
 

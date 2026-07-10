@@ -23,6 +23,7 @@ dependencies = [
     "bcrypt==4.0.1",  # passlib 1.7.4 misreads bcrypt 4.1+ version metadata
     "google-auth==2.27.0",
     "requests==2.31.0",  # required by google.auth.transport.requests
+    "cryptography==49.0.0",  # Fernet — BYOK key encryption (app/core/crypto.py)
     # AI pipeline — core orchestration dependency
     "openai-agents==0.3.3",
     "openai==1.109.1",

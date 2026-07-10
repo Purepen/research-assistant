@@ -45,10 +45,11 @@ def apply_openai_key(user) -> None:
 
     key: str | None = None
 
-    # Priority 1: user's own saved key
+    # Priority 1: user's own saved key (stored encrypted — see app/core/crypto.py)
     if user and getattr(user, "openai_api_key", None):
-        key = user.openai_api_key
-        print(f"   🔑 Using user key (sk-...{key[-4:]})")
+        from app.core.crypto import decrypt_secret
+        key = decrypt_secret(user.openai_api_key)
+        print("   🔑 Using user key (BYOK)")
 
     # Priority 2: system env var
     if not key:

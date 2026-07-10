@@ -123,17 +123,19 @@ class ResearchService:
                         # subsequent Runner.run() call use this key instead of the
                         # system OPENAI_API_KEY environment variable.
                         if user.openai_api_key:
+                            from app.core.crypto import decrypt_secret
+                            user_key = decrypt_secret(user.openai_api_key)
                             try:
                                 from agents import set_default_openai_key
-                                set_default_openai_key(user.openai_api_key)
+                                set_default_openai_key(user_key)
                                 user_key_used = True
-                                print(f"   🔑 Using user's own API key (sk-...{user.openai_api_key[-4:]})")
+                                print("   🔑 Using user's own API key (BYOK)")
                             except ImportError:
                                 # agents SDK doesn't export set_default_openai_key in this version
                                 # Fall back to setting the env var for this process
-                                os.environ["OPENAI_API_KEY"] = user.openai_api_key
+                                os.environ["OPENAI_API_KEY"] = user_key
                                 user_key_used = True
-                                print(f"   🔑 Using user's own API key via env (sk-...{user.openai_api_key[-4:]})")
+                                print("   🔑 Using user's own API key via env (BYOK)")
                         else:
                             print(f"   🔑 Using system OPENAI_API_KEY (no user key set)")
 
@@ -146,6 +148,11 @@ class ResearchService:
                         print(f"   🤖 Model tier: {user.model_tier or 'production'}")
 
                 except Exception as exc:
+                    from app.core.crypto import SecretDecryptionError
+                    if isinstance(exc, SecretDecryptionError):
+                        # A stored BYOK key that can't be decrypted must abort the
+                        # run — falling through would silently bill the system key.
+                        raise
                     print(f"   ⚠️  Could not load user settings ({exc}) — using system defaults")
 
             # ── Run pipeline ───────────────────────────────────────────────────
