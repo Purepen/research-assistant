@@ -36,14 +36,26 @@ class ProjectLifecycle:
         ProjectStatus.FAILED: [ProjectStatus.QUEUED]  # Can retry
     }
     
+    @staticmethod
+    def _coerce(status) -> ProjectStatus:
+        """Normalize to this module's ProjectStatus.
+
+        The DB layer (app.models.database.ProjectStatus) is a distinct enum
+        class with identical values; members of that class hash differently,
+        so dict lookups here silently miss unless coerced by value.
+        """
+        if isinstance(status, Enum):
+            return ProjectStatus(status.value)
+        return ProjectStatus(status)
+
     def __init__(self, current_status: ProjectStatus = ProjectStatus.DRAFT):
-        self.current_status = current_status
+        self.current_status = self._coerce(current_status)
         self.history: List[dict] = []
-        self._log_transition(None, current_status, "Initial state")
-    
+        self._log_transition(None, self.current_status, "Initial state")
+
     def can_transition_to(self, new_status: ProjectStatus) -> bool:
         """Check if transition is valid"""
-        return new_status in self.VALID_TRANSITIONS.get(self.current_status, [])
+        return self._coerce(new_status) in self.VALID_TRANSITIONS.get(self.current_status, [])
     
     def transition_to(self, new_status: ProjectStatus, reason: str = "") -> bool:
         """
@@ -56,9 +68,10 @@ class ProjectLifecycle:
         Returns:
             True if successful, False if invalid
         """
+        new_status = self._coerce(new_status)
         if not self.can_transition_to(new_status):
             return False
-        
+
         old_status = self.current_status
         self.current_status = new_status
         self._log_transition(old_status, new_status, reason)
