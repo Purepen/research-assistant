@@ -74,7 +74,7 @@ async def run_topic_discovery(
     geographic_focus: str, ambition_level: str, confidence_level: str,
 ) -> TopicDiscoveryOutput:
 
-    print(f"\n💡 TOPIC DISCOVERY — Stage 1")
+    print("\n💡 TOPIC DISCOVERY — Stage 1")
     print(f"   Field: {field} | Level: {degree_level}")
     print("-" * 80)
 
@@ -131,7 +131,7 @@ def _parse_scout_json(raw: str, project_type: str) -> TopicScoutOutput:
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError:
-        print(f"   ⚠️  Scout JSON parse failed, using raw text fallback")
+        print("   ⚠️  Scout JSON parse failed, using raw text fallback")
         return TopicScoutOutput(
             scout_type="dataset" if project_type != "research-based" else "literature",
             availability_summary=raw[:500],
@@ -251,7 +251,7 @@ def _parse_project_scout_json(raw: str) -> ProjectScoutOutput:
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError:
-        print(f"   ⚠️  Project scout JSON parse failed")
+        print("   ⚠️  Project scout JSON parse failed")
         return ProjectScoutOutput(search_note="Search completed but results could not be parsed.")
 
     projects = [
@@ -287,7 +287,7 @@ async def run_project_scout(
     Called by: POST /topics/find-projects
     """
 
-    print(f"\n🎓 PROJECT SCOUT — finding similar student projects")
+    print("\n🎓 PROJECT SCOUT — finding similar student projects")
     print(f"   Topic: {topic_title[:60]}")
     print(f"   Field: {field} | Level: {degree_level}")
     print("-" * 80)
@@ -449,7 +449,7 @@ async def run_topic_vet(
     Called by: POST /topics/vet
     """
 
-    print(f"\n🔬 TOPIC VETTER — evaluating student's topic")
+    print("\n🔬 TOPIC VETTER — evaluating student's topic")
     print(f"   Original: {original_topic[:60]}")
     print(f"   Field: {field} | Level: {degree_level}")
     print("-" * 80)

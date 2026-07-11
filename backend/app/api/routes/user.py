@@ -24,7 +24,7 @@ from fastapi.security import HTTPBearer
 from pydantic import BaseModel
 from typing import Optional, Dict, List
 
-from app.models.database import User, Project
+from app.models.database import Project
 from app.api.dependencies import get_db_session, get_current_user
 
 router   = APIRouter(prefix="/user", tags=["User"])
@@ -263,7 +263,7 @@ async def _validate_openai_key_live(api_key: str) -> tuple[bool, str]:
                     caller can decide whether to save anyway.
     """
     try:
-        from openai import AsyncOpenAI, AuthenticationError, PermissionDeniedError
+        from openai import AsyncOpenAI
         client = AsyncOpenAI(api_key=api_key)
         await client.models.list()
         return True, "ok"

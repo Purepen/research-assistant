@@ -17,7 +17,7 @@ Model Tier Addition (Apr 2026):
 from __future__ import annotations
 
 import os
-from typing import List, Optional
+from typing import List
 
 from agents import Runner
 from docx import Document
@@ -104,7 +104,7 @@ async def discover_resources(
     _web_search_agent    = _agents["web_searcher"]
     _resource_finder_agent = _agents["resource_finder"]
 
-    print(f"\n🌐 RESOURCE DISCOVERY")
+    print("\n🌐 RESOURCE DISCOVERY")
     print(f"   Topic: {research_topic[:60]}...")
     print(f"   Searches: {num_searches} | Dataset source: {dataset_source}")
     print("-" * 60)
@@ -154,7 +154,7 @@ Extract into DiscoveredResources format with datasets, methods, tools, and paper
         )
         resources: DiscoveredResources = extraction_result.final_output
 
-        print(f"\n✅ Resource Discovery complete:")
+        print("\n✅ Resource Discovery complete:")
         print(f"   Papers:   {len(resources.papers)}")
         print(f"   Datasets: {len(resources.datasets)}")
         print(f"   Methods:  {len(resources.methods)}")
@@ -195,7 +195,7 @@ async def analyze_user_dumps(
 
         text = _read_file_text(path)
         if not text.strip():
-            print(f"      ⚠️  Empty or unreadable — skipping")
+            print("      ⚠️  Empty or unreadable — skipping")
             continue
 
         try:

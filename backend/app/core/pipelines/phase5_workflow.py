@@ -33,7 +33,7 @@ from app.models.config import SpecificationConfig
 from app.models.locked_requirements import LockedRequirementsA, LockedRequirementsB
 
 from app.core.agents.definitions.phase5_agents import professor_reviewer_agent
-from app.core.pipelines.phase4_workflow import generate_specification, create_context_for_agents
+from app.core.pipelines.phase4_workflow import generate_specification
 from app.core.validation.spec_validator import (
     validate_specification,
     format_report_for_reviewer,

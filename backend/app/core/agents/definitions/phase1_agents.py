@@ -9,7 +9,12 @@ Model assignments:
                   past_projects_spec_analyzer_agent (deep analysis of user uploads)
 """
 
+from typing import TYPE_CHECKING
+
 from agents import Agent, WebSearchTool
+
+if TYPE_CHECKING:
+    from app.models.agent_config import AgentModelConfig
 from app.models.resources import DiscoveredResources
 from app.models.projects import AnalyzedProjectSpecSections, ProjectFinderOutput
 from app.core.agents.instructions.phase1_resource_discovery import RESOURCE_FINDER_INSTRUCTIONS
@@ -62,7 +67,7 @@ past_projects_spec_analyzer_agent = Agent(
 
 # ── Factory function — model-tier-aware ───────────────────────────────────────
 
-def build_phase1_agents(config: "AgentModelConfig") -> dict:  # type: ignore[name-defined]
+def build_phase1_agents(config: "AgentModelConfig") -> dict:
     """
     Build Phase 1 discovery agents using the user's AgentModelConfig.
 

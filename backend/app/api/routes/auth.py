@@ -14,7 +14,6 @@ Bug fixes:
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
-from typing import Optional
 
 from app.services.auth_service import AuthService
 from app.models.database import User

@@ -55,7 +55,7 @@ def apply_openai_key(user) -> None:
     if not key:
         key = os.environ.get("OPENAI_API_KEY")
         if key:
-            print(f"   🔑 Using system .env key")
+            print("   🔑 Using system .env key")
 
     if not key:
         raise RuntimeError(

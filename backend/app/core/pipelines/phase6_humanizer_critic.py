@@ -30,7 +30,6 @@ error message are returned instead. The pipeline never stops because of them.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from agents import Runner
 

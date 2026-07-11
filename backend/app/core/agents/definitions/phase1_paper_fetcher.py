@@ -52,7 +52,7 @@ async def build_verified_citation_pool(
     """
     papers_to_fetch = discovered_papers[:max_papers]
 
-    print(f"\n📚 PAPER ABSTRACT FETCHER")
+    print("\n📚 PAPER ABSTRACT FETCHER")
     print(f"   Fetching {len(papers_to_fetch)} papers for verified citation pool...")
     print("-" * 60)
 

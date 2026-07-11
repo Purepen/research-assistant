@@ -59,7 +59,7 @@ Parse carefully and infer the project type from the language and requirements.
         
         guidelines = result.final_output
         
-        print(f"✅ Guidelines parsed successfully")
+        print("✅ Guidelines parsed successfully")
         print(f"   Project type: {guidelines.project_type}")
         print(f"   Sections: {len(guidelines.sections)}")
         print(f"   Target word count: {guidelines.target_word_count}")

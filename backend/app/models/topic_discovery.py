@@ -10,7 +10,7 @@ CHANGES:
 """
 
 from __future__ import annotations
-from typing import List, Optional, Literal
+from typing import List, Literal
 from pydantic import BaseModel, Field
 
 

@@ -26,7 +26,6 @@ from typing import Union
 
 from agents import Runner
 
-from app.models.specification import ProjectSpecification, SpecificationSection
 from app.models.guidelines import ProjectGuidelines
 from app.models.synthesis import StrategicSynthesis
 from app.models.locked_requirements import (

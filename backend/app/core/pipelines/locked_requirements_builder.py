@@ -201,30 +201,30 @@ def detect_paradigm(
                       "fixed effect", "random effect", "instrumental variable",
                       "hausman", "regression analysis", "panel data"]
         if any(t in alg_lower for t in econ_terms):
-            print(f"   📐 Paradigm detected from preferred_algorithms: ECONOMETRIC_CAUSAL")
+            print("   📐 Paradigm detected from preferred_algorithms: ECONOMETRIC_CAUSAL")
             return ResearchParadigm.ECONOMETRIC_CAUSAL
 
         finance_terms = ["garch", "var ", "monte carlo", "volatility model",
                          "portfolio optim", "arima", "event study"]
         if any(t in alg_lower for t in finance_terms):
-            print(f"   📐 Paradigm detected from preferred_algorithms: FINANCE_QUANT")
+            print("   📐 Paradigm detected from preferred_algorithms: FINANCE_QUANT")
             return ResearchParadigm.FINANCE_QUANT
 
         survey_terms = ["likert", "cronbach", "spss", "sem ", "structural equation",
                         "questionnaire", "survey analysis", "factor analysis"]
         if any(t in alg_lower for t in survey_terms):
-            print(f"   📐 Paradigm detected from preferred_algorithms: SURVEY_QUANTITATIVE")
+            print("   📐 Paradigm detected from preferred_algorithms: SURVEY_QUANTITATIVE")
             return ResearchParadigm.SURVEY_QUANTITATIVE
 
     field_l = field_of_study.lower()
     topic_l = (research_topic or "").lower()
 
     if any(s in topic_l for s in _SYSTEMS_SIGNALS):
-        print(f"   📐 Paradigm detected from topic keywords: SYSTEMS_ENGINEERING")
+        print("   📐 Paradigm detected from topic keywords: SYSTEMS_ENGINEERING")
         return ResearchParadigm.SYSTEMS_ENGINEERING
 
     if any(s in topic_l for s in _FINANCE_QUANT_SIGNALS):
-        print(f"   📐 Paradigm detected from topic keywords: FINANCE_QUANT")
+        print("   📐 Paradigm detected from topic keywords: FINANCE_QUANT")
         return ResearchParadigm.FINANCE_QUANT
 
     if any(f in field_l for f in _ECONOMETRIC_FIELDS):
@@ -237,7 +237,7 @@ def detect_paradigm(
             print(f"   📐 Paradigm detected: SURVEY_QUANTITATIVE (field={field_of_study})")
             return ResearchParadigm.SURVEY_QUANTITATIVE
 
-    print(f"   📐 Paradigm: ML_CLASSIFICATION (default — no other signal found)")
+    print("   📐 Paradigm: ML_CLASSIFICATION (default — no other signal found)")
     return ResearchParadigm.ML_CLASSIFICATION
 
 
@@ -553,15 +553,15 @@ def _pick_algorithms(
                 elif "xgboost" in a_lower or "gradient boost" in a_lower:
                     just[a] = f"High-performance ensemble method; student-identified as relevant to {topic}"
                 elif "lstm" in a_lower or "rnn" in a_lower:
-                    just[a] = f"Recurrent architecture suited to sequential patterns; student-identified"
+                    just[a] = "Recurrent architecture suited to sequential patterns; student-identified"
                 elif "bert" in a_lower or "transformer" in a_lower:
-                    just[a] = f"State-of-the-art contextual representation; student-identified"
+                    just[a] = "State-of-the-art contextual representation; student-identified"
                 elif "cnn" in a_lower or "resnet" in a_lower:
-                    just[a] = f"Convolutional architecture for spatial/image features; student-identified"
+                    just[a] = "Convolutional architecture for spatial/image features; student-identified"
                 elif "random forest" in a_lower:
-                    just[a] = f"Robust ensemble method; resistant to overfitting on moderately-sized datasets"
+                    just[a] = "Robust ensemble method; resistant to overfitting on moderately-sized datasets"
                 elif "svm" in a_lower or "support vector" in a_lower:
-                    just[a] = f"Effective for high-dimensional classification; student-identified"
+                    just[a] = "Effective for high-dimensional classification; student-identified"
                 else:
                     just[a] = f"Student-identified method — appropriate for {topic}"
             print(f"   🎯 Algorithms: Priority 1 (student preference) — {student_algs}")
@@ -712,23 +712,23 @@ def _build_ethics_statement(data_sensitivity: str, dataset_name: str, field_of_s
                                population_bias_note=f"Demographic representation of {dataset_name} may limit generalisation.")
     elif data_sensitivity == "self_collected":
         stmt = (
-            f"This study involves primary data collection from human participants, which requires ethical "
-            f"approval from the institutional ethics review board prior to data collection. Informed consent "
-            f"will be obtained from all participants before they provide any data. Participation is entirely "
-            f"voluntary and participants may withdraw at any time without consequence. All collected data will "
-            f"be anonymised before analysis and stored securely in accordance with GDPR (or equivalent national "
-            f"legislation). No personally identifiable information will appear in the final report."
+            "This study involves primary data collection from human participants, which requires ethical "
+            "approval from the institutional ethics review board prior to data collection. Informed consent "
+            "will be obtained from all participants before they provide any data. Participation is entirely "
+            "voluntary and participants may withdraw at any time without consequence. All collected data will "
+            "be anonymised before analysis and stored securely in accordance with GDPR (or equivalent national "
+            "legislation). No personally identifiable information will appear in the final report."
         )
         return EthicsStatement(data_sensitivity="self_collected", statement=stmt, irb_required=True,
                                population_bias_note="Sample recruitment method may introduce self-selection bias.")
     else:
         stmt = (
-            f"This study uses restricted or sensitive data, which requires formal data access agreements and "
-            f"institutional ethics approval before any data processing begins. All data access, storage, and "
-            f"processing will comply with the relevant data protection framework. Data will be accessed only "
-            f"within the approved secure environment, will not be transferred to external systems, and will be "
-            f"deleted at the end of the study period in accordance with the data access agreement terms. "
-            f"Individual-level records will not be reported; only aggregate findings will be presented."
+            "This study uses restricted or sensitive data, which requires formal data access agreements and "
+            "institutional ethics approval before any data processing begins. All data access, storage, and "
+            "processing will comply with the relevant data protection framework. Data will be accessed only "
+            "within the approved secure environment, will not be transferred to external systems, and will be "
+            "deleted at the end of the study period in accordance with the data access agreement terms. "
+            "Individual-level records will not be reported; only aggregate findings will be presented."
         )
         return EthicsStatement(data_sensitivity="sensitive", statement=stmt, irb_required=True, population_bias_note=None)
 
@@ -919,7 +919,7 @@ def build_locked_requirements(
     similar_projects = _convert_analyzed_projects(analyzed_projects)
     citation_style = guidelines.citation_style or "Harvard"
 
-    print(f"\n🔒 LOCKED REQUIREMENTS BUILDER")
+    print("\n🔒 LOCKED REQUIREMENTS BUILDER")
     print(f"   Track: {track} | Timeline: {timeline_weeks} weeks")
     print(f"   Citation pool: {len(citation_pool)} verified papers")
     print(f"   Similar projects: {len(similar_projects)}")
@@ -1089,7 +1089,7 @@ def build_locked_requirements(
             section_word_targets=section_targets,
         )
 
-        print(f"   ✅ LockedRequirementsB assembled")
+        print("   ✅ LockedRequirementsB assembled")
         print(f"      Framework: {framework_to_use[:60]}…")
         print(f"      Debates: {len(scholarly_debates)} identified")
         return locked

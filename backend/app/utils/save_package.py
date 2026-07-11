@@ -7,7 +7,6 @@ Purpose: Package and save complete results to disk
 import json
 import os
 from datetime import datetime
-from typing import Any
 
 
 def save_complete_package(final_results: dict, output_dir: str = "output") -> str:

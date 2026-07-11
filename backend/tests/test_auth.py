@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import app.services.auth_service as auth_module
-from app.models.database import Base, User
+from app.models.database import Base
 from app.services.auth_service import AuthService
 
 

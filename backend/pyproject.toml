@@ -46,4 +46,13 @@ dev = [
     "pytest==7.4.4",
     "pytest-asyncio==0.23.3",
     "httpx==0.28.1",
+    "ruff==0.15.21",
 ]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+# Bug-catchers only (undefined names, unused imports, syntax errors).
+# Style rules deliberately excluded — tighten after the WS1 refactor.
+select = ["E9", "F"]

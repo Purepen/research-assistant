@@ -117,7 +117,7 @@ Create a strategic synthesis that positions this research uniquely.
 
             synthesis = result.final_output
 
-            print(f"✅ Strategic synthesis complete (Track A)")
+            print("✅ Strategic synthesis complete (Track A)")
             print(f"   Novel contributions: {len(synthesis.novel_contributions)}")
             print(f"   Risks identified: {len(synthesis.risk_factors)}")
 
@@ -157,7 +157,7 @@ Be field-specific — use discipline-appropriate terminology, not generic social
 
         synthesis = result.final_output
 
-        print(f"✅ Theoretical synthesis complete (Track B)")
+        print("✅ Theoretical synthesis complete (Track B)")
         print(f"   Scholarly debates: {len(synthesis.scholarly_debates)}")
         print(f"   Key frameworks: {len(synthesis.key_theoretical_frameworks)}")
 

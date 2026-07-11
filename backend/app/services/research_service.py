@@ -137,7 +137,7 @@ class ResearchService:
                                 user_key_used = True
                                 print("   🔑 Using user's own API key via env (BYOK)")
                         else:
-                            print(f"   🔑 Using system OPENAI_API_KEY (no user key set)")
+                            print("   🔑 Using system OPENAI_API_KEY (no user key set)")
 
                         # ── Model tier: build AgentModelConfig ─────────────────
                         from app.models.agent_config import build_agent_config_for_user

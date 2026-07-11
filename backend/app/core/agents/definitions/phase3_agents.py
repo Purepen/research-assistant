@@ -6,7 +6,13 @@ Every agent is plain text output — formatting into ProjectSpecification
 is handled by phase4 formatter after phase3 sections are assembled.
 """
 
+from typing import TYPE_CHECKING
+
 from agents import Agent
+
+if TYPE_CHECKING:
+    from app.models.agent_config import AgentModelConfig
+
 from app.core.agents.instructions.phase3_justification  import JUSTIFICATION_AIM_INSTRUCTIONS
 from app.core.agents.instructions.phase3_objectives     import OBJECTIVES_ARCHITECT_INSTRUCTIONS
 from app.core.agents.instructions.phase3_literature     import LITERATURE_STRATEGIST_INSTRUCTIONS
@@ -74,7 +80,7 @@ feasibility_analyst = Agent(
 
 # ── Factory function — model-tier-aware ───────────────────────────────────────
 
-def build_phase3_agents(config: "AgentModelConfig") -> dict:  # type: ignore[name-defined]
+def build_phase3_agents(config: "AgentModelConfig") -> dict:
     """
     Build Phase 3 section-writer agents using the user's AgentModelConfig.
 
