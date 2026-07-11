@@ -17,12 +17,17 @@ MODEL TIER ADDITION (Apr 2026):
   any code that still imports them directly will continue to work.
 """
 
+from typing import TYPE_CHECKING
+
 from agents import Agent
 from app.models.synthesis import StrategicSynthesis, TheoreticalSynthesisB
 from app.core.agents.instructions.phase2_synthesis import (
     STRATEGIC_SYNTHESIZER_INSTRUCTIONS,
     THEORETICAL_SYNTHESIZER_B_INSTRUCTIONS,
 )
+
+if TYPE_CHECKING:
+    from app.models.agent_config import AgentModelConfig
 
 
 # ── Track A: Strategic Synthesizer — UNCHANGED ────────────────────────────────
@@ -45,7 +50,7 @@ theoretical_synthesizer_b_agent = Agent(
 
 # ── Factory function — model-tier-aware ───────────────────────────────────────
 
-def build_phase2_agents(config: "AgentModelConfig") -> dict:  # type: ignore[name-defined]
+def build_phase2_agents(config: "AgentModelConfig") -> dict:
     """
     Build Phase 2 synthesis agents using the user's AgentModelConfig.
 

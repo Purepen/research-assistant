@@ -17,9 +17,14 @@ Module-level singletons are kept for backward compatibility.
 Use build_post_agents(config) when a per-user AgentModelConfig is available.
 """
 
+from typing import TYPE_CHECKING
+
 from agents import Agent
 from app.core.agents.instructions.critic_instructions      import CRITIC_AGENT_INSTRUCTIONS
 from app.core.agents.instructions.human_writer_instructions import HUMAN_WRITER_INSTRUCTIONS
+
+if TYPE_CHECKING:
+    from app.models.agent_config import AgentModelConfig
 
 
 # ── Module-level singletons — for direct import compatibility ─────────────────
@@ -39,7 +44,7 @@ human_writer_agent = Agent(
 
 # ── Factory function — model-tier-aware ───────────────────────────────────────
 
-def build_post_agents(config: "AgentModelConfig") -> dict:  # type: ignore[name-defined]
+def build_post_agents(config: "AgentModelConfig") -> dict:
     """
     Build post-assembly agents using the user's AgentModelConfig.
 
