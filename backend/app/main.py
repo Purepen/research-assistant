@@ -64,12 +64,9 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    openai_ok    = bool(os.getenv("OPENAI_API_KEY"))
-    anthropic_ok = bool(os.getenv("ANTHROPIC_API_KEY"))
     return {
         "status": "healthy",
-        "openai_key_loaded": openai_ok,
-        "anthropic_key_loaded": anthropic_ok,
+        "openai_key_loaded": bool(os.getenv("OPENAI_API_KEY")),
     }
 
 app.include_router(auth_router)

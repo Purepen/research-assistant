@@ -117,6 +117,27 @@ def test_validation_blocker_forces_section():
     assert blocker in feedback["work_plan"]
 
 
+def test_citation_blocker_routes_to_literature_review():
+    """Regression: CITATION FAIL names no section and was silently dropped,
+    so the citation deficit survived every iteration of the 2026-07-12 run."""
+    review = _review_with([_section_review("Methodology", 18, 20)])
+    blocker = "CITATION FAIL — 6 in-text citations found; minimum 10 required (Harvard format: Author, YYYY)"
+    val = SimpleNamespace(blockers=[blocker])
+    to_regen, feedback = select_sections_for_regeneration(review, val)
+    assert to_regen == {"literature_review"}
+    assert blocker in feedback["literature_review"]
+
+
+def test_unattributable_blocker_regenerates_all_content_sections():
+    """A blocker we can't map must widen the rewrite, never be dropped."""
+    review = _review_with([_section_review("Methodology", 18, 20)])
+    val = SimpleNamespace(blockers=["SOME FUTURE CHECK FAIL — unmappable"])
+    to_regen, _ = select_sections_for_regeneration(review, val)
+    assert to_regen == {
+        "justification", "objectives", "literature_review", "methodology", "work_plan",
+    }
+
+
 def test_all_sections_passing_selects_nothing():
     review = _review_with([
         _section_review("Methodology", 18, 20),

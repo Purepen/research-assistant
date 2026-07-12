@@ -91,6 +91,28 @@ _SECTION_NAME_TO_KEY = {
 # A section passes if it scores at least this fraction of its possible marks.
 REGEN_SCORE_THRESHOLD = 0.75
 
+_CONTENT_KEYS = ["justification", "objectives", "literature_review", "methodology", "work_plan"]
+
+
+def _blocker_targets(blocker: str) -> list:
+    """
+    Map a validation blocker to the section key(s) that must be rewritten.
+
+    Most blockers name their section (WORD COUNT FAIL — Abstract…,
+    METHODOLOGY CHECKLIST FAIL…). CITATION FAIL is counted spec-wide and names
+    none — citations live overwhelmingly in the Literature Review, so the
+    deficit is routed there. Anything else unattributable falls back to every
+    content section: rewriting too much is cheaper than looping max_iterations
+    on a document nobody is fixing.
+    """
+    low = blocker.lower()
+    named = [key for display, key in _SECTION_NAME_TO_KEY.items() if display.lower() in low]
+    if named:
+        return named
+    if "citation" in low:
+        return ["literature_review"]
+    return list(_CONTENT_KEYS)
+
 
 def _review_name_to_key(section_name: str) -> Optional[str]:
     """Map a reviewer's section name to a phase3 section key (None if unknown)."""
@@ -156,13 +178,11 @@ def select_sections_for_regeneration(
 
     if validation_report is not None:
         for blocker in validation_report.blockers:
-            low = blocker.lower()
-            for display, key in _SECTION_NAME_TO_KEY.items():
-                if display.lower() in low:
-                    to_regen.add(key)
-                    feedback[key] = (
-                        feedback.get(key, "") + f"\nVALIDATION BLOCKER (must fix): {blocker}"
-                    ).strip()
+            for key in _blocker_targets(blocker):
+                to_regen.add(key)
+                feedback[key] = (
+                    feedback.get(key, "") + f"\nVALIDATION BLOCKER (must fix): {blocker}"
+                ).strip()
 
     return to_regen, feedback
 
