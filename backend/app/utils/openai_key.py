@@ -25,21 +25,36 @@ from __future__ import annotations
 import os
 
 
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _require_byok() -> bool:
+    """
+    True when this deployment must NEVER fall back to the system key.
+
+    Set REQUIRE_BYOK=true in production (cloud) so every generation runs on the
+    customer's own key. Leave unset/false for local development, where the
+    owner's OPENAI_API_KEY in .env is the convenient default.
+    """
+    return os.environ.get("REQUIRE_BYOK", "").strip().lower() in _TRUTHY
+
+
 def apply_openai_key(user) -> None:
     """
     Resolve and set the active OpenAI API key for this request.
 
     Priority:
       1. User's own stored key (user.openai_api_key) — BYOK
-      2. System OPENAI_API_KEY environment variable — fallback
+      2. System OPENAI_API_KEY environment variable — LOCAL-DEV fallback only;
+         disabled entirely when REQUIRE_BYOK=true (production posture)
 
-    Raises RuntimeError if neither is available, so the route returns
+    Raises RuntimeError if no usable key is available, so the route returns
     a clean 500 rather than a cryptic 401 from inside the agent call.
 
     Args:
         user: The authenticated User ORM object from get_current_user().
               If None (shouldn't happen in authenticated routes), falls back
-              to the env var.
+              to the env var (unless REQUIRE_BYOK is set).
     """
     from agents import set_default_openai_key
 
@@ -51,8 +66,13 @@ def apply_openai_key(user) -> None:
         key = decrypt_secret(user.openai_api_key)
         print("   🔑 Using user key (BYOK)")
 
-    # Priority 2: system env var
+    # Priority 2: system env var — blocked in production
     if not key:
+        if _require_byok():
+            raise RuntimeError(
+                "This deployment requires your own OpenAI API key. "
+                "Add it in Profile → Settings → API Key."
+            )
         key = os.environ.get("OPENAI_API_KEY")
         if key:
             print("   🔑 Using system .env key")

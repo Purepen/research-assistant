@@ -603,12 +603,40 @@ PROHIBITED:
 
 # ─── Main workflow function — UPDATED (agent_model_config param added) ────────
 
+def _revision_addendum(section_key: str, previous_sections, section_feedback) -> str:
+    """
+    Build the revision context appended to a specialist prompt on iteration 2+.
+    Gives the writer its previous version plus the reviewer's feedback so it
+    revises the section instead of regenerating blind.
+    """
+    if not previous_sections:
+        return ""
+    parts = []
+    prev = previous_sections.get(section_key)
+    if prev:
+        parts.append(f"YOUR PREVIOUS VERSION OF THIS SECTION:\n{prev}")
+    fb = (section_feedback or {}).get(section_key)
+    if fb:
+        parts.append(f"REVIEWER FEEDBACK ON THIS SECTION — address every point:\n{fb}")
+    if not parts:
+        return ""
+    return (
+        "\n\n=== REVISION CONTEXT ===\n"
+        "You are REVISING this section, not writing it from scratch. Keep what "
+        "already works, fix everything the reviewer flagged, and meet the word "
+        "count requirement.\n\n" + "\n\n".join(parts)
+    )
+
+
 async def generate_specification_sections(
     research_topic: str,
     guidelines: ProjectGuidelines,
     synthesis: StrategicSynthesis,
     locked: LockedRequirements,
     agent_model_config=None,   # NEW — Optional[AgentModelConfig]
+    previous_sections: dict | None = None,
+    sections_to_regenerate: set | None = None,
+    section_feedback: dict | None = None,
 ) -> dict:
     """
     Generate all specification sections using individual specialist agents.
@@ -618,6 +646,16 @@ async def generate_specification_sections(
     agent_model_config: when present, tier-aware agents are built via
       build_phase3_agents() and used instead of the module-level singletons.
       When None, all existing behaviour is unchanged.
+
+    Targeted regeneration (iteration 2+ of the review loop):
+      previous_sections:      section_key → content from the previous iteration.
+                              When None, all 7 sections are generated (iteration 1).
+      sections_to_regenerate: section keys the reviewer failed — only these are
+                              rewritten; the rest are kept verbatim.
+      section_feedback:       section_key → reviewer feedback text, injected into
+                              the rewritten sections' prompts.
+      References and Abstract aggregate the other sections, so they are always
+      regenerated whenever any content section changed.
     """
 
     print("\n📝 GENERATING SPECIFICATION SECTIONS (individual specialists)")
@@ -652,106 +690,152 @@ async def generate_specification_sections(
         print(f"   🤖 Phase 3 model: {agent_model_config.get(AgentKey.JUSTIFICATION_SPECIALIST)}")
     # ─────────────────────────────────────────────────────────────────────────
 
-    sections: dict = {}
+    # ── Targeted-regeneration bookkeeping ─────────────────────────────────────
+    regen_all    = previous_sections is None
+    to_regen     = set(sections_to_regenerate or [])
+    content_keys = ["justification", "objectives", "literature_review", "methodology", "work_plan"]
+
+    def _writes(key: str) -> bool:
+        return regen_all or key in to_regen
+
+    # References and Abstract summarise/cite the content sections — stale copies
+    # would contradict rewritten content, so they follow any content change.
+    content_changed  = regen_all or any(k in to_regen for k in content_keys)
+    regen_references = _writes("references") or content_changed
+    regen_abstract   = _writes("abstract") or content_changed
+
+    sections: dict = {} if regen_all else dict(previous_sections)
+
+    if not regen_all:
+        kept = [k for k in content_keys if not _writes(k)]
+        print(f"   🎯 Targeted regeneration — rewriting: {sorted(to_regen)}")
+        print(f"      keeping approved sections: {kept}")
 
     # ── 1. Justification & Aim ────────────────────────────────────────────────
-    print("   [1/7] Justification & Aim...")
-    try:
-        result = await Runner.run(
-            starting_agent=_justification_specialist,
-            input=_justification_context(locked, guidelines),
-        )
-        sections["justification"] = str(result.final_output)
-        wc = len(sections["justification"].split())
-        print(f"   ✅ Justification: {wc} words")
-    except Exception as exc:
-        print(f"   ❌ Justification failed: {exc}")
-        raise
+    if _writes("justification"):
+        print("   [1/7] Justification & Aim...")
+        try:
+            result = await Runner.run(
+                starting_agent=_justification_specialist,
+                input=_justification_context(locked, guidelines)
+                + _revision_addendum("justification", previous_sections, section_feedback),
+            )
+            sections["justification"] = str(result.final_output)
+            wc = len(sections["justification"].split())
+            print(f"   ✅ Justification: {wc} words")
+        except Exception as exc:
+            print(f"   ❌ Justification failed: {exc}")
+            raise
+    else:
+        print("   [1/7] Justification & Aim — kept (passed review)")
 
     # ── 2. Objectives ─────────────────────────────────────────────────────────
-    print("   [2/7] Objectives...")
-    try:
-        result = await Runner.run(
-            starting_agent=_objectives_architect,
-            input=_objectives_context(locked, guidelines, sections["justification"]),
-        )
-        sections["objectives"] = str(result.final_output)
-        wc = len(sections["objectives"].split())
-        print(f"   ✅ Objectives: {wc} words")
-    except Exception as exc:
-        print(f"   ❌ Objectives failed: {exc}")
-        raise
+    if _writes("objectives"):
+        print("   [2/7] Objectives...")
+        try:
+            result = await Runner.run(
+                starting_agent=_objectives_architect,
+                input=_objectives_context(locked, guidelines, sections["justification"])
+                + _revision_addendum("objectives", previous_sections, section_feedback),
+            )
+            sections["objectives"] = str(result.final_output)
+            wc = len(sections["objectives"].split())
+            print(f"   ✅ Objectives: {wc} words")
+        except Exception as exc:
+            print(f"   ❌ Objectives failed: {exc}")
+            raise
+    else:
+        print("   [2/7] Objectives — kept (passed review)")
 
     # ── 3. Literature Review ──────────────────────────────────────────────────
-    print("   [3/7] Literature Review...")
-    try:
-        result = await Runner.run(
-            starting_agent=_literature_strategist,
-            input=_literature_context(locked, guidelines),
-        )
-        sections["literature_review"] = str(result.final_output)
-        wc = len(sections["literature_review"].split())
-        print(f"   ✅ Literature Review: {wc} words")
-    except Exception as exc:
-        print(f"   ❌ Literature Review failed: {exc}")
-        raise
+    if _writes("literature_review"):
+        print("   [3/7] Literature Review...")
+        try:
+            result = await Runner.run(
+                starting_agent=_literature_strategist,
+                input=_literature_context(locked, guidelines)
+                + _revision_addendum("literature_review", previous_sections, section_feedback),
+            )
+            sections["literature_review"] = str(result.final_output)
+            wc = len(sections["literature_review"].split())
+            print(f"   ✅ Literature Review: {wc} words")
+        except Exception as exc:
+            print(f"   ❌ Literature Review failed: {exc}")
+            raise
+    else:
+        print("   [3/7] Literature Review — kept (passed review)")
 
     # ── 4. Methodology ────────────────────────────────────────────────────────
-    print("   [4/7] Methodology...")
-    try:
-        result = await Runner.run(
-            starting_agent=_methodology_designer,
-            input=_methodology_context(locked, guidelines),
-        )
-        sections["methodology"] = str(result.final_output)
-        wc = len(sections["methodology"].split())
-        print(f"   ✅ Methodology: {wc} words")
-    except Exception as exc:
-        print(f"   ❌ Methodology failed: {exc}")
-        raise
+    if _writes("methodology"):
+        print("   [4/7] Methodology...")
+        try:
+            result = await Runner.run(
+                starting_agent=_methodology_designer,
+                input=_methodology_context(locked, guidelines)
+                + _revision_addendum("methodology", previous_sections, section_feedback),
+            )
+            sections["methodology"] = str(result.final_output)
+            wc = len(sections["methodology"].split())
+            print(f"   ✅ Methodology: {wc} words")
+        except Exception as exc:
+            print(f"   ❌ Methodology failed: {exc}")
+            raise
+    else:
+        print("   [4/7] Methodology — kept (passed review)")
 
     # ── 5. Work Plan ──────────────────────────────────────────────────────────
-    print("   [5/7] Work Plan...")
-    try:
-        result = await Runner.run(
-            starting_agent=_timeline_validator,
-            input=_timeline_context(locked, guidelines, sections["objectives"]),
-        )
-        sections["work_plan"] = str(result.final_output)
-        wc = len(sections["work_plan"].split())
-        print(f"   ✅ Work Plan: {wc} words")
-    except Exception as exc:
-        print(f"   ❌ Work Plan failed: {exc}")
-        raise
+    if _writes("work_plan"):
+        print("   [5/7] Work Plan...")
+        try:
+            result = await Runner.run(
+                starting_agent=_timeline_validator,
+                input=_timeline_context(locked, guidelines, sections["objectives"])
+                + _revision_addendum("work_plan", previous_sections, section_feedback),
+            )
+            sections["work_plan"] = str(result.final_output)
+            wc = len(sections["work_plan"].split())
+            print(f"   ✅ Work Plan: {wc} words")
+        except Exception as exc:
+            print(f"   ❌ Work Plan failed: {exc}")
+            raise
+    else:
+        print("   [5/7] Work Plan — kept (passed review)")
 
     # ── 6. References ─────────────────────────────────────────────────────────
-    print("   [6/7] References...")
-    all_section_text = "\n\n".join(sections.values())
-    try:
-        result = await Runner.run(
-            starting_agent=_references_compiler,
-            input=_references_context(locked, all_section_text),
-        )
-        sections["references"] = str(result.final_output)
-        ref_count = len([l for l in sections["references"].split("\n") if l.strip()])
-        print(f"   ✅ References: {ref_count} entries")
-    except Exception as exc:
-        print(f"   ❌ References failed: {exc}")
-        raise
+    if regen_references:
+        print("   [6/7] References...")
+        all_section_text = "\n\n".join(sections[k] for k in content_keys if sections.get(k))
+        try:
+            result = await Runner.run(
+                starting_agent=_references_compiler,
+                input=_references_context(locked, all_section_text),
+            )
+            sections["references"] = str(result.final_output)
+            ref_count = len([l for l in sections["references"].split("\n") if l.strip()])
+            print(f"   ✅ References: {ref_count} entries")
+        except Exception as exc:
+            print(f"   ❌ References failed: {exc}")
+            raise
+    else:
+        print("   [6/7] References — kept (no content changes)")
 
     # ── 7. Abstract (must be last) ────────────────────────────────────────────
-    print("   [7/7] Abstract (last)...")
-    try:
-        result = await Runner.run(
-            starting_agent=_abstract_specialist,
-            input=_abstract_context(locked, guidelines, sections),
-        )
-        sections["abstract"] = str(result.final_output)
-        wc = len(sections["abstract"].split())
-        print(f"   ✅ Abstract: {wc} words")
-    except Exception as exc:
-        print(f"   ❌ Abstract failed: {exc}")
-        raise
+    if regen_abstract:
+        print("   [7/7] Abstract (last)...")
+        try:
+            result = await Runner.run(
+                starting_agent=_abstract_specialist,
+                input=_abstract_context(locked, guidelines, sections)
+                + _revision_addendum("abstract", previous_sections, section_feedback),
+            )
+            sections["abstract"] = str(result.final_output)
+            wc = len(sections["abstract"].split())
+            print(f"   ✅ Abstract: {wc} words")
+        except Exception as exc:
+            print(f"   ❌ Abstract failed: {exc}")
+            raise
+    else:
+        print("   [7/7] Abstract — kept (no content changes)")
 
     total = sum(len(v.split()) for k, v in sections.items() if k != "references")
     print(f"\n✅ All sections generated — total: {total} words")

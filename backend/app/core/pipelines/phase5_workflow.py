@@ -72,6 +72,101 @@ def _get_reviewer_agent(agent_model_config=None):
         return professor_reviewer_agent
 
 
+# ─── Targeted regeneration helpers ────────────────────────────────────────────
+
+# Reviewer/validator section names → phase3 section dict keys
+_SECTION_NAME_TO_KEY = {
+    "Abstract":                      "abstract",
+    "Justification and Overall Aim": "justification",
+    "Justification and Aim":         "justification",
+    "Justification":                 "justification",
+    "Objectives":                    "objectives",
+    "Review of Literature":          "literature_review",
+    "Literature Review":             "literature_review",
+    "Methodology":                   "methodology",
+    "Work Plan":                     "work_plan",
+    "References":                    "references",
+}
+
+# A section passes if it scores at least this fraction of its possible marks.
+REGEN_SCORE_THRESHOLD = 0.75
+
+
+def _review_name_to_key(section_name: str) -> Optional[str]:
+    """Map a reviewer's section name to a phase3 section key (None if unknown)."""
+    name = (section_name or "").strip()
+    if name in _SECTION_NAME_TO_KEY:
+        return _SECTION_NAME_TO_KEY[name]
+    low = name.lower()
+    for display, key in _SECTION_NAME_TO_KEY.items():
+        if display.lower() == low:
+            return key
+    for display, key in _SECTION_NAME_TO_KEY.items():
+        if display.lower() in low or low in display.lower():
+            return key
+    return None
+
+
+def sections_from_spec(spec: ProjectSpecification) -> dict:
+    """
+    Rebuild the phase3 section dict from a formatted specification so the next
+    iteration can keep passing sections verbatim and rewrite only failed ones.
+    """
+    return {
+        "abstract":          spec.abstract.content,
+        "justification":     spec.justification_and_aim.content,
+        "objectives":        spec.objectives.content,
+        "literature_review": spec.literature_review.content,
+        "methodology":       spec.methodology.content,
+        "work_plan":         spec.work_plan.content,
+        "references":        "\n".join(spec.references),
+    }
+
+
+def select_sections_for_regeneration(
+    review: OverallReview,
+    validation_report: Optional[ValidationReport] = None,
+) -> tuple:
+    """
+    Decide which sections must be rewritten next iteration, and build the
+    per-section feedback to hand their writers.
+
+    A section is selected when its review score falls below
+    REGEN_SCORE_THRESHOLD of the possible marks, or when a validation blocker
+    names it (blockers are ground truth — the reviewer cannot override them).
+
+    Returns (section_keys: set, feedback: dict section_key → feedback text).
+    """
+    to_regen: set = set()
+    feedback: dict = {}
+
+    for sr in review.section_reviews:
+        key = _review_name_to_key(sr.section_name)
+        if key is None:
+            continue
+        ratio = (sr.marks_awarded / sr.marks_possible) if sr.marks_possible else 0.0
+        if ratio < REGEN_SCORE_THRESHOLD:
+            to_regen.add(key)
+            notes = [f"Score: {sr.marks_awarded}/{sr.marks_possible}."]
+            if sr.weaknesses:
+                notes.append("Weaknesses:\n" + "\n".join(f"  - {w}" for w in sr.weaknesses))
+            if sr.recommendations:
+                notes.append("Recommendations:\n" + "\n".join(f"  - {r}" for r in sr.recommendations))
+            feedback[key] = "\n".join(notes)
+
+    if validation_report is not None:
+        for blocker in validation_report.blockers:
+            low = blocker.lower()
+            for display, key in _SECTION_NAME_TO_KEY.items():
+                if display.lower() in low:
+                    to_regen.add(key)
+                    feedback[key] = (
+                        feedback.get(key, "") + f"\nVALIDATION BLOCKER (must fix): {blocker}"
+                    ).strip()
+
+    return to_regen, feedback
+
+
 # ─── Existing helpers — UNCHANGED ─────────────────────────────────────────────
 
 def format_specification_for_review(spec: ProjectSpecification) -> str:
@@ -268,15 +363,30 @@ async def run_specification_with_review_loop(
                 )
                 feedback = "\n\n".join(feedback_parts)
 
+                # Targeted regeneration: rewrite only the sections the reviewer
+                # failed (References/Abstract follow automatically in phase3).
+                to_regen, section_fb = select_sections_for_regeneration(
+                    previous_review, prev_validation
+                )
+                prev_sections = sections_from_spec(prev["specification"])
+                if not to_regen:
+                    # Not approved, but no failing section identified — regenerate
+                    # everything rather than resubmitting an identical document.
+                    print("   ⚠️  No failing section identified — full regeneration")
+                    prev_sections = None
+
                 current_specification = await generate_specification(
                     research_topic=research_topic,
                     guidelines=guidelines,
                     strategic_synthesis=strategic_synthesis,
                     discovered_resources=discovered_resources,
                     feasibility_calibration=feasibility_calibration,
-                    previous_feedback=feedback,
+                    previous_feedback=feedback,   # used by the legacy (no-locked) path only
                     locked=locked,
                     agent_model_config=agent_model_config,   # NEW
+                    previous_sections=prev_sections,
+                    sections_to_regenerate=to_regen or None,
+                    section_feedback=section_fb or None,
                 )
 
         except Exception as exc:

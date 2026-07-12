@@ -6,8 +6,11 @@ Central registry for the model tier system.
 
 Three tiers:
   TESTING    — all gpt-4o-mini, cheapest, fast, good for verifying structure
-  PRODUCTION — recommended defaults (gpt-4o-mini for most, gpt-4o for
-               quality-critical agents: reviewer and strategic synthesizer)
+  PRODUCTION — recommended defaults (gpt-4o-mini for most, gpt-4.1-mini for
+               quality-critical agents: synthesizers, reviewer, critic, humanizer.
+               gpt-4o was dropped from the defaults in Jul 2026 — ~6x the cost
+               of gpt-4.1-mini for comparable quality on these tasks; users who
+               want it can still pick it per-agent via the CUSTOM tier)
   CUSTOM     — user picks a model per agent individually from the UI
 
 Architecture:
@@ -115,6 +118,10 @@ class AgentKey(str, Enum):
     # Phase 5 — Review
     PROFESSOR_REVIEWER = "professor_reviewer"
 
+    # Post-assembly — Critic + Humanizer (run once after the review loop)
+    CRITIC_AGENT       = "critic_agent"
+    HUMAN_WRITER_AGENT = "human_writer_agent"
+
     # Phase 6 — Email
     EMAIL_AGENT = "email_agent"
 
@@ -203,7 +210,7 @@ AGENT_REGISTRY: List[AgentMeta] = [
         phase="Synthesis",
         cost_impact="Medium",
         testing_model="gpt-4o-mini",
-        production_model="gpt-4o",
+        production_model="gpt-4.1-mini",
     ),
     AgentMeta(
         key=AgentKey.THEORETICAL_SYNTHESIZER,
@@ -212,7 +219,7 @@ AGENT_REGISTRY: List[AgentMeta] = [
         phase="Synthesis",
         cost_impact="Medium",
         testing_model="gpt-4o-mini",
-        production_model="gpt-4o",
+        production_model="gpt-4.1-mini",
     ),
 
     # ── Phase 3: Specification Writing ────────────────────────────────────────
@@ -317,7 +324,27 @@ AGENT_REGISTRY: List[AgentMeta] = [
         phase="Review",
         cost_impact="High",
         testing_model="gpt-4o-mini",
-        production_model="gpt-4o",
+        production_model="gpt-4.1-mini",
+    ),
+
+    # ── Post-Assembly: Critic + Humanizer ─────────────────────────────────────
+    AgentMeta(
+        key=AgentKey.CRITIC_AGENT,
+        display_name="Critic",
+        description="Performs a brutal section-by-section gap analysis of the finished specification.",
+        phase="Review",
+        cost_impact="High",
+        testing_model="gpt-4o-mini",
+        production_model="gpt-4.1-mini",
+    ),
+    AgentMeta(
+        key=AgentKey.HUMAN_WRITER_AGENT,
+        display_name="Human Writer",
+        description="Rewrites the full specification in natural human voice, removing AI writing patterns.",
+        phase="Review",
+        cost_impact="High",
+        testing_model="gpt-4o-mini",
+        production_model="gpt-4.1-mini",
     ),
 
     # ── Phase 6: Delivery ─────────────────────────────────────────────────────

@@ -275,18 +275,17 @@ async def run_humanizer_and_critic(
     active_writer_agent  = None
 
     if agent_model_config is not None:
-        try:
-            post = build_post_agents(agent_model_config)
-            active_critic_agent = post["critic"]
-            active_writer_agent = post["human_writer"]
-            from app.models.agent_config import AgentKey
-            print(
-                f"   🤖 Post agents — "
-                f"critic: {agent_model_config.get(AgentKey.CRITIC_AGENT)}, "
-                f"writer: {agent_model_config.get(AgentKey.HUMAN_WRITER_AGENT)}"
-            )
-        except Exception as exc:
-            print(f"   ⚠️  Could not build tier-aware post agents ({exc}) — using defaults")
+        # No try/except here: silently downgrading to the hardcoded gpt-4o
+        # singletons was Bug #12 (same class as Bug #2 in Phases 1/3).
+        post = build_post_agents(agent_model_config)
+        active_critic_agent = post["critic"]
+        active_writer_agent = post["human_writer"]
+        from app.models.agent_config import AgentKey
+        print(
+            f"   🤖 Post agents — "
+            f"critic: {agent_model_config.get(AgentKey.CRITIC_AGENT)}, "
+            f"writer: {agent_model_config.get(AgentKey.HUMAN_WRITER_AGENT)}"
+        )
 
     # ── Step 1: Critic ────────────────────────────────────────────────────────
     print("\n" + "=" * 80)

@@ -237,6 +237,9 @@ async def generate_specification(
     previous_feedback: Optional[str] = None,
     locked: LockedRequirements = None,
     agent_model_config=None,   # NEW — Optional[AgentModelConfig]
+    previous_sections: Optional[dict] = None,
+    sections_to_regenerate: Optional[set] = None,
+    section_feedback: Optional[dict] = None,
 ) -> ProjectSpecification:
     """
     Generate or revise a specification.
@@ -249,6 +252,11 @@ async def generate_specification(
 
     agent_model_config: when present, tier-aware agents are used for the formatter,
       orchestrator (legacy path), and the phase3 specialists (via generate_specification_sections).
+
+    Targeted regeneration (locked path, iteration 2+): previous_sections /
+      sections_to_regenerate / section_feedback are forwarded to
+      generate_specification_sections so only reviewer-failed sections are
+      rewritten. previous_feedback is only used by the legacy orchestrator path.
     """
 
     print("\n📝 GENERATING SPECIFICATION")
@@ -266,14 +274,10 @@ async def generate_specification(
                 synthesis=strategic_synthesis,
                 locked=locked,
                 agent_model_config=agent_model_config,   # NEW — passes tier to phase3
+                previous_sections=previous_sections,
+                sections_to_regenerate=sections_to_regenerate,
+                section_feedback=section_feedback,
             )
-
-            if previous_feedback:
-                for key in sections:
-                    if sections[key]:
-                        sections[key] = sections[key] + (
-                            f"\n\n[REVISION NOTE: {previous_feedback[:500]}]"
-                        )
 
             specification = await _format_sections_into_spec(
                 research_topic=research_topic,
