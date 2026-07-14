@@ -43,6 +43,24 @@ from app.core.validation.spec_validator import (
 LockedRequirements = Union[LockedRequirementsA, LockedRequirementsB]
 
 
+# ─── Helper: resolve paradigm for the validator ──────────────────────────────
+
+def _resolve_paradigm(locked: Optional[LockedRequirements]) -> Optional[str]:
+    """
+    Extracts the paradigm string validate_specification() needs to pick the
+    right checklist (ML / econometric / survey / systems / finance).
+
+    Bug fix: both call sites below used to omit `paradigm` entirely, so every
+    project silently validated against the ML_CLASSIFICATION checklist —
+    e.g. an econometric spec was graded on train/test-split and SMOTE
+    requirements instead of regression-method and diagnostics requirements.
+    Track B has no paradigm concept, so this returns None for it (the
+    validator's Track B branch doesn't consume `paradigm` at all).
+    """
+    paradigm = getattr(locked, "paradigm", None)
+    return paradigm.value if paradigm else None
+
+
 # ─── Helper: resolve tier-aware reviewer ─────────────────────────────────────
 
 def _get_reviewer_agent(agent_model_config=None):
@@ -258,6 +276,8 @@ async def review_specification(
         section_word_targets=section_word_targets,
         track=track,
         xai_claimed=xai_claimed,
+        paradigm=_resolve_paradigm(locked),
+        similar_projects=locked.similar_projects if locked else None,
     )
 
     report_text = format_report_for_reviewer(validation_report)
@@ -435,6 +455,8 @@ async def run_specification_with_review_loop(
             section_word_targets=section_word_targets,
             track=locked.track if locked else "A",
             xai_claimed=bool(getattr(locked, "xai_techniques", None)) if locked else False,
+            paradigm=_resolve_paradigm(locked),
+            similar_projects=locked.similar_projects if locked else None,
         )
 
         all_iterations.append({

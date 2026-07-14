@@ -1,6 +1,7 @@
 """Tests for the zero-AI validation gate (core/validation/spec_validator.py)."""
 
 from app.core.validation.spec_validator import format_report_for_reviewer, validate_specification
+from app.models.locked_requirements import SimilarProjectEntry
 from tests.conftest import make_ml_spec, small_targets
 
 
@@ -68,3 +69,59 @@ def test_reviewer_report_states_ground_truth_verdict():
 
     bad = validate_specification(make_ml_spec(citations=3), small_targets(), track="A")
     assert "HAS BLOCKERS" in format_report_for_reviewer(bad)
+
+
+# ─── Topic novelty / staleness gate ────────────────────────────────────────────
+
+def _similar_heart_disease_project(**overrides) -> SimilarProjectEntry:
+    defaults = dict(
+        title="Machine Learning Classification of Heart Disease",
+        author_or_institution="Adebayo, T.",
+        year=2021, level="MSc",
+        approach_summary="Random forest classifier on UCI data.",
+        limitation="No explainability analysis.",
+    )
+    defaults.update(overrides)
+    return SimilarProjectEntry(**defaults)
+
+
+def test_high_similarity_without_differentiation_is_a_warning_not_a_blocker():
+    # make_ml_spec()'s title is "Machine Learning Classification of Heart Disease Risk"
+    spec = make_ml_spec()
+    report = validate_specification(
+        spec, small_targets(), track="A",
+        similar_projects=[_similar_heart_disease_project()],
+    )
+    assert any("POSSIBLE TOPIC STALENESS" in w for w in report.warnings)
+    assert not any("STALENESS" in b for b in report.blockers)
+    assert report.passes_all is True  # a warning must never flip this
+
+
+def test_similarity_with_explicit_differentiation_is_not_flagged():
+    spec = make_ml_spec(
+        methodology_extra=(
+            "This builds directly on Adebayo (2021), extending it with explainability "
+            "analysis absent from that prior work. "
+        )
+    )
+    report = validate_specification(
+        spec, small_targets(), track="A",
+        similar_projects=[_similar_heart_disease_project()],
+    )
+    assert not any("STALENESS" in w for w in report.warnings)
+
+
+def test_dissimilar_prior_project_is_not_flagged():
+    spec = make_ml_spec()
+    unrelated = _similar_heart_disease_project(
+        title="Sentiment Analysis of Twitter Posts During Elections",
+        author_or_institution="Bello, K.",
+    )
+    report = validate_specification(spec, small_targets(), track="A", similar_projects=[unrelated])
+    assert not any("STALENESS" in w for w in report.warnings)
+
+
+def test_no_similar_projects_is_safe():
+    report = validate_specification(make_ml_spec(), small_targets(), track="A", similar_projects=None)
+    assert not any("STALENESS" in w for w in report.warnings)
+    assert report.passes_all is True

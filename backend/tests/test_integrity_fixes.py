@@ -9,6 +9,8 @@ Covers:
     validator's signal words still appear so validation doesn't regress.
 """
 
+from types import SimpleNamespace
+
 import httpx
 import pytest
 
@@ -22,7 +24,8 @@ from app.core.pipelines.locked_requirements_builder import (
     _build_positionality,
 )
 from app.core.pipelines.phase3_workflow import _methodology_context
-from app.models.locked_requirements import VerifiedPaper
+from app.core.pipelines.phase5_workflow import _resolve_paradigm
+from app.models.locked_requirements import ResearchParadigm, VerifiedPaper
 from app.models.resources import DiscoveredPaper
 from tests.test_locked_requirements import _guidelines
 from tests.test_cost_controls import _locked
@@ -179,3 +182,25 @@ def test_positionality_is_guidance_not_finished_prose():
     assert "Postcolonial identity in Achebe" in guidance
     # The old template's fixed opening must not appear verbatim
     assert "As a researcher approaching" not in guidance
+
+
+# ─── paradigm wiring: validate_specification() must see the real paradigm ────
+
+def test_resolve_paradigm_reads_track_a_default():
+    assert _resolve_paradigm(_locked()) == "ml_classification"
+
+
+def test_resolve_paradigm_reflects_non_default_paradigm():
+    """Regression: both validate_specification() call sites in phase5_workflow.py
+    used to omit `paradigm` entirely, so an econometric or survey project was
+    silently graded against the ML checklist (train/test split, SMOTE, etc.)
+    instead of its own (regression method, diagnostics, ...)."""
+    locked = _locked()
+    locked.paradigm = ResearchParadigm.ECONOMETRIC_CAUSAL
+    assert _resolve_paradigm(locked) == "econometric_causal"
+
+
+def test_resolve_paradigm_none_when_unavailable():
+    assert _resolve_paradigm(None) is None
+    # Track B objects carry no `paradigm` attribute at all.
+    assert _resolve_paradigm(SimpleNamespace()) is None

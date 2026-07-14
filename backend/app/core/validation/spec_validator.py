@@ -23,9 +23,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 from app.models.specification import ProjectSpecification
+
+if TYPE_CHECKING:
+    from app.models.locked_requirements import SimilarProjectEntry
 
 
 # ─── Harvard in-text citation regex ──────────────────────────────────────────
@@ -136,6 +139,88 @@ def _word_count(text: str) -> int:
 
 def _count_intext_citations(text: str) -> int:
     return len(_HARVARD_INTEXT.findall(text))
+
+
+# ─── Topic novelty / staleness (checks the topic against known prior projects) ─
+
+_NOVELTY_STOPWORDS = {
+    "a", "an", "the", "of", "for", "in", "on", "using", "and", "to", "with",
+    "study", "analysis", "impact", "effect", "effects", "approach", "based",
+    "towards", "toward", "review", "assessment", "evaluation", "investigating",
+    "investigation", "system", "case", "via", "into", "from", "role",
+}
+
+_NOVELTY_SIMILARITY_THRESHOLD = 0.6  # Jaccard over significant title words
+
+
+def _significant_words(text: str) -> set:
+    words = re.findall(r"[a-z]+", (text or "").lower())
+    return {w for w in words if len(w) > 2 and w not in _NOVELTY_STOPWORDS}
+
+
+def _title_similarity(a: str, b: str) -> float:
+    wa, wb = _significant_words(a), _significant_words(b)
+    if not wa or not wb:
+        return 0.0
+    return len(wa & wb) / len(wa | wb)
+
+
+def _mentions_project(all_text_lower: str, author: Optional[str]) -> bool:
+    """
+    Whether the spec explicitly names this prior project's author — the
+    signal that a real differentiation paragraph exists.
+
+    Deliberately NOT a title-word-overlap check against the whole document:
+    a spec that's legitimately about the same topic as the similar project
+    will always contain that topic's words throughout (that's what "same
+    topic" means), so word overlap can't distinguish "engaged with this
+    specific prior work" from "is simply on-topic." The author's name is the
+    one signal that actually indicates a citation rather than a shared subject.
+    """
+    if not author:
+        return False
+    first_token = author.split(",")[0].strip().split()
+    if not first_token:
+        return False
+    surname = first_token[0].lower()
+    return len(surname) > 2 and surname in all_text_lower
+
+
+def _check_topic_novelty(
+    project_title: str,
+    all_text_lower: str,
+    similar_projects: Optional[List["SimilarProjectEntry"]],
+    report: ValidationReport,
+) -> None:
+    """
+    Flags topics that look like an undifferentiated resubmission of a prior
+    project already in `similar_projects` (uploaded by the student or found by
+    Phase 1's auto-discovery — see locked_requirements_builder.py).
+
+    This is a WARNING, not a blocker: title-word overlap is a heuristic, and a
+    narrow research niche naturally shares vocabulary across legitimately
+    different projects. Whether a given overlap is actually adequately
+    differentiated is a judgment call for the reviewer, not a fact a string
+    matcher can assert — same rationale as MARKETING LANGUAGE and PARADIGM
+    CONTAMINATION being warnings above.
+    """
+    if not similar_projects:
+        return
+    for sp in similar_projects:
+        title = getattr(sp, "title", None)
+        if not title:
+            continue
+        similarity = _title_similarity(project_title, title)
+        if similarity < _NOVELTY_SIMILARITY_THRESHOLD:
+            continue
+        author = getattr(sp, "author_or_institution", None)
+        if _mentions_project(all_text_lower, author):
+            continue
+        report.warnings.append(
+            f"POSSIBLE TOPIC STALENESS — {int(similarity * 100)}% title-word overlap "
+            f"with prior project '{title}' ({author or 'source unknown'}), and the "
+            f"specification doesn't appear to explicitly differentiate from it."
+        )
 
 
 def _full_spec_text(spec: ProjectSpecification) -> str:
@@ -360,6 +445,7 @@ def validate_specification(
     track: str = "A",
     xai_claimed: bool = False,
     paradigm: Optional[str] = None,   # NEW — "ml_classification" | "econometric_causal" | etc.
+    similar_projects: Optional[List["SimilarProjectEntry"]] = None,
 ) -> ValidationReport:
     """
     Run all objective checks and return a ValidationReport.
@@ -371,6 +457,8 @@ def validate_specification(
         xai_claimed:          Whether the spec claims XAI / interpretability
         paradigm:             ResearchParadigm value string. Defaults to "ml_classification"
                               which preserves all original behaviour.
+        similar_projects:     Prior projects from LockedRequirements (user-uploaded or
+                              auto-discovered). Used only for the topic-staleness warning.
 
     Returns:
         ValidationReport with all counts, checklist results, and blocker list
@@ -380,6 +468,9 @@ def validate_specification(
 
     report = ValidationReport(track=track, paradigm=resolved_paradigm)
     full_text = _full_spec_text(spec)
+    all_text_lower = full_text.lower()
+
+    _check_topic_novelty(spec.project_title, all_text_lower, similar_projects, report)
 
     # ── 1. Word counts ────────────────────────────────────────────────────────
     section_map = {
@@ -433,7 +524,6 @@ def validate_specification(
     if track == "A":
         methodology_text = spec.methodology.content.lower()
         work_plan_text   = spec.work_plan.content.lower()
-        all_text_lower   = full_text.lower()
 
         if resolved_paradigm == "econometric_causal":
             checklist = _run_econometric_checklist(
@@ -509,7 +599,6 @@ def validate_specification(
     elif track == "B":
         methodology_text = spec.methodology.content.lower()
         work_plan_text   = spec.work_plan.content.lower()
-        all_text_lower   = full_text.lower()
 
         checklist = {}
 
