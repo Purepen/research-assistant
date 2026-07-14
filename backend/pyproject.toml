@@ -39,13 +39,13 @@ dependencies = [
     "mangum==0.21.0",
     # Utilities
     "python-dotenv==1.0.0",
+    "httpx==0.28.1",  # CrossRef DOI verification (app/core/agents/definitions/phase1_paper_fetcher.py)
 ]
 
 [dependency-groups]
 dev = [
     "pytest==7.4.4",
     "pytest-asyncio==0.23.3",
-    "httpx==0.28.1",
     "ruff==0.15.21",
 ]
 

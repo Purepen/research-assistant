@@ -48,13 +48,22 @@ class ResearchParadigm(str, Enum):
 
 class VerifiedPaper(BaseModel):
     """
-    A real, DOI-linked paper with confirmed performance figures.
-    Only papers that pass the PaperAbstractFetcher enter the citation pool.
+    A paper found via web search by PaperAbstractFetcher (title/authors/abstract/
+    metric are that agent's self-report, not independently confirmed).
+
+    doi_verified is the one field that IS independently confirmed: when a DOI is
+    present, build_verified_citation_pool() checks it against CrossRef before the
+    paper enters the pool. Papers whose DOI does not resolve are dropped entirely
+    (see phase1_paper_fetcher.py) — a DOI that fails resolution is worse than no
+    DOI. doi_verified=False + doi=None means the paper is genuinely DOI-less
+    (e.g. a conference abstract); doi_verified=False + doi set means CrossRef was
+    unreachable, not that the DOI is wrong.
     """
     title: str
     authors: str                      # e.g. "Mohan, S., Thirumalai, C. and Srivastava, G."
     year: int
     doi: Optional[str] = None         # None only if genuinely DOI-less (conference abs)
+    doi_verified: bool = False        # True only after a successful CrossRef resolution
     source_url: str                   # URL that was fetched
     abstract_snippet: str             # First 500 chars of abstract
     key_metric: Optional[str] = None  # e.g. "AUC-ROC", "F1", "Accuracy"
@@ -140,9 +149,17 @@ class EvaluationFramework(BaseModel):
 # ─── Ethics Statement ─────────────────────────────────────────────────────────
 
 class EthicsStatement(BaseModel):
-    """Pre-written ethics content locked in before methodology agent runs."""
+    """
+    Ethics POLICY FACTS, locked in before the methodology agent runs.
+
+    irb_required is a deterministic compliance decision (correct by construction
+    from data_sensitivity) and must never be left to LLM judgment. `statement` is
+    a short factual brief, not finished prose — the methodology writer composes
+    the actual paragraph from it, so wording varies per project instead of being
+    pasted verbatim (see phase3_workflow.py's ETHICS CONTEXT block).
+    """
     data_sensitivity: str    # "public", "self_collected", "sensitive"
-    statement: str           # Full paragraph ready to drop into methodology
+    statement: str           # Factual brief — input for the writer, not verbatim prose
     irb_required: bool = False
     population_bias_note: Optional[str] = None
 

@@ -426,9 +426,11 @@ METHODS / ALGORITHMS (with justifications):
 XAI TECHNIQUES:
 {', '.join(la.xai_techniques) if la.xai_techniques else 'Not applicable'}
 {paradigm_extras}
-ETHICS STATEMENT (DROP THIS IN — do not rewrite or summarise):
-{la.ethics.statement}
-Population bias note: {la.ethics.population_bias_note or 'Acknowledge relevant limitations of data source'}
+ETHICS CONTEXT (write 2-4 sentences of ORIGINAL prose from these facts — every
+project's ethics paragraph must read differently; do not reuse stock phrasing):
+  Institutional ethics approval required: {'Yes' if la.ethics.irb_required else 'No'}
+  Why: {la.ethics.statement}
+  Limitation to address specifically for this dataset/topic: {la.ethics.population_bias_note or 'consider representativeness of this specific data source for this specific topic'}
 
 CITATION POOL for method citations:
 {_build_citation_pool_text(locked)}
@@ -461,7 +463,10 @@ PRIMARY SOURCE FOCUS: {lb.primary_source_focus or 'Not specified — describe br
 KEY SCHOLARLY DEBATES TO ENGAGE:
 {chr(10).join(f'  - {d}' for d in lb.scholarly_debates)}
 
-POSITIONALITY: {lb.positionality_statement or 'Discuss researcher standpoint and its implications'}
+POSITIONALITY GUIDANCE (write original prose from this — do not reuse generic
+reflexivity phrasing that could apply to any topic in this field):
+{lb.positionality_statement or "Discuss how the researcher's standpoint and background shape their interpretive choices for this specific topic."}
+Label this as your positionality statement so the reader can identify it as such.
 
 CITATION POOL:
 {_build_citation_pool_text(locked)}

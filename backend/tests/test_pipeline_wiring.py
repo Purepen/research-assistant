@@ -186,7 +186,17 @@ class CannedRunner:
 def canned(monkeypatch):
     runner = CannedRunner()
     monkeypatch.setattr(agents_sdk.Runner, "run", runner.run)
+    # Golden harness must stay fully offline: build_verified_citation_pool()
+    # checks each DOI against CrossRef for real, and the fixture DOI below is
+    # fictional. Stub it "resolved" — CrossRef integration itself is covered by
+    # tests/test_integrity_fixes.py.
+    import app.core.agents.definitions.phase1_paper_fetcher as fetcher_module
+    monkeypatch.setattr(fetcher_module, "_crossref_doi_status", lambda doi: _resolved())
     yield runner
+
+
+async def _resolved():
+    return "resolved"
 
 
 @pytest.mark.asyncio

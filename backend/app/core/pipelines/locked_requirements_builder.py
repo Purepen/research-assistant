@@ -698,39 +698,51 @@ def _select_baseline(citation_pool: List[VerifiedPaper]) -> Optional[LockedBasel
 
 
 def _build_ethics_statement(data_sensitivity: str, dataset_name: str, field_of_study: str) -> EthicsStatement:
+    """
+    Determines the ethics POLICY FACTS — approval required or not, and why. This
+    stays deterministic on purpose: whether IRB/institutional approval is needed
+    is a compliance rule, not something an LLM should be guessing per-request.
+
+    What changed: `statement` used to be a full ready-to-paste paragraph, and the
+    methodology prompt pasted it verbatim — every project with the same
+    data_sensitivity got byte-identical ethics prose. `statement` is now a short
+    factual brief; the writer composes the actual paragraph from it (see
+    phase3_workflow.py's ETHICS CONTEXT block), so two projects with the same
+    data_sensitivity read differently while the underlying compliance facts
+    (irb_required, population_bias_note) stay correct and non-negotiable.
+    """
     if data_sensitivity == "public":
-        stmt = (
-            f"The dataset used in this study, {dataset_name}, is publicly available under an open licence "
-            f"and does not contain identifiable personal data. No informed consent or institutional ethics "
-            f"approval is required for secondary analysis of open-access data. However, the researcher acknowledges "
-            f"the potential for population bias inherent in any pre-collected dataset. The demographic composition "
-            f"of {dataset_name} may not be representative of the target population, and findings should be "
-            f"interpreted with this limitation in mind. All data will be handled in compliance with applicable "
-            f"data protection guidelines."
+        brief = (
+            f"{dataset_name} is publicly available under an open licence with no identifiable "
+            f"personal data, so no informed consent or institutional ethics approval is required "
+            f"for this secondary analysis."
         )
-        return EthicsStatement(data_sensitivity="public", statement=stmt, irb_required=False,
-                               population_bias_note=f"Demographic representation of {dataset_name} may limit generalisation.")
+        return EthicsStatement(
+            data_sensitivity="public", statement=brief, irb_required=False,
+            population_bias_note=(
+                f"Demographic representation of {dataset_name} may limit generalisation — "
+                f"address this specifically for {field_of_study} research, not generically."
+            ),
+        )
     elif data_sensitivity == "self_collected":
-        stmt = (
-            "This study involves primary data collection from human participants, which requires ethical "
-            "approval from the institutional ethics review board prior to data collection. Informed consent "
-            "will be obtained from all participants before they provide any data. Participation is entirely "
-            "voluntary and participants may withdraw at any time without consequence. All collected data will "
-            "be anonymised before analysis and stored securely in accordance with GDPR (or equivalent national "
-            "legislation). No personally identifiable information will appear in the final report."
+        brief = (
+            "This study collects primary data from human participants, which requires "
+            "institutional ethics approval and informed consent before collection begins; "
+            "data must be anonymised and participation must be voluntary."
         )
-        return EthicsStatement(data_sensitivity="self_collected", statement=stmt, irb_required=True,
-                               population_bias_note="Sample recruitment method may introduce self-selection bias.")
+        return EthicsStatement(
+            data_sensitivity="self_collected", statement=brief, irb_required=True,
+            population_bias_note="Sample recruitment method may introduce self-selection bias.",
+        )
     else:
-        stmt = (
-            "This study uses restricted or sensitive data, which requires formal data access agreements and "
-            "institutional ethics approval before any data processing begins. All data access, storage, and "
-            "processing will comply with the relevant data protection framework. Data will be accessed only "
-            "within the approved secure environment, will not be transferred to external systems, and will be "
-            "deleted at the end of the study period in accordance with the data access agreement terms. "
-            "Individual-level records will not be reported; only aggregate findings will be presented."
+        brief = (
+            "This study uses restricted or sensitive data, requiring formal data access "
+            "agreements and institutional ethics approval before any processing begins; "
+            "only aggregate findings may be reported, never individual-level records."
         )
-        return EthicsStatement(data_sensitivity="sensitive", statement=stmt, irb_required=True, population_bias_note=None)
+        return EthicsStatement(
+            data_sensitivity="sensitive", statement=brief, irb_required=True, population_bias_note=None,
+        )
 
 
 def _build_dataset_citation(name: str, url: Optional[str], source: str) -> str:
@@ -775,21 +787,23 @@ def _extract_debates(synthesis: AnySynthesis, topic: str) -> List[str]:
 
 
 def _build_positionality(field: str, topic: str, synthesis: AnySynthesis = None) -> str:
-    scholars_sentence = ""
+    """
+    Facts for the Methodology writer to compose an ORIGINAL positionality paragraph
+    from — not a ready-made paragraph. This used to return full prose that the
+    prompt handed the writer as "the positionality statement," so every Track B
+    project in the same field read almost identically. Now it returns guidance
+    the writer must turn into prose specific to THIS topic (see phase3_workflow.py's
+    POSITIONALITY GUIDANCE block).
+    """
+    scholars_note = ""
     if synthesis and isinstance(synthesis, TheoreticalSynthesisB) and synthesis.key_scholars:
         scholar_names = [s.split("(")[0].strip() for s in synthesis.key_scholars[:3]]
-        scholars_sentence = (
-            f" The theoretical contributions of scholars such as "
-            f"{', '.join(scholar_names)} are engaged with critically, "
-            f"acknowledging both their insights and the limits of their applicability "
-            f"to the specific context under study."
-        )
+        scholars_note = f" Engage critically with: {', '.join(scholar_names)}."
     return (
-        f"As a researcher approaching {topic} from a {field} perspective, I acknowledge that my "
-        f"institutional positioning, cultural background, and disciplinary training shape both my "
-        f"interpretive choices and the theoretical frameworks I consider most relevant. This "
-        f"positionality statement is included in accordance with best practice in reflexive qualitative "
-        f"and theoretical research.{scholars_sentence}"
+        f"Researcher's disciplinary lens: {field}. Write 2-4 original sentences on how "
+        f"institutional positioning, cultural background, and disciplinary training shape "
+        f"interpretive choices specifically for '{topic}' — not generic reflexivity phrasing "
+        f"that could apply to any topic in this field.{scholars_note}"
     )
 
 
