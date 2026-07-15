@@ -114,46 +114,26 @@ class ResearchService:
             user_key_used      = False
 
             if db_session:
-                try:
-                    user = db_session.query(User).filter(User.id == project.user_id).first()
+                user = db_session.query(User).filter(User.id == project.user_id).first()
 
-                    if user:
-                        # ── BYOK: set the user's key as the active OpenAI key ──
-                        # set_default_openai_key() from the Agents SDK makes every
-                        # subsequent Runner.run() call use this key instead of the
-                        # system OPENAI_API_KEY environment variable.
-                        if user.openai_api_key:
-                            from app.core.crypto import decrypt_secret
-                            user_key = decrypt_secret(user.openai_api_key)
-                            try:
-                                from agents import set_default_openai_key
-                                set_default_openai_key(user_key)
-                                user_key_used = True
-                                print("   🔑 Using user's own API key (BYOK)")
-                            except ImportError:
-                                # agents SDK doesn't export set_default_openai_key in this version
-                                # Fall back to setting the env var for this process
-                                os.environ["OPENAI_API_KEY"] = user_key
-                                user_key_used = True
-                                print("   🔑 Using user's own API key via env (BYOK)")
-                        else:
-                            print("   🔑 Using system OPENAI_API_KEY (no user key set)")
+                if user:
+                    # No try/except here: apply_openai_key raises if the user's
+                    # stored key can't be decrypted, their free spec-generation
+                    # trial credit is already spent, or REQUIRE_BYOK blocks the
+                    # system key — the run must fail with that clear message,
+                    # not silently fall through and bill the system key (this
+                    # is also what closes the gap where REQUIRE_BYOK protected
+                    # Topic Lab but not the paid generation path).
+                    from app.utils.openai_key import apply_openai_key
+                    user_key_used = apply_openai_key(user, db_session=db_session, credit_kind="spec")
 
-                        # ── Model tier: build AgentModelConfig ─────────────────
-                        from app.models.agent_config import build_agent_config_for_user
-                        agent_model_config = build_agent_config_for_user(
-                            model_tier=user.model_tier or "production",
-                            custom_model_config=user.custom_model_config,
-                        )
-                        print(f"   🤖 Model tier: {user.model_tier or 'production'}")
-
-                except Exception as exc:
-                    from app.core.crypto import SecretDecryptionError
-                    if isinstance(exc, SecretDecryptionError):
-                        # A stored BYOK key that can't be decrypted must abort the
-                        # run — falling through would silently bill the system key.
-                        raise
-                    print(f"   ⚠️  Could not load user settings ({exc}) — using system defaults")
+                    # ── Model tier: build AgentModelConfig ─────────────────────
+                    from app.models.agent_config import build_agent_config_for_user
+                    agent_model_config = build_agent_config_for_user(
+                        model_tier=user.model_tier or "production",
+                        custom_model_config=user.custom_model_config,
+                    )
+                    print(f"   🤖 Model tier: {user.model_tier or 'production'}")
 
             # ── Run pipeline ───────────────────────────────────────────────────
             start_time = datetime.utcnow()
@@ -180,6 +160,19 @@ class ResearchService:
                         set_default_openai_key(system_key)
                 except Exception:
                     pass
+
+            # Guard against resurrecting a cancellation: /cancel writes FAILED
+            # from a different DB session/connection, so re-read this row
+            # before unconditionally overwriting it back to COMPLETE.
+            if db_session:
+                db_session.refresh(project)
+                if project.status == ProjectStatus.FAILED:
+                    return {
+                        "success":    False,
+                        "error":      "cancelled",
+                        "project_id": project.id,
+                        "status":     "cancelled",
+                    }
 
             project.status              = ProjectStatus.COMPLETE
             project.progress_percentage = 100

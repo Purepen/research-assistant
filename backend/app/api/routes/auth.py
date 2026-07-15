@@ -76,6 +76,7 @@ class UserResponse(BaseModel):
     full_name:      str
     email_verified: bool
     created_at:     str
+    auth_provider:  str = "email"
 
 
 # ── EMAIL / PASSWORD AUTH ─────────────────────────────────────────────────────
@@ -180,6 +181,7 @@ async def login(
             "email":          user.email,
             "full_name":      user.full_name,
             "email_verified": user.email_verified,
+            "auth_provider":  "google" if user.google_id else "email",
         },
     }
 
@@ -336,6 +338,7 @@ async def google_sign_in(
             "full_name":      user.full_name,
             "email_verified": user.email_verified,
             "picture":        google_user.get("picture"),
+            "auth_provider":  "google",
         },
     }
 
@@ -362,6 +365,7 @@ async def get_current_user(
         "full_name":      user.full_name,
         "email_verified": user.email_verified,
         "created_at":     user.created_at.isoformat(),
+        "auth_provider":  "google" if user.google_id else "email",
     }
 
 

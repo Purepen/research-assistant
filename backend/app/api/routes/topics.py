@@ -272,6 +272,7 @@ def _save_topic_session(
 async def discover_topics(
     req: TopicDiscoveryRequest,
     user=Depends(get_current_user),
+    db=Depends(get_db_session),
 ):
     """
     Discover topics based on student profile.
@@ -280,8 +281,14 @@ async def discover_topics(
     BYOK FIX: apply_openai_key(user) sets the correct key before any agent call.
     """
     # ── BYOK: resolve correct OpenAI key before any agent call ───────────────
+    # Free users get one Topic Lab credit total (shared across discover/scout/
+    # refine/vet/find-projects) on the system key; after that they need their
+    # own key. Users with their own key are never gated.
     from app.utils.openai_key import apply_openai_key
-    apply_openai_key(user)
+    try:
+        apply_openai_key(user, db_session=db, credit_kind="topic")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=402, detail=str(exc))
 
     try:
         # Build the base kwargs — always valid regardless of run_topic_discovery version
@@ -320,10 +327,14 @@ async def discover_topics(
 async def scout_topic_data(
     req: TopicScoutRequest,
     user=Depends(get_current_user),
+    db=Depends(get_db_session),
 ):
     # ── BYOK: resolve correct OpenAI key before any agent call ───────────────
     from app.utils.openai_key import apply_openai_key
-    apply_openai_key(user)
+    try:
+        apply_openai_key(user, db_session=db, credit_kind="topic")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=402, detail=str(exc))
 
     try:
         output = await run_data_scout(
@@ -358,7 +369,10 @@ async def refine_topic(
     """
     # ── BYOK: resolve correct OpenAI key before any agent call ───────────────
     from app.utils.openai_key import apply_openai_key
-    apply_openai_key(user)
+    try:
+        apply_openai_key(user, db_session=db, credit_kind="topic")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=402, detail=str(exc))
 
     try:
         output = await run_topic_advisor(
@@ -418,10 +432,14 @@ async def refine_topic(
 async def find_similar_projects(
     req: ProjectScoutRequest,
     user=Depends(get_current_user),
+    db=Depends(get_db_session),
 ):
     # ── BYOK: resolve correct OpenAI key before any agent call ───────────────
     from app.utils.openai_key import apply_openai_key
-    apply_openai_key(user)
+    try:
+        apply_openai_key(user, db_session=db, credit_kind="topic")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=402, detail=str(exc))
 
     try:
         output = await run_project_scout(
@@ -445,6 +463,7 @@ async def find_similar_projects(
 async def vet_topic(
     req: TopicVetRequest,
     user=Depends(get_current_user),
+    db=Depends(get_db_session),
 ):
     """
     "I already have a topic" path.
@@ -458,7 +477,10 @@ async def vet_topic(
     """
     # ── BYOK: resolve correct OpenAI key before any agent call ───────────────
     from app.utils.openai_key import apply_openai_key
-    apply_openai_key(user)
+    try:
+        apply_openai_key(user, db_session=db, credit_kind="topic")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=402, detail=str(exc))
 
     try:
         result: VetTopicOutput = await run_topic_vet(

@@ -74,15 +74,15 @@ async def create_strategic_synthesis(
     _theoretical_agent   = theoretical_synthesizer_b_agent
 
     if agent_model_config is not None:
-        try:
-            from app.core.agents.definitions.phase2_agents import build_phase2_agents
-            _agents = build_phase2_agents(agent_model_config)
-            _strategic_agent   = _agents["strategic_synthesizer"]
-            _theoretical_agent = _agents["theoretical_synthesizer"]
-            from app.models.agent_config import AgentKey
-            print(f"   🤖 Phase 2 model: {agent_model_config.get(AgentKey.STRATEGIC_SYNTHESIZER)}")
-        except Exception as exc:
-            print(f"   ⚠️  Could not build tier-aware phase2 agents ({exc}) — using defaults")
+        # No try/except here: a user paying for a model tier must get it or see
+        # the failure — silently downgrading to defaults was Bug #2.
+        from app.core.agents.definitions.phase2_agents import build_phase2_agents
+        from app.models.agent_config import AgentKey
+
+        _agents = build_phase2_agents(agent_model_config)
+        _strategic_agent   = _agents["strategic_synthesizer"]
+        _theoretical_agent = _agents["theoretical_synthesizer"]
+        print(f"   🤖 Phase 2 model: {agent_model_config.get(AgentKey.STRATEGIC_SYNTHESIZER)}")
 
     # ── Build context — UNCHANGED ─────────────────────────────────────────────
     resources_summary = f"""

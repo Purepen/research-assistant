@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  output: 'standalone', // smaller Docker image — see frontend/Dockerfile
 
   // ── Fix: Cross-Origin-Opener-Policy for Google OAuth popup ───────────────
   // Next.js 14 defaults to `same-origin` which blocks Google's OAuth popup

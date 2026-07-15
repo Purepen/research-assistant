@@ -228,7 +228,15 @@ class AuthService:
     
     def verify_google_token(self, id_token_str: str) -> Optional[dict]:
         """Verify Google ID token"""
-        
+
+        if not self.google_client_id:
+            # Fail closed: google-auth's verify_oauth2_token skips the audience
+            # check entirely when audience=None, which would accept a token
+            # issued for ANY Google OAuth client, not just this app. Refuse
+            # instead of silently trusting an unconfigured deployment.
+            print("Google sign-in rejected: GOOGLE_CLIENT_ID is not configured")
+            return None
+
         try:
             idinfo = id_token.verify_oauth2_token(
                 id_token_str,

@@ -127,10 +127,11 @@ class StorageAdapter:
         )
         
         url = f"https://{self.s3_bucket}.s3.amazonaws.com/{key}"
-        
+
         return {
             "success": True,
             "key": key,
+            "path": key,   # every consumer reads result["path"] regardless of backend
             "filename": filename,
             "folder": folder,
             "url": url

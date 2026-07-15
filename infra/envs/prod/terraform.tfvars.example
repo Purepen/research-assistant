@@ -1,0 +1,24 @@
+# Copy this file to terraform.tfvars (gitignored) and fill in real values.
+# Never commit terraform.tfvars — it holds secrets.
+
+aws_region = "us-east-1"
+
+# Generate with:
+#   python -c "import secrets; print(secrets.token_urlsafe(48))"
+jwt_secret_key = "REPLACE_ME_32_CHARS_MINIMUM"
+
+# Generate with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+fernet_key = "REPLACE_ME"
+
+# System OpenAI key — used ONLY for the free-trial fallback (one free Topic
+# Lab action + one free spec generation per user with no key of their own).
+# Required for the free trial to work at all.
+openai_api_key = "sk-REPLACE_ME"
+
+# Optional — leave blank to disable transactional email (verification/reset
+# emails just won't send; the app treats that as non-fatal).
+resend_api_key = ""
+
+# Optional — leave blank to disable Google sign-in (fails closed, not open).
+google_client_id = ""

@@ -851,7 +851,7 @@ function ChatStage({ topic, formData, scoutData, onFinal, onChangeTopic }:
           {chatStage==='explain'?'Your advisor is sizing up the topic…':chatStage==='questions'?`Feasibility check · ~${questionCount}/4 questions`:chatStage==='feasibility'?'Assessing your situation…':'Writing your final topic…'}
         </p>
         <div style={{ display:'flex',alignItems:'center',gap:8 }}>
-          {helpClicked&&<motion.span initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} style={{ fontSize:'.78rem',color:'#9ca3af',fontStyle:'italic' }}>dropping son</motion.span>}
+          {helpClicked&&<motion.span initial={{opacity:0,x:10}} animate={{opacity:1,x:0}} style={{ fontSize:'.78rem',color:'#9ca3af',fontStyle:'italic' }}>Coming soon</motion.span>}
           <button onClick={()=>setHelpClicked(true)}
             style={{ display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:8,border:'1.5px solid #e8ede8',background:'white',color:'#6b7280',fontSize:'.76rem',fontWeight:600,cursor:'pointer',transition:'all .15s' }}
             onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor='#fecaca';el.style.color='#dc2626';el.style.background='#fef2f2'}}

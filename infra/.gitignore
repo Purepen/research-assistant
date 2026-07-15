@@ -1,0 +1,15 @@
+# Terraform local state and cache — holds plaintext secrets (DB password,
+# secret ARNs, etc.) since we're using local state for v1. Never commit these.
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/terraform.tfstate.*.backup
+**/*.tfplan
+crash.log
+crash.*.log
+
+# Real secrets — only the .example template is meant to be committed.
+**/terraform.tfvars
+!**/terraform.tfvars.example
+
+# .terraform.lock.hcl IS committed on purpose (pins provider versions).

@@ -17,6 +17,7 @@ dependencies = [
     # Database
     "sqlalchemy==2.0.25",
     "alembic==1.13.1",
+    "psycopg2-binary==2.9.9",  # driver for postgresql:// DATABASE_URL in deployed envs (SQLite needs no driver)
     # Auth
     "pyjwt==2.11.0",
     "passlib[bcrypt]==1.7.4",

@@ -9,9 +9,14 @@ Safe to run multiple times — each ALTER is wrapped in try/except so already-
 existing columns are skipped silently.
 """
 
+import os
+
 from sqlalchemy import create_engine, text
 
-engine = create_engine("""sqlite:///./research_assistant.db""")
+# Honor DATABASE_URL like the rest of the app (app/api/dependencies.py) instead
+# of always targeting the local SQLite file — running this against a
+# configured Postgres deployment used to silently migrate the wrong database.
+engine = create_engine(os.getenv("DATABASE_URL", "sqlite:///./research_assistant.db"))
 
 migrations = [
     # Apr 2026 — Model Tier + BYOK
@@ -21,6 +26,10 @@ migrations = [
 
     # Apr 2026 — Critic Analysis
     ("""ALTER TABLE project_results ADD COLUMN critic_json JSON""",                            "project_results.critic_json"),
+
+    # Jul 2026 — Free-trial credits
+    ("""ALTER TABLE users ADD COLUMN free_topic_credit_used BOOLEAN NOT NULL DEFAULT 0""",     "users.free_topic_credit_used"),
+    ("""ALTER TABLE users ADD COLUMN free_spec_credit_used BOOLEAN NOT NULL DEFAULT 0""",      "users.free_spec_credit_used"),
 ]
 
 with engine.connect() as conn:

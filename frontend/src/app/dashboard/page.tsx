@@ -238,7 +238,7 @@ export default function DashboardPage() {
                     className="g-row" onClick={()=>router.push(`/dashboard/projects/${p.id}`)}
                     style={{ padding:'13px 20px',borderBottom:i<recent.length-1?'1px solid #f3f4f6':'none',cursor:'pointer',display:'flex',alignItems:'center',gap:14 }}>
                     {/* Status dot */}
-                    <div style={{ width:8,height:8,borderRadius:'50%',flexShrink:0,background:p.status==='completed'?'#16a34a':p.status==='failed'?'#dc2626':'#d97706',boxShadow:`0 0 0 2px ${p.status==='completed'?'#dcfce7':p.status==='failed'?'#fef2f2':'#fef3c7'}` }}/>
+                    <div style={{ width:8,height:8,borderRadius:'50%',flexShrink:0,background:p.status==='complete'?'#16a34a':p.status==='failed'?'#dc2626':'#d97706',boxShadow:`0 0 0 2px ${p.status==='complete'?'#dcfce7':p.status==='failed'?'#fef2f2':'#fef3c7'}` }}/>
                     <div style={{ flex:1,minWidth:0 }}>
                       <p style={{ margin:'0 0 2px',fontWeight:600,color:'#0f1f0f',fontSize:'.86rem',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>
                         {p.research_topic||p.field_of_study||'Untitled'}

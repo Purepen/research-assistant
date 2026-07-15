@@ -190,3 +190,13 @@
   font-size: .92rem; color: var(--g-text-sec); line-height: 1.8;
   white-space: pre-wrap; font-family: 'Georgia', serif;
 }
+
+/* ── Responsive: mobile nav ───────────────────────────────────────
+   Below 860px the fixed sidebar has no room, so it's hidden in favor
+   of the hamburger menu + slide-out drawer in Header.tsx. */
+.g-mobile-menu-btn { display: none; }
+@media (max-width: 860px) {
+  .g-sidebar { display: none; }
+  .g-main-wrap { padding-left: 0 !important; }
+  .g-mobile-menu-btn { display: inline-flex; }
+}

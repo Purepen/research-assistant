@@ -485,7 +485,7 @@ export default function ProfilePage() {
             {[
               { label: 'Full Name',    value: user?.full_name || '—',   icon: <I.User /> },
               { label: 'Email',        value: user?.email     || '—',   icon: <I.Mail /> },
-              { label: 'Account Type', value: 'Google OAuth 2.0',       icon: <I.Google /> },
+              { label: 'Account Type', value: user?.auth_provider === 'google' ? 'Google OAuth 2.0' : 'Email & Password', icon: user?.auth_provider === 'google' ? <I.Google /> : <I.Lock /> },
               { label: 'Member Since', value: joined,                   icon: <I.Shield /> },
             ].map((row, i, arr) => (
               <div key={row.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 20px', borderBottom: i < arr.length - 1 ? '1px solid #f9fafb' : 'none' }}>
@@ -502,7 +502,11 @@ export default function ProfilePage() {
             <div style={{ padding: '12px 20px', background: '#fafcfa' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ color: '#9ca3af', flexShrink: 0, marginTop: 1 }}><I.Info /></div>
-                <p style={{ margin: 0, fontSize: '.76rem', color: '#9ca3af', lineHeight: 1.6 }}>Profile details are managed via your Google account. Direct editing will be available in a future update.</p>
+                <p style={{ margin: 0, fontSize: '.76rem', color: '#9ca3af', lineHeight: 1.6 }}>
+                  {user?.auth_provider === 'google'
+                    ? 'Profile details are managed via your Google account. Direct editing will be available in a future update.'
+                    : 'Direct profile editing will be available in a future update.'}
+                </p>
               </div>
             </div>
           </motion.div>
@@ -520,10 +524,10 @@ export default function ProfilePage() {
               </div>
             </div>
             <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><I.Google /></div>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{user?.auth_provider === 'google' ? <I.Google /> : <I.Lock />}</div>
               <div style={{ flex: 1 }}>
-                <p style={{ margin: '0 0 3px', fontWeight: 700, color: '#0f1f0f', fontSize: '.9rem' }}>Google Sign-In</p>
-                <p style={{ margin: 0, fontSize: '.78rem', color: '#6b7280' }}>Secured via Google OAuth 2.0 — industry-standard authentication</p>
+                <p style={{ margin: '0 0 3px', fontWeight: 700, color: '#0f1f0f', fontSize: '.9rem' }}>{user?.auth_provider === 'google' ? 'Google Sign-In' : 'Email & Password'}</p>
+                <p style={{ margin: 0, fontSize: '.78rem', color: '#6b7280' }}>{user?.auth_provider === 'google' ? 'Secured via Google OAuth 2.0 — industry-standard authentication' : 'Secured via bcrypt-hashed password authentication'}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 999, background: '#f0fdf4', border: '1px solid #bbf7d0', fontSize: '.72rem', fontWeight: 700, color: '#16a34a', flexShrink: 0 }}><I.Check /> Active</div>
             </div>

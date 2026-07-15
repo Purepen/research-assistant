@@ -19,6 +19,7 @@ export interface User {
   full_name:      string
   email_verified: boolean
   created_at?:    string
+  auth_provider?: 'google' | 'email'
 }
 
 // ── Config sent to /research/generate ─────────────────────────────────────────
@@ -166,6 +167,9 @@ export interface UserStats {
   average_marks:                   number
   total_generation_time_seconds:   number
   total_generation_time_hours:     number
+  has_own_api_key:                 boolean
+  free_topic_credit_used:          boolean
+  free_spec_credit_used:           boolean
 }
 
 export interface ApiResponse<T = any> {

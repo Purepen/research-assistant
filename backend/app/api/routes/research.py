@@ -17,11 +17,12 @@ BUG FIX (carried over from v2):
 from __future__ import annotations
 
 from fastapi import (
-    APIRouter, BackgroundTasks, Depends, HTTPException,
+    APIRouter, Depends, HTTPException,
     status, UploadFile, File, Form,
 )
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Dict, List, Optional
+import asyncio
 import json
 
 from app.services.research_service import ResearchService
@@ -36,6 +37,14 @@ router = APIRouter(prefix="/research", tags=["Research"])
 research_service = ResearchService()
 auth_service     = AuthService()
 storage_service  = StorageService()
+
+# ── In-process cancellation registry ──────────────────────────────────────────
+# Maps project_id -> the asyncio.Task actually running its generation, so
+# /cancel can call task.cancel() instead of only flipping a DB column that
+# the (still-running) task would otherwise overwrite back to COMPLETE.
+# This is a single-process stopgap — the cloud/Step-Functions build
+# (roadmap.md WS1) replaces it with a real StopExecution call.
+_RUNNING_GENERATIONS: Dict[int, "asyncio.Task"] = {}
 
 
 # ─── Response models ──────────────────────────────────────────────────────────
@@ -83,6 +92,12 @@ async def _run_generation_background(project_id: int, config: SpecificationConfi
         )
         print(f"✅ Background generation complete for project {project_id}")
 
+    except asyncio.CancelledError:
+        # /cancel already wrote the terminal DB status before calling
+        # task.cancel() — nothing to update here, just don't swallow it
+        # (re-raising is what actually marks the asyncio.Task cancelled).
+        print(f"🛑 Background generation for project {project_id} was cancelled")
+        raise
     except Exception as exc:
         print(f"❌ Background generation FAILED for project {project_id}: {exc}")
         import traceback
@@ -102,7 +117,6 @@ async def _run_generation_background(project_id: int, config: SpecificationConfi
 
 @router.post("/generate", response_model=GenerateResponse)
 async def generate_specification(
-    background_tasks: BackgroundTasks,
     config_json: str = Form(...),
     guidelines_file: Optional[UploadFile] = File(None),
     past_project_files: Optional[List[UploadFile]] = File(None),
@@ -190,7 +204,13 @@ async def generate_specification(
     db.commit()
 
     # ── 6. Launch background task ─────────────────────────────────────────────
-    background_tasks.add_task(_run_generation_background, project.id, config, dataset_file_path)
+    # Uses asyncio.create_task (not FastAPI's BackgroundTasks) so we keep a
+    # handle we can actually cancel — see /cancel below and Bug #4 in context.md.
+    task = asyncio.create_task(
+        _run_generation_background(project.id, config, dataset_file_path)
+    )
+    _RUNNING_GENERATIONS[project.id] = task
+    task.add_done_callback(lambda _t, pid=project.id: _RUNNING_GENERATIONS.pop(pid, None))
     print(f"📋 Project {project.id} queued")
 
     return GenerateResponse(
@@ -304,5 +324,12 @@ async def cancel_generation(
     project.status = ProjectStatus.FAILED
     project.current_phase = "Cancelled by user"
     db.commit()
+
+    # Actually stop the running pipeline (Bug #4) — without this, the
+    # background task kept running to completion regardless and could
+    # overwrite this FAILED status back to COMPLETE when it finished.
+    task = _RUNNING_GENERATIONS.get(project_id)
+    if task and not task.done():
+        task.cancel()
 
     return {"success": True, "message": "Generation cancelled"}

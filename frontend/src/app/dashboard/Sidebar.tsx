@@ -15,7 +15,7 @@ const IcoPlus    = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="n
 const IcoUser    = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
 const IcoOut     = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
 
-const NAV = [
+export const NAV = [
   { label:'Dashboard', href:'/dashboard',         icon:IcoGrid,  desc:'Overview',        accent:false },
   { label:'Topic Lab', href:'/dashboard/topics',  icon:IcoFlask, desc:'Find & refine',   accent:true  },
   { label:'Projects',  href:'/dashboard/projects',icon:IcoFiles, desc:'All specs',        accent:false },
@@ -30,14 +30,14 @@ export function Sidebar() {
 
   const initials = user?.full_name
     ? user.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : 'R'
-  const used = stats?.total_projects ?? 0
-  const freeLimit = 3
-  const pct = Math.min((used / freeLimit) * 100, 100)
+  const hasOwnKey    = stats?.has_own_api_key ?? false
+  const topicCredit  = stats?.free_topic_credit_used ?? false
+  const specCredit   = stats?.free_spec_credit_used ?? false
   const { data: topicData } = useTopicHistory({ limit:1 })
   const topicsUsed = topicData?.total ?? 0
 
   return (
-    <div style={{ position:'fixed',top:0,left:0,bottom:0,width:'var(--g-sidebar-w)',zIndex:40,display:'flex',flexDirection:'column',background:'#ffffff',borderRight:'1px solid #e8ede8' }}>
+    <div className="g-sidebar" style={{ position:'fixed',top:0,left:0,bottom:0,width:'var(--g-sidebar-w)',zIndex:40,display:'flex',flexDirection:'column',background:'#ffffff',borderRight:'1px solid #e8ede8' }}>
       <style>{`
         .sb-logout{transition:all .15s;cursor:pointer;background:none;border:none;width:100%;text-align:left;}
         .sb-logout:hover{background:#fef2f2!important;color:#dc2626!important;}
@@ -106,18 +106,34 @@ export function Sidebar() {
       {/* Usage tier */}
       <div style={{ padding:'12px 16px' }}>
         <div style={{ background:'#f9fafb',borderRadius:12,padding:'12px 14px',border:'1px solid #f0f4f0' }}>
-          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6 }}>
-            <span style={{ fontSize:'.72rem',fontWeight:700,color:'#374151' }}>Free tier</span>
-            <span style={{ fontSize:'.72rem',fontWeight:700,color: pct>=100?'#dc2626':'#16a34a' }}>{used}/{freeLimit} specs</span>
+          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8 }}>
+            <span style={{ fontSize:'.72rem',fontWeight:700,color:'#374151' }}>{hasOwnKey ? 'Your API key' : 'Free trial'}</span>
+            {hasOwnKey && <span style={{ fontSize:'.68rem',fontWeight:700,color:'#16a34a' }}>Unlimited</span>}
           </div>
-          <div style={{ height:5,background:'#e8ede8',borderRadius:999,overflow:'hidden',marginBottom:8 }}>
-            <motion.div initial={{width:0}} animate={{width:`${pct}%`}} transition={{duration:.6,ease:'easeOut'}}
-              style={{ height:'100%',borderRadius:999,background: pct>=100?'#dc2626':'linear-gradient(90deg,#16a34a,#22c55e)' }}/>
-          </div>
-          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
-            <span style={{ fontSize:'.68rem',color:'#9ca3af' }}><span style={{ fontSize:'.62rem',marginRight:3 }}>🧪</span>{topicsUsed} topic{topicsUsed!==1?'s':''} explored</span>
-            {pct>=100&&<span style={{ fontSize:'.66rem',color:'#dc2626',fontWeight:600 }}>Limit reached</span>}
-          </div>
+          {hasOwnKey ? (
+            <p style={{ margin:0,fontSize:'.68rem',color:'#9ca3af' }}>Generations run on your own OpenAI key.</p>
+          ) : (
+            <>
+              <div style={{ display:'flex',flexDirection:'column',gap:5,marginBottom:8 }}>
+                <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
+                  <span style={{ fontSize:'.7rem',color:'#6b7280' }}>Topic Lab try</span>
+                  <span style={{ fontSize:'.7rem',fontWeight:700,color: topicCredit?'#dc2626':'#16a34a' }}>{topicCredit?'Used':'Available'}</span>
+                </div>
+                <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
+                  <span style={{ fontSize:'.7rem',color:'#6b7280' }}>Spec generation try</span>
+                  <span style={{ fontSize:'.7rem',fontWeight:700,color: specCredit?'#dc2626':'#16a34a' }}>{specCredit?'Used':'Available'}</span>
+                </div>
+              </div>
+              <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
+                <span style={{ fontSize:'.66rem',color:'#9ca3af' }}><span style={{ fontSize:'.6rem',marginRight:3 }}>🧪</span>{topicsUsed} topic{topicsUsed!==1?'s':''} explored</span>
+              </div>
+              {(topicCredit || specCredit) && (
+                <Link href="/dashboard/profile" style={{ display:'block',textAlign:'center',fontSize:'.68rem',fontWeight:700,color:'#16a34a',textDecoration:'none',padding:'8px 0 0',marginTop:8,borderTop:'1px solid #e8ede8' }}>
+                  Add your API key for unlimited use →
+                </Link>
+              )}
+            </>
+          )}
         </div>
       </div>
 

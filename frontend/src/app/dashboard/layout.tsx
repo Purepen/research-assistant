@@ -30,7 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <QueryClientProvider client={queryClient}>
       <div style={{ minHeight:'100vh', background:'var(--g-bg)' }}>
         <Sidebar />
-        <div style={{ paddingLeft:'var(--g-sidebar-w)' }}>
+        <div className="g-main-wrap" style={{ paddingLeft:'var(--g-sidebar-w)' }}>
           <Header />
           <main style={{ padding:'28px 32px 60px', maxWidth:1240, boxSizing:'border-box' }}>{children}</main>
         </div>

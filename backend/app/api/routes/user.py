@@ -119,6 +119,9 @@ async def get_user_stats(
         "average_marks":                 round(avg_marks, 1),
         "total_generation_time_seconds": total_time,
         "total_generation_time_hours":   round(total_time / 3600, 1),
+        "has_own_api_key":               bool(user.openai_api_key),
+        "free_topic_credit_used":        user.free_topic_credit_used,
+        "free_spec_credit_used":         user.free_spec_credit_used,
     }
 
 

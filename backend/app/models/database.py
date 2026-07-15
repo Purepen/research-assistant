@@ -151,6 +151,13 @@ class User(Base):
     # Text, not String(255): a Fernet token of a long sk-proj- key exceeds 255 chars
     openai_api_key = Column(Text, nullable=True)
 
+    # ── Free-trial credits (Jul 2026) ─────────────────────────────────────────
+    # Users with no key of their own get exactly one free Topic Lab action and
+    # one free specification generation on the shared system key. See
+    # app/services/trial_service.py. Irrelevant once the user has their own key.
+    free_topic_credit_used = Column(Boolean, default=False, nullable=False, server_default="0")
+    free_spec_credit_used  = Column(Boolean, default=False, nullable=False, server_default="0")
+
     # Relationships
     projects       = relationship("Project",      back_populates="user", cascade="all, delete-orphan")
     topic_sessions = relationship("TopicSession", back_populates="user", cascade="all, delete-orphan",

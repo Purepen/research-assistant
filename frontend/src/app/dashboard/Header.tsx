@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
 import Link from 'next/link'
+import { NAV } from '@/app/dashboard/Sidebar'
 
 const IcoPlus  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 const IcoCaret = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -26,6 +27,10 @@ export function Header() {
     <>
       <header style={{ position:'sticky', top:0, zIndex:30, height:54, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 32px', background:'rgba(255,255,255,0.95)', backdropFilter:'blur(12px)', borderBottom:'1px solid #e8ede8', boxShadow:'0 1px 0 #f0f4f0' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <button className="g-mobile-menu-btn" onClick={() => setOpen(true)}
+            style={{ alignItems:'center', justifyContent:'center', width:32, height:32, borderRadius:8, border:'1px solid #e8ede8', background:'white', color:'#374151', cursor:'pointer', padding:0 }}>
+            <IcoMenu />
+          </button>
           <div style={{ display:'flex', alignItems:'center', gap:5 }}>
             {isDetail && <>
               <Link href="/dashboard/projects" style={{ fontSize:'.78rem', color:'#9ca3af', textDecoration:'none', fontWeight:500, transition:'color .15s' }}
@@ -53,10 +58,29 @@ export function Header() {
               onClick={() => setOpen(false)}
               style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.3)', backdropFilter:'blur(2px)' }} />
             <motion.div initial={{ x:-260 }} animate={{ x:0 }} exit={{ x:-260 }} transition={{ type:'spring', damping:26, stiffness:300 }}
-              style={{ position:'absolute', top:0, left:0, bottom:0, width:260, background:'white', borderRight:'1px solid #e8ede8', padding:'20px 14px' }}>
+              style={{ position:'absolute', top:0, left:0, bottom:0, width:260, background:'white', borderRight:'1px solid #e8ede8', padding:'20px 14px', overflowY:'auto' }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24 }}>
                 <span style={{ fontWeight:800, color:'#0f1f0f', fontSize:'.9rem' }}>ResearchAI</span>
                 <button onClick={() => setOpen(false)} style={{ background:'none', border:'none', cursor:'pointer', color:'#9ca3af', padding:4 }}><IcoX /></button>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                {NAV.map(item => {
+                  const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                  return (
+                    <Link key={item.href} href={item.href} onClick={() => setOpen(false)} className="g-nav">
+                      <div className={`g-nav-inner ${active ? 'active' : ''}`}>
+                        <div style={{ width:30, height:30, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+                          background: active ? '#dcfce7' : '#f9fafb', color: active ? '#16a34a' : '#9ca3af' }}>
+                          <item.icon />
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:'.83rem', fontWeight: active ? 700 : 500, color: active ? '#0f1f0f' : 'inherit' }}>{item.label}</div>
+                          <div style={{ fontSize:'.66rem', color:'#9ca3af' }}>{item.desc}</div>
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
             </motion.div>
           </div>
