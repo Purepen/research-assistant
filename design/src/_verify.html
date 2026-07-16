@@ -1,0 +1,16 @@
+<meta charset="utf-8">
+<style>*{margin:0;padding:0}body{overflow:hidden}iframe{border:0;height:16000px;display:block}</style>
+<iframe id="f"></iframe>
+<script>
+const p = new URLSearchParams(location.search);
+const i = parseInt(p.get('i') || '0', 10);
+const src = p.get('src') || 'mobile-redesign.html';
+const h = parseInt(p.get('h') || '1123', 10);
+const w = parseInt(p.get('w') || '794', 10);
+document.body.style.width = w + 'px';
+document.body.style.height = h + 'px';
+const f = document.getElementById('f');
+f.style.width = w + 'px';
+f.src = src;
+f.style.marginTop = (-i * h) + 'px';
+</script>

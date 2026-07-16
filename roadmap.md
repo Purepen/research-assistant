@@ -6,6 +6,8 @@ The research-assistant (FastAPI + Next.js research-proposal generator with a 7-p
 
 **User-approved decisions:** Aurora Serverless v2 PostgreSQL · stabilize-first sequencing · Stripe subscriptions + BYOK · Terraform · **lean cost posture (~$45–70/mo: prod-only env, no RDS Proxy, single NAT, Aurora 0-ACU auto-pause)** · Lambda granularity delegated to me → **per-phase Lambdas + one section-writer Lambda invoked 7× by the state machine** (per-agent retry/observability without 25 functions).
 
+**2026-07-15 update:** added **Workstream 0.5 — Quick Deploy** below, a parallel/interim track to get the *existing* app live on real infrastructure now rather than waiting for WS1/WS2 to finish. This does **not** replace or change Workstream 1/2 — those remain the actual destination architecture. WS0.5 deliberately reuses the same VPC/Aurora/S3/secrets shape WS1/WS2 need anyway, so nothing built there is thrown away when the Lambda/Step-Functions rebuild happens — it's additive (swap ECS for Lambda later), not a detour.
+
 **Verified-in-code findings that shape the design** (each confirmed by direct read, not assumed):
 1. `phase4_workflow.py:271-276` — reviewer feedback is appended as `[REVISION NOTE:…]` to *already-generated* sections; the 7 writers regenerate blind each iteration. The new loop passes `previous_feedback` into writer contexts — deliberate behavior improvement, must be tested explicitly.
 2. S3 storage is broken end-to-end today: `storage_adapter.py:105` `_save_s3` returns `key`/`url` but `storage_service.py:69/90/121` and `routes/research.py:148/160` read `result["path"]` → KeyError; pipeline consumers (`Document(path)`, `_read_file_text`, `profile_dataset`) expect local paths.
@@ -35,6 +37,36 @@ Ordered per audit priority; one commit per fix, with tests.
 | 0.10 | GitHub Actions CI: backend (uv sync, ruff, pytest) + frontend (`tsc --noEmit`, `next build`), required on PRs | `.github/workflows/ci.yml` |
 
 **Verify:** fresh clone → both builds green → one full local generation (testing tier, max_iterations=1) completes; project page shows a real phase name; save its `complete_results` JSON as the golden fixture.
+
+---
+
+## Workstream 0.5 — Quick Deploy (v1 showcase, parallel/interim — added 2026-07-15)
+
+**Why this exists:** after WS0 finished, the user wanted something real and live to show progress *now*, rather than waiting the several more weeks WS1→WS2 will take. Rather than a throwaway shortcut, this deploys the *existing* app (as containers) onto real, Terraform-managed AWS infrastructure that WS1/WS2 will keep using — same VPC shape, same Aurora, same S3 bucket, same Secrets Manager entries. Only the compute layer (ECS Fargate here vs. Lambda/Step Functions in WS2) gets replaced later.
+
+**What was built**, all under `infra/` (full runbook in `infra/README.md`):
+- `infra/modules/{network,security,database,storage,ecr,service}` — VPC (2 public + 2 private subnets, 1 NAT gateway), Secrets Manager entries (JWT secret, Fernet key, system OpenAI key, Resend key), Aurora Serverless v2 Postgres (private subnets, 0.5 ACU floor), S3 uploads bucket, 2 ECR repos, and one reusable `service` module (ECS Fargate task + its own ALB + IAM roles + CloudWatch logs) used twice — once for the backend, once for the frontend.
+- `infra/envs/prod/` wires those modules together. Two ALBs rather than one shared with routing rules (simpler to reason about; ~$16-20/mo more, easy to consolidate later).
+- `backend/Dockerfile` (multi-stage, `uv`-based) and `frontend/Dockerfile` (Next.js `output: 'standalone'`) — both built and smoke-tested locally *before* ever touching AWS: backend `/health` → 200 inside a real container; frontend landing page served real HTML/CSS/JS. Backend takes ~20s to boot (pandas/openai-agents imports) — `health_check_grace_period_seconds` on the ECS service accounts for this.
+- `infra/scripts/deploy.sh` — automates the build→push→force-redeploy cycle for future code changes, once the initial infra exists.
+- Postgres driver was entirely missing before this (`psycopg2-binary` added to `backend/pyproject.toml` — SQLite had never needed one, so this gap was invisible until now).
+
+**Known v1-only limitations (not infra bugs, not blockers for today):**
+- File uploads still use local container storage, not the S3 bucket that gets created — the app's S3 code path needs the `download_to_tmp()` plumbing this roadmap's WS1.4 already scopes before pipeline consumers (`Document(path)`, `profile_dataset`) can read a file back from S3 instead of a local path. The KeyError bug that used to break S3 outright (finding #2 above) is fixed; full S3 support isn't wired up yet.
+- Resend is likely still in sandbox mode (no verified sending domain) — the developer can fully exercise register→verify→generate on their own account email, but a stranger signing up won't receive a verification email until a domain is bought and DNS-verified in Resend.
+- Google OAuth consent screen is likely still in "Testing" publishing status — only pre-approved test-user emails can sign in until it's flipped to "In production" (a Google Cloud Console setting, not an infra change; basic sign-in scopes don't need Google's lengthy verification review).
+- No *custom* domain yet — HTTPS itself is solved (see 2026-07-16 update below), but the public URL is CloudFront's own `*.cloudfront.net` name, not a purchased domain. Add Route53 + a `us-east-1` ACM cert on the distribution later for a real domain.
+
+**Status as of 2026-07-15:** AWS account created, IAM user (`aiengineer`, `AdministratorAccess`) and access key created, `aws configure` done and verified (`aws sts get-caller-identity` succeeds), Terraform + AWS CLI installed locally, `terraform init`/`validate` both clean, `terraform.tfvars` filled in (generated JWT/Fernet keys + user's own OpenAI key as the system/free-trial key). **Not yet applied** — next action is `terraform plan` → review → `terraform apply` → build/push both images → verify live.
+
+**Process note:** for this workstream specifically, the user runs every `terraform`/`aws`/`docker` command themselves to learn the material; Claude's role here is explaining and reviewing output, not executing. Scoped to cloud/infra only — doesn't apply to application-code work.
+
+**2026-07-16 update — applied for real, two bugs fixed, CloudFront edge added:**
+`terraform apply` succeeded against the live account — all 62 resources up (VPC, Aurora, ECR, Secrets Manager, S3, both ECS services + ALBs). Two things broke on contact with real infra: Aurora rejected `engine_version = "15.4"` (bumped to `15.17`), and Google sign-in failed with `Error 400: origin_mismatch` because Google's Identity Services JS flow (what this app actually uses — no redirect URI involved) flatly refuses a non-`localhost` `http://` origin, and the frontend was only reachable over the ALB's plain-HTTP DNS name.
+
+Fixed by adding **`infra/modules/cdn`**: one CloudFront distribution in front of both ALBs (path-based routing to the existing backend route prefixes, everything else to the frontend), chosen over buying a domain specifically because CloudFront's own `*.cloudfront.net` name already has a valid cert at zero setup cost — and because one shared distribution makes frontend+API same-origin, so there's no CORS to manage between them either. New `app_url` Terraform output is now the canonical URL — registered in Google Cloud Console, baked into the frontend build via `deploy.sh frontend`. Caching is off on every path (this is a TLS terminator, not a cache, for now).
+
+**Verified:** Google sign-in works end-to-end through the new URL. **Not yet verified:** the rest of the app's features through it — full generation pipeline, Topic Lab, file uploads (CloudFront's viewer-request body-size ceiling is an open risk for large guidelines/dataset uploads, untested), email links, downloads. See `context.md` §12's 2026-07-16 entry for the full implication list (HTTP-only origin traffic behind the edge, ALBs still directly reachable in parallel, new backend routes need manual entry in the CDN's path-pattern list, future custom-domain certs must be issued in `us-east-1`).
 
 ---
 

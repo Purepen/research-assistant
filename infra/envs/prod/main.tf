@@ -79,8 +79,8 @@ module "backend_service" {
   environment = {
     STORAGE_TYPE     = "local" # S3 plumbing isn't finished yet — see infra/modules/storage/main.tf
     STORAGE_PATH     = "/app/storage"
-    REQUIRE_BYOK     = "false" # must be false/unset for the free trial to work at all
-    FRONTEND_URL     = module.frontend_service.url
+    REQUIRE_BYOK     = "false"                             # must be false/unset for the free trial to work at all
+    FRONTEND_URL     = "https://${module.cdn.domain_name}" # CloudFront domain, not the frontend ALB directly — see infra/modules/cdn
     GOOGLE_CLIENT_ID = var.google_client_id
   }
 
@@ -126,3 +126,14 @@ module "frontend_service" {
   cpu                = 256
   memory             = 512
 }
+
+# HTTPS edge — see infra/modules/cdn/main.tf for why this exists (Google OAuth
+# refuses non-localhost http:// origins outright) and why it's one
+# distribution routing to both ALBs rather than one each.
+module "cdn" {
+  source                 = "../../modules/cdn"
+  name_prefix            = var.name_prefix
+  frontend_origin_domain = module.frontend_service.alb_dns_name
+  backend_origin_domain  = module.backend_service.alb_dns_name
+}
+

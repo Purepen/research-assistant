@@ -1,0 +1,1091 @@
+<meta charset="utf-8">
+<title>ResearchAI — Mobile Redesign Proposal</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&display=swap');
+
+/* ══ Print setup ══ */
+@page { size: A4 portrait; margin: 0; }
+* { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+body { font-family:'DM Sans',sans-serif; color:#0f1f0f; background:#fff; }
+.sheet { width:794px; height:1123px; page-break-after:always; position:relative; overflow:hidden; padding:40px 44px; background:#fff; }
+
+/* ══ Tokens (mirror dashboard.css) ══ */
+:root{
+  --green:#16a34a; --green-mid:#15803d; --green-light:#22c55e; --green-bg:#f0fdf4; --green-bg2:#dcfce7;
+  --ink:#0f1f0f; --ink-sec:#374151; --muted:#9ca3af; --border:#e8ede8; --bg:#f4f7f4; --surface2:#f9fafb;
+  --amber:#d97706; --red:#dc2626; --blue:#2563eb;
+}
+
+/* ══ Sheet chrome ══ */
+.shead { display:flex; align-items:baseline; justify-content:space-between; border-bottom:2px solid var(--ink); padding-bottom:14px; margin-bottom:24px; }
+.shead .k { font-size:.68rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--green); }
+.shead h2 { font-family:'Sora',sans-serif; font-size:1.5rem; font-weight:800; letter-spacing:-.02em; margin-top:2px; }
+.shead .pg { font-size:.7rem; color:var(--muted); font-weight:600; }
+.layout { display:flex; gap:30px; }
+.pcol { flex-shrink:0; position:relative; }
+.acol { flex:1; min-width:0; }
+
+/* ══ Annotations ══ */
+.an { list-style:none; display:flex; flex-direction:column; gap:14px; }
+.an li { display:flex; gap:10px; font-size:.8rem; line-height:1.55; color:var(--ink-sec); }
+.an b { color:var(--ink); }
+.an .n { flex-shrink:0; width:20px; height:20px; border-radius:50%; background:var(--green); color:#fff; font-size:.68rem; font-weight:800; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+.co { position:absolute; width:22px; height:22px; border-radius:50%; background:var(--green); color:#fff; font-size:.7rem; font-weight:800; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 3px #fff,0 2px 6px rgba(0,0,0,.25); z-index:50; }
+.why { margin-top:22px; background:var(--green-bg); border:1px solid #bbf7d0; border-radius:12px; padding:14px 16px; font-size:.76rem; line-height:1.6; color:var(--ink-sec); }
+.why b { color:var(--green-mid); display:block; font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; margin-bottom:4px; }
+
+/* ══ Phone frame (360×760 logical) ══ */
+.phone { width:378px; height:778px; background:var(--ink); border-radius:46px; padding:9px; box-shadow:0 20px 50px rgba(15,31,15,.28); position:relative; }
+.screen { width:360px; height:760px; background:#fff; border-radius:38px; overflow:hidden; display:flex; flex-direction:column; position:relative; }
+.sb { height:40px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 24px 0 28px; font-size:.74rem; font-weight:700; }
+.sb .ic { display:flex; gap:5px; align-items:center; }
+.batt { width:20px; height:10px; border:1.4px solid currentColor; border-radius:3px; position:relative; opacity:.9; }
+.batt::after{ content:''; position:absolute; inset:1.5px; right:5px; background:currentColor; border-radius:1px; }
+.homebar { position:absolute; bottom:7px; left:50%; transform:translateX(-50%); width:120px; height:4px; border-radius:2px; background:var(--ink); opacity:.85; z-index:40; }
+
+/* app bar */
+.abar { display:flex; align-items:center; gap:10px; padding:8px 16px 12px; flex-shrink:0; }
+.abar .ttl { font-family:'Sora',sans-serif; font-weight:800; font-size:1.05rem; letter-spacing:-.01em; flex:1; }
+.avat { width:32px; height:32px; border-radius:50%; background:var(--green-bg2); color:var(--green-mid); font-size:.72rem; font-weight:800; display:flex; align-items:center; justify-content:center; border:1.5px solid #bbf7d0; }
+.body { flex:1; overflow:hidden; padding:0 16px; display:flex; flex-direction:column; gap:12px; }
+.body.grey { background:var(--bg); padding-top:14px; margin:0; }
+
+/* tab bar */
+.tabbar { flex-shrink:0; height:76px; background:rgba(255,255,255,.97); border-top:1px solid var(--border); display:flex; align-items:flex-start; padding:8px 10px 0; position:relative; z-index:30; }
+.tb { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; font-size:.58rem; font-weight:700; color:var(--muted); padding-top:4px; }
+.tb.on { color:var(--green); }
+.tb svg { width:21px; height:21px; }
+.fab { flex:1; display:flex; justify-content:center; }
+.fab .fb { width:52px; height:52px; border-radius:18px; background:linear-gradient(135deg,#16a34a,#22c55e); display:flex; align-items:center; justify-content:center; color:#fff; margin-top:-22px; box-shadow:0 8px 20px rgba(22,163,74,.4), 0 0 0 5px #fff; }
+.fab svg { width:24px; height:24px; }
+
+/* ══ Mobile UI atoms ══ */
+.card { background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+.btn { display:flex; align-items:center; justify-content:center; gap:8px; height:48px; border-radius:12px; background:var(--green); color:#fff; font-weight:700; font-size:.9rem; box-shadow:0 2px 10px rgba(22,163,74,.3); }
+.btn.ghost { background:var(--green-bg); color:var(--green); border:1.5px solid rgba(22,163,74,.3); box-shadow:none; }
+.btn.line { background:#fff; color:var(--ink-sec); border:1.5px solid var(--border); box-shadow:none; }
+.inp { height:48px; border:1.5px solid var(--border); border-radius:12px; background:var(--surface2); display:flex; align-items:center; padding:0 14px; font-size:.85rem; color:var(--muted); }
+.inp.focus { border-color:var(--green); background:#fff; box-shadow:0 0 0 3px rgba(22,163,74,.1); color:var(--ink); }
+.lbl { font-size:.62rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.badge { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:999px; font-size:.6rem; font-weight:800; letter-spacing:.02em; }
+.bg-g{ background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; }
+.bg-a{ background:#fffbeb; color:#d97706; border:1px solid #fde68a; }
+.bg-r{ background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+.bg-b{ background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe; }
+.dot { width:7px; height:7px; border-radius:50%; display:inline-block; }
+.chip { display:inline-flex; align-items:center; padding:7px 14px; border-radius:999px; border:1.5px solid var(--border); font-size:.72rem; font-weight:700; color:var(--ink-sec); background:#fff; }
+.chip.on { background:var(--green); border-color:var(--green); color:#fff; }
+.prog { height:5px; background:#e5e7eb; border-radius:999px; overflow:hidden; }
+.prog i { display:block; height:100%; background:linear-gradient(90deg,#16a34a,#22c55e); border-radius:999px; }
+.serif { font-family:'Fraunces',Georgia,serif; }
+.doc { font-family:Georgia,serif; font-size:.72rem; line-height:1.75; color:var(--ink-sec); }
+
+/* stat tile (dataviz: hero number in ink, label muted, icon = accent only) */
+.tile { background:#fff; border:1px solid var(--border); border-radius:14px; padding:12px 14px; }
+.tile .tn { font-family:'Sora',sans-serif; font-size:1.45rem; font-weight:800; color:var(--ink); letter-spacing:-.02em; }
+.tile .tl { font-size:.62rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-top:2px; }
+.tico { width:26px; height:26px; border-radius:8px; background:var(--green-bg); color:var(--green); display:flex; align-items:center; justify-content:center; margin-bottom:8px; }
+.tico svg{ width:14px; height:14px; }
+
+.rowc { display:flex; align-items:center; gap:12px; padding:13px 14px; }
+.rico { width:38px; height:38px; border-radius:11px; background:var(--green-bg); color:var(--green); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.rico svg { width:18px; height:18px; }
+.chev { margin-left:auto; color:var(--muted); flex-shrink:0; }
+
+/* dark action card */
+.dark { background:#0f1f0f; border-radius:16px; color:#fff; position:relative; overflow:hidden; }
+.dark::before { content:''; position:absolute; inset:0; background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px); background-size:20px 20px; }
+.dark .glow { position:absolute; top:-40px; right:-40px; width:160px; height:160px; border-radius:50%; background:radial-gradient(circle,rgba(34,197,94,.3),transparent 70%); }
+
+svg { display:block; }
+</style>
+
+<!-- shared inline icons via <use> -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <g id="i-home"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></g>
+    <g id="i-folder"><path d="M3 6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></g>
+    <g id="i-bulb"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.3 2.2h4.6c.2-.9.6-1.6 1.3-2.2A6 6 0 0 0 12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-user"><circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 21c1.4-3.6 4.4-5.5 8-5.5s6.6 1.9 8 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></g>
+    <g id="i-plus"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></g>
+    <g id="i-doc"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM13 2v6h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></g>
+    <g id="i-dl"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-chev"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-check"><path d="m4 12.5 5.5 5.5L20 6.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-up"><path d="M12 16V5m0 0 5 5m-5-5-5 5M4 21h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-key"><circle cx="8" cy="15" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m11.5 11.5 8-8M16 7l3 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></g>
+    <g id="i-search"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20.5 20.5-4.5-4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></g>
+    <g id="i-flask"><path d="M9 3h6M10 3v6l-5.5 9.2A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.8L14 9V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-shield"><path d="M12 3 5 6v5c0 5 3 8.4 7 10 4-1.6 7-5 7-10V6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></g>
+    <g id="i-x"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></g>
+  </defs>
+</svg>
+
+<!-- ═════════ SHEET 1 — COVER ═════════ -->
+<div class="sheet" style="background:#0f1f0f; color:#fff; display:flex; flex-direction:column; justify-content:space-between; padding:64px;">
+  <div style="position:absolute; inset:0; background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px); background-size:28px 28px;"></div>
+  <div style="position:absolute; top:-160px; left:-160px; width:560px; height:560px; border-radius:50%; background:radial-gradient(circle,rgba(34,197,94,.16),transparent 70%);"></div>
+  <div style="position:absolute; bottom:-120px; right:-120px; width:460px; height:460px; border-radius:50%; background:radial-gradient(circle,rgba(22,163,74,.12),transparent 70%);"></div>
+  <div style="position:relative; display:flex; align-items:center; gap:12px;">
+    <div style="width:40px;height:40px;border-radius:11px;background:#16a34a;display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" style="color:#fff"><use href="#i-flask"/></svg></div>
+    <div style="font-family:'Sora',sans-serif;font-weight:700;font-size:1.15rem;">Research<span style="color:#4ade80">AI</span></div>
+  </div>
+  <div style="position:relative;">
+    <div style="width:44px;height:3px;border-radius:2px;background:linear-gradient(90deg,#16a34a,#4ade80);margin-bottom:30px;"></div>
+    <div style="font-size:.72rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#4ade80;margin-bottom:14px;">Design proposal · 01</div>
+    <h1 class="serif" style="font-size:3.4rem;font-weight:700;line-height:1.08;letter-spacing:-.02em;margin-bottom:22px;">Mobile experience<br>redesign</h1>
+    <p style="font-size:1rem;color:rgba(255,255,255,.55);line-height:1.7;max-width:430px;">
+      A screen-by-screen proposal for how ResearchAI should look and behave on a phone —
+      replacing the shrunk-desktop experience with a native-feeling mobile app pattern,
+      in the product's existing white-and-green language.
+    </p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:30px;max-width:520px;">
+      <span style="padding:6px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);font-size:.72rem;font-weight:600;color:rgba(255,255,255,.75);">Landing</span>
+      <span style="padding:6px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);font-size:.72rem;font-weight:600;color:rgba(255,255,255,.75);">Sign in</span>
+      <span style="padding:6px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);font-size:.72rem;font-weight:600;color:rgba(255,255,255,.75);">Register</span>
+      <span style="padding:6px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);font-size:.72rem;font-weight:600;color:rgba(255,255,255,.75);">Dashboard</span>
+      <span style="padding:6px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);font-size:.72rem;font-weight:600;color:rgba(255,255,255,.75);">Generate wizard</span>
+      <span style="padding:6px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);font-size:.72rem;font-weight:600;color:rgba(255,255,255,.75);">Projects</span>
+      <span style="padding:6px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);font-size:.72rem;font-weight:600;color:rgba(255,255,255,.75);">Spec reader</span>
+      <span style="padding:6px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);font-size:.72rem;font-weight:600;color:rgba(255,255,255,.75);">Topic Lab</span>
+      <span style="padding:6px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);font-size:.72rem;font-weight:600;color:rgba(255,255,255,.75);">Profile</span>
+    </div>
+  </div>
+  <div style="position:relative;display:flex;justify-content:space-between;font-size:.72rem;color:rgba(255,255,255,.3);">
+    <span>research-assistant · v1 showcase</span><span>16 July 2026</span>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 2 — GLOBAL PATTERNS ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Foundations</div><h2>The mobile navigation model</h2></div><div class="pg">02 / 14</div></div>
+  <div style="display:flex; gap:28px;">
+    <div style="flex:1;">
+      <div style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--red);margin-bottom:10px;">Today</div>
+      <div class="card" style="padding:18px;border-color:#fecaca;background:#fef2f2;">
+        <p style="font-size:.8rem;line-height:1.6;color:var(--ink-sec);">
+          The desktop layout simply collapses: the 232px sidebar disappears below 860px and all navigation
+          moves behind a <b>hamburger + slide-out drawer</b>. Every destination costs two taps, current
+          location is invisible, tap targets are desktop-sized (~32px), tables and multi-column
+          grids overflow, and page headers scroll away.
+        </p>
+      </div>
+      <div style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--green);margin:22px 0 10px;">Proposed</div>
+      <div class="card" style="padding:18px;">
+        <p style="font-size:.8rem;line-height:1.6;color:var(--ink-sec);margin-bottom:14px;">
+          A persistent <b>bottom tab bar</b> — the four destinations that matter, always one thumb-tap away,
+          with the app's single most important action (<b>New Spec</b>) as a raised center button:
+        </p>
+        <ul class="an">
+          <li><span class="n">1</span><span><b>Home</b> — dashboard overview & recent activity</span></li>
+          <li><span class="n">2</span><span><b>Projects</b> — every generated specification</span></li>
+          <li><span class="n">3</span><span><b>New Spec</b> — center FAB, opens the Generate wizard</span></li>
+          <li><span class="n">4</span><span><b>Topics</b> — the Topic Lab toolset</span></li>
+          <li><span class="n">5</span><span><b>Profile</b> — account, API key, model tiers</span></li>
+        </ul>
+      </div>
+      <div class="why" style="margin-top:18px;"><b>Why a tab bar, not the drawer</b>
+        This app has exactly 5 destinations — the textbook case for bottom tabs (Apple HIG & Material both).
+        Navigation is always visible, state is self-evident, and reach is thumb-native. The drawer pattern
+        exists for apps with 7+ sections; here it only hides the product.
+      </div>
+    </div>
+    <div style="width:300px;flex-shrink:0;">
+      <div style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">Tab bar anatomy</div>
+      <div style="border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.07);">
+        <div style="height:70px;background:var(--bg);"></div>
+        <div class="tabbar" style="height:80px;">
+          <div class="tb on"><svg viewBox="0 0 24 24"><use href="#i-home"/></svg>Home</div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-folder"/></svg>Projects</div>
+          <div class="fab"><div class="fb"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg></div></div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-bulb"/></svg>Topics</div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-user"/></svg>Profile</div>
+        </div>
+      </div>
+      <ul class="an" style="margin-top:16px;">
+        <li><span class="n" style="background:var(--ink)">a</span><span>Active tab in <b>brand green</b>, inactive in muted gray — never two greens competing.</span></li>
+        <li><span class="n" style="background:var(--ink)">b</span><span>FAB raised 22px above the bar, 52×52px, green gradient + white ring — same treatment as the desktop "Generate Spec" card.</span></li>
+        <li><span class="n" style="background:var(--ink)">c</span><span>Bar floats above the iOS home indicator (safe-area inset).</span></li>
+      </ul>
+      <div style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:20px 0 10px;">Global rules</div>
+      <div class="card" style="padding:14px 16px;">
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:9px;font-size:.74rem;line-height:1.5;color:var(--ink-sec);">
+          <li>• Touch targets ≥ <b>44×44px</b>, list rows ≥ 56px</li>
+          <li>• Inputs ≥ 16px font — prevents iOS auto-zoom</li>
+          <li>• One column everywhere; tables become cards</li>
+          <li>• Sticky app bar: page title + avatar, 56px</li>
+          <li>• Sticky bottom CTA on forms (never below the fold)</li>
+          <li>• Type: Sora headings · DM Sans UI · Fraunces/serif for document reading</li>
+          <li>• Existing tokens unchanged: <span style="color:var(--green);font-weight:700">#16a34a</span> on white, <b>#0f1f0f</b> ink</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 3 — LANDING ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 1 · /</div><h2>Landing</h2></div><div class="pg">03 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen" style="background:#0f1f0f;color:#fff;">
+        <div class="sb" style="color:#fff;"><span>9:41</span><span class="ic"><svg width="15" height="11" viewBox="0 0 16 12"><path d="M1 8h2v3H1zM5 6h2v5H5zM9 4h2v7H9zM13 1h2v10h-13z" fill="none"/><path d="M1 8h2v3H1zM5 6h2v5H5zM9 4h2v7H9zM13 2h2v9h-2z" fill="currentColor"/></svg><span class="batt"></span></span></div>
+        <div style="padding:6px 18px 0;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:28px;height:28px;border-radius:8px;background:#16a34a;display:flex;align-items:center;justify-content:center;"><svg width="14" height="14" viewBox="0 0 24 24" style="color:#fff"><use href="#i-flask"/></svg></div>
+            <b style="font-family:'Sora',sans-serif;font-size:.9rem;">Research<span style="color:#4ade80">AI</span></b>
+          </div>
+          <div style="padding:8px 16px;border-radius:10px;border:1px solid rgba(255,255,255,.2);font-size:.72rem;font-weight:700;">Sign in</div>
+        </div>
+        <div style="position:relative;padding:30px 22px 0;">
+          <div style="position:absolute;top:-30px;right:-60px;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle,rgba(34,197,94,.18),transparent 70%);"></div>
+          <span class="badge" style="background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(74,222,128,.25);">7-PHASE AI PIPELINE</span>
+          <h1 class="serif" style="font-size:2rem;line-height:1.12;font-weight:700;margin:14px 0 12px;letter-spacing:-.015em;">Generate your <em style="font-style:normal;color:#4ade80;">perfect research</em> spec in minutes</h1>
+          <p style="font-size:.8rem;line-height:1.65;color:rgba(255,255,255,.55);">Upload your university guidelines, let ResearchAI do the heavy lifting. Get a fully structured, academically sound specification — ready to submit.</p>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:18px;">
+            <div class="btn" style="height:50px;">Start free — no card needed</div>
+            <div class="btn line" style="height:50px;background:transparent;color:#fff;border-color:rgba(255,255,255,.25);">See how it works</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;padding:20px 22px 14px;">
+          <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:10px;text-align:center;">
+            <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:1.05rem;">7</div><div style="font-size:.56rem;color:rgba(255,255,255,.45);font-weight:600;letter-spacing:.04em;">AI PHASES</div>
+          </div>
+          <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:10px;text-align:center;">
+            <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:1.05rem;">15+</div><div style="font-size:.56rem;color:rgba(255,255,255,.45);font-weight:600;letter-spacing:.04em;">VERIFIED SOURCES</div>
+          </div>
+          <div style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:10px;text-align:center;">
+            <div style="font-family:'Sora',sans-serif;font-weight:800;font-size:1.05rem;">£0</div><div style="font-size:.56rem;color:rgba(255,255,255,.45);font-weight:600;letter-spacing:.04em;">FIRST SPEC</div>
+          </div>
+        </div>
+        <div style="flex:1;background:#fff;border-radius:24px 24px 0 0;padding:18px 22px;color:var(--ink);">
+          <div class="lbl" style="margin-bottom:10px;">How it works</div>
+          <div style="display:flex;flex-direction:column;gap:9px;">
+            <div class="card rowc" style="padding:11px 13px;"><div class="rico"><svg viewBox="0 0 24 24"><use href="#i-up"/></svg></div><div><b style="font-size:.78rem;">1 · Upload guidelines</b><div style="font-size:.66rem;color:var(--muted);">Your university's .docx brief</div></div></div>
+            <div class="card rowc" style="padding:11px 13px;"><div class="rico"><svg viewBox="0 0 24 24"><use href="#i-flask"/></svg></div><div><b style="font-size:.78rem;">2 · AI writes & reviews</b><div style="font-size:.66rem;color:var(--muted);">Researched, drafted, examined</div></div></div>
+            <div class="card rowc" style="padding:11px 13px;"><div class="rico"><svg viewBox="0 0 24 24"><use href="#i-dl"/></svg></div><div><b style="font-size:.78rem;">3 · Download your spec</b><div style="font-size:.66rem;color:var(--muted);">Formatted .docx, ready to submit</div></div></div>
+          </div>
+        </div>
+        <div class="homebar" style="background:#9ca3af;"></div>
+      </div></div>
+      <div class="co" style="top:120px;left:-11px;">1</div>
+      <div class="co" style="top:290px;left:-11px;">2</div>
+      <div class="co" style="top:472px;right:-11px;">3</div>
+      <div class="co" style="top:600px;left:-11px;">4</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>Compact nav, one action.</b> Logo + a single "Sign in" pill. The full menu lives in the page flow, not a drawer — a marketing page has no business hiding its content.</span></li>
+        <li><span class="n">2</span><span><b>The real headline, resized — not rewritten.</b> Fraunces at 2rem/1.12 with the green <i>em</i> kept. Both CTAs full-width and stacked; primary carries the free-trial promise ("no card needed") since the free credit is now a real product feature.</span></li>
+        <li><span class="n">3</span><span><b>Stats as a 3-up strip</b> instead of the desktop 4-column band — glanceable without scrolling past a wall.</span></li>
+        <li><span class="n">4</span><span><b>White sheet rises over the dark hero</b> (24px top radius) — a deliberate "app-like" seam that carries the dark→light transition the desktop page does with sections. "How it works" becomes 3 tappable rows.</span></li>
+      </ul>
+      <div class="why"><b>Keeps the theme</b>
+        Dark forest (#0f1f0f) hero with green glow + dot grid is lifted straight from the auth pages' left panel — the strongest visual asset the product already owns. Below the fold: features single-column, pricing cards stacked (Free / £9.99 / £24.99 with "Most Popular" on the middle card), then the dark CTA band.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 4 — SIGN IN ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 2 · /signin</div><h2>Sign in</h2></div><div class="pg">04 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen">
+        <div class="sb"><span>9:41</span><span class="ic"><span class="batt"></span></span></div>
+        <div style="padding:14px 24px 0;">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:26px;">
+            <div style="width:30px;height:30px;border-radius:9px;background:#16a34a;display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" style="color:#fff"><use href="#i-flask"/></svg></div>
+            <b style="font-family:'Sora',sans-serif;font-size:.95rem;">Research<span style="color:#16a34a">AI</span></b>
+          </div>
+          <div style="width:34px;height:3px;border-radius:2px;background:linear-gradient(90deg,#16a34a,#4ade80);margin-bottom:16px;"></div>
+          <h1 style="font-family:'Sora',sans-serif;font-size:1.5rem;font-weight:800;letter-spacing:-.02em;">Sign in</h1>
+          <p style="font-size:.8rem;color:var(--muted);margin-top:5px;">Welcome back — pick up where you left off.</p>
+        </div>
+        <div style="padding:22px 24px 0;display:flex;flex-direction:column;gap:13px;">
+          <div class="btn line" style="height:50px;font-size:.85rem;gap:10px;">
+            <svg width="17" height="17" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18A11 11 0 0 0 1 12c0 1.77.43 3.45 1.18 4.94z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/></svg>
+            Continue with Google
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;color:var(--muted);font-size:.68rem;font-weight:600;"><span style="flex:1;height:1px;background:var(--border);"></span>or with email<span style="flex:1;height:1px;background:var(--border);"></span></div>
+          <div>
+            <div class="lbl" style="margin-bottom:6px;">Email</div>
+            <div class="inp focus" style="color:var(--ink);">jane@university.ac.uk</div>
+          </div>
+          <div>
+            <div class="lbl" style="margin-bottom:6px;display:flex;justify-content:space-between;"><span>Password</span><span style="color:var(--green);text-transform:none;letter-spacing:0;">Forgot?</span></div>
+            <div class="inp">••••••••••</div>
+          </div>
+          <div class="btn" style="height:52px;margin-top:4px;">Sign in</div>
+          <div style="text-align:center;font-size:.78rem;color:var(--muted);padding-top:8px;">New here? <b style="color:var(--green);">Create an account</b></div>
+        </div>
+        <div style="margin-top:auto;padding:0 24px 34px;">
+          <div style="background:var(--green-bg);border:1px solid #bbf7d0;border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;">
+            <svg width="16" height="16" viewBox="0 0 24 24" style="color:var(--green);flex-shrink:0;"><use href="#i-shield"/></svg>
+            <span style="font-size:.68rem;color:var(--ink-sec);line-height:1.45;">Your first specification is <b>free</b> — no card, no API key needed.</span>
+          </div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="co" style="top:96px;left:-11px;">1</div>
+      <div class="co" style="top:250px;left:-11px;">2</div>
+      <div class="co" style="top:380px;right:-11px;">3</div>
+      <div class="co" style="top:660px;left:-11px;">4</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>Brand header replaces the lost panel.</b> Today the dark left panel simply vanishes under 900px, taking all brand presence with it. The logo + green accent bar restores identity in 60px of height.</span></li>
+        <li><span class="n">2</span><span><b>Google first, full-width, 50px tall.</b> It's the lowest-friction path and now works in production — give it the top slot. Real GSI button sits invisibly on top of the styled one (the pattern the app already uses).</span></li>
+        <li><span class="n">3</span><span><b>"Forgot?" moves inline with the password label</b> — one less row, and it can't be missed at the exact moment it's needed.</span></li>
+        <li><span class="n">4</span><span><b>The free-trial promise fills the dead space</b> where desktop shows proof cards — it's the one message most likely to convert a hesitant student, anchored safely above the home indicator.</span></li>
+      </ul>
+      <div class="why"><b>States covered</b>
+        Error banner slides under the app bar (red tint, matches .bg-r badge). "Email unverified" state swaps the primary button for "Resend verification" with a 60s countdown — same components, no new patterns. All inputs 48px+, 16px text: no iOS zoom-jump.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 5 — REGISTER ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 3 · /register</div><h2>Create your account</h2></div><div class="pg">05 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen">
+        <div class="sb"><span>9:41</span><span class="ic"><span class="batt"></span></span></div>
+        <div style="padding:14px 24px 0;">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:22px;">
+            <div style="width:30px;height:30px;border-radius:9px;background:#16a34a;display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" style="color:#fff"><use href="#i-flask"/></svg></div>
+            <b style="font-family:'Sora',sans-serif;font-size:.95rem;">Research<span style="color:#16a34a">AI</span></b>
+          </div>
+          <h1 style="font-family:'Sora',sans-serif;font-size:1.45rem;font-weight:800;letter-spacing:-.02em;">Create your account</h1>
+          <p style="font-size:.8rem;color:var(--muted);margin-top:5px;">Your first spec is on us.</p>
+        </div>
+        <div style="padding:18px 24px 0;display:flex;flex-direction:column;gap:12px;">
+          <div class="btn line" style="height:50px;font-size:.85rem;gap:10px;">
+            <svg width="17" height="17" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18A11 11 0 0 0 1 12c0 1.77.43 3.45 1.18 4.94z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/></svg>
+            Sign up with Google
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;color:var(--muted);font-size:.68rem;font-weight:600;"><span style="flex:1;height:1px;background:var(--border);"></span>or<span style="flex:1;height:1px;background:var(--border);"></span></div>
+          <div><div class="lbl" style="margin-bottom:6px;">Full name</div><div class="inp" style="color:var(--ink);">Jane Smith</div></div>
+          <div><div class="lbl" style="margin-bottom:6px;">Email</div><div class="inp" style="color:var(--ink);">jane@university.ac.uk</div></div>
+          <div>
+            <div class="lbl" style="margin-bottom:6px;">Password</div>
+            <div class="inp focus" style="color:var(--ink);">••••••••••</div>
+            <div style="display:flex;gap:5px;margin-top:8px;align-items:center;">
+              <span style="flex:1;height:4px;border-radius:2px;background:var(--green);"></span>
+              <span style="flex:1;height:4px;border-radius:2px;background:var(--green);"></span>
+              <span style="flex:1;height:4px;border-radius:2px;background:var(--green-light);"></span>
+              <span style="flex:1;height:4px;border-radius:2px;background:#e5e7eb;"></span>
+              <span style="font-size:.62rem;font-weight:700;color:var(--green);margin-left:6px;">Good</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;padding-top:2px;">
+            <div style="width:20px;height:20px;border-radius:6px;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="12" height="12" viewBox="0 0 24 24" style="color:#fff"><use href="#i-check"/></svg></div>
+            <span style="font-size:.7rem;color:var(--ink-sec);line-height:1.5;">I agree to the <b style="color:var(--green)">Terms</b> and <b style="color:var(--green)">Privacy Policy</b></span>
+          </div>
+        </div>
+        <div style="margin-top:auto;padding:0 24px 30px;">
+          <div class="btn" style="height:52px;">Create account</div>
+          <div style="text-align:center;font-size:.78rem;color:var(--muted);padding-top:12px;">Already registered? <b style="color:var(--green);">Sign in</b></div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="co" style="top:405px;right:-11px;">1</div>
+      <div class="co" style="top:500px;left:-11px;">2</div>
+      <div class="co" style="top:645px;right:-11px;">3</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>Live password-strength meter</b> — four segments filling in green, replacing silent validation. Costs one div, saves a round-trip failure.</span></li>
+        <li><span class="n">2</span><span><b>44px checkbox row</b> for terms — the tap area is the whole row, not the 16px box.</span></li>
+        <li><span class="n">3</span><span><b>Sticky bottom CTA.</b> "Create account" is pinned above the home indicator, visible even with the keyboard open (the form scrolls, the button doesn't).</span></li>
+      </ul>
+      <div class="why"><b>Post-submit: "Account created!"</b>
+        The existing success state becomes a full-screen moment: green check-circle animation, "Account created!" in Sora 800, "We've sent a verification link to jane@…" and a single "Open mail app" button (mailto: deep-link). The resend option appears after 30s. Same flow as today, one screen instead of a squeezed card.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 6 — DASHBOARD ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 4 · /dashboard</div><h2>Dashboard home</h2></div><div class="pg">06 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen" style="background:var(--bg);">
+        <div class="sb"><span>9:41</span><span class="ic"><span class="batt"></span></span></div>
+        <div class="abar">
+          <div><div style="font-size:.66rem;color:var(--muted);font-weight:600;">Wednesday, 16 July</div><div class="ttl">Good morning, Jane</div></div>
+          <div class="avat" style="margin-left:auto;">JS</div>
+        </div>
+        <div class="body grey" style="gap:11px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="tile"><div class="tico"><svg viewBox="0 0 24 24"><use href="#i-doc"/></svg></div><div class="tn">12</div><div class="tl">Total specs</div></div>
+            <div class="tile"><div class="tico"><svg viewBox="0 0 24 24"><use href="#i-check"/></svg></div><div class="tn">9</div><div class="tl">Completed</div></div>
+          </div>
+          <div class="dark" style="padding:16px;display:flex;align-items:center;gap:13px;">
+            <div class="glow"></div>
+            <div style="position:relative;width:42px;height:42px;border-radius:13px;background:rgba(34,197,94,.2);display:flex;align-items:center;justify-content:center;"><svg width="21" height="21" viewBox="0 0 24 24" style="color:#4ade80"><use href="#i-plus"/></svg></div>
+            <div style="position:relative;flex:1;"><b style="font-family:'Sora',sans-serif;font-size:.92rem;">Generate Spec</b><div style="font-size:.66rem;color:rgba(255,255,255,.5);margin-top:2px;">Full 7-phase specification</div></div>
+            <svg width="18" height="18" viewBox="0 0 24 24" style="position:relative;color:rgba(255,255,255,.5)"><use href="#i-chev"/></svg>
+          </div>
+          <div class="dark" style="padding:16px;display:flex;align-items:center;gap:13px;background:#122a12;">
+            <div class="glow"></div>
+            <div style="position:relative;width:42px;height:42px;border-radius:13px;background:rgba(34,197,94,.18);display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" style="color:#4ade80"><use href="#i-bulb"/></svg></div>
+            <div style="position:relative;flex:1;"><b style="font-family:'Sora',sans-serif;font-size:.92rem;">Topic Lab</b><div style="font-size:.66rem;color:rgba(255,255,255,.5);margin-top:2px;">Discover & vet research topics</div></div>
+            <svg width="18" height="18" viewBox="0 0 24 24" style="position:relative;color:rgba(255,255,255,.5)"><use href="#i-chev"/></svg>
+          </div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:4px;">
+            <span class="lbl" style="font-size:.66rem;">Recent projects</span><span style="font-size:.7rem;font-weight:700;color:var(--green);">See all</span>
+          </div>
+          <div class="card" style="padding:13px 14px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="dot" style="background:var(--amber);"></span>
+              <b style="font-size:.78rem;flex:1;line-height:1.3;">Microfinance access and SME growth in Lagos</b>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:9px;">
+              <div class="prog" style="flex:1;"><i style="width:64%;"></i></div>
+              <span style="font-size:.64rem;font-weight:800;color:var(--amber);">64%</span>
+            </div>
+            <div style="font-size:.62rem;color:var(--muted);margin-top:6px;">Phase 4 — Formatting & citations</div>
+          </div>
+          <div class="card rowc">
+            <span class="dot" style="background:var(--green);flex-shrink:0;"></span>
+            <div style="flex:1;min-width:0;"><b style="font-size:.78rem;display:block;line-height:1.3;">Econometric analysis of remittance flows</b><span style="font-size:.62rem;color:var(--muted);">Completed · 82/100 · 2d ago</span></div>
+            <svg width="16" height="16" viewBox="0 0 24 24" class="chev"><use href="#i-chev"/></svg>
+          </div>
+          <div class="card rowc">
+            <span class="dot" style="background:var(--green);flex-shrink:0;"></span>
+            <div style="flex:1;min-width:0;"><b style="font-size:.78rem;display:block;line-height:1.3;">ML-based crop yield prediction, Kano state</b><span style="font-size:.62rem;color:var(--muted);">Completed · 78/100 · 5d ago</span></div>
+            <svg width="16" height="16" viewBox="0 0 24 24" class="chev"><use href="#i-chev"/></svg>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tb on"><svg viewBox="0 0 24 24"><use href="#i-home"/></svg>Home</div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-folder"/></svg>Projects</div>
+          <div class="fab"><div class="fb"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg></div></div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-bulb"/></svg>Topics</div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-user"/></svg>Profile</div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="co" style="top:70px;left:-11px;">1</div>
+      <div class="co" style="top:150px;right:-11px;">2</div>
+      <div class="co" style="top:250px;left:-11px;">3</div>
+      <div class="co" style="top:432px;right:-11px;">4</div>
+      <div class="co" style="top:705px;left:-11px;">5</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>Greeting header</b> with date — warmer than a bare "Dashboard" title, and the avatar doubles as a shortcut to Profile.</span></li>
+        <li><span class="n">2</span><span><b>Two stat tiles, not four.</b> Hero numbers in ink (not green — color is for accents, numbers are for reading), labels muted uppercase. "In progress" and trial credits live lower down where they have context.</span></li>
+        <li><span class="n">3</span><span><b>The two dark action cards survive</b> — they're the strongest element of the current dashboard — resized to full-width rows with the dot-grid + glow treatment kept.</span></li>
+        <li><span class="n">4</span><span><b>A running generation gets a live card:</b> amber pulse dot, progress bar, and the real phase description ("Phase 4 — Formatting & citations") the API already returns. Polling already exists; this just surfaces it on Home.</span></li>
+        <li><span class="n">5</span><span><b>Completed rows carry their mark</b> (82/100) — the single number users care about — with the green status dot (the one this session's typo fix made work again).</span></li>
+      </ul>
+      <div class="why"><b>What disappears</b>
+        The desktop's table layout, the sidebar usage meter (moves to Profile), and all hover-dependent affordances. Everything above is reachable with one thumb; nothing needs a tooltip to be understood.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 7 — GENERATE WIZARD ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 5 · /dashboard/generate</div><h2>Generate — a true mobile wizard</h2></div><div class="pg">07 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen">
+        <div class="sb"><span>9:41</span><span class="ic"><span class="batt"></span></span></div>
+        <div class="abar" style="border-bottom:1px solid var(--border);">
+          <svg width="20" height="20" viewBox="0 0 24 24" style="transform:rotate(180deg);color:var(--ink-sec)"><use href="#i-chev"/></svg>
+          <div class="ttl" style="font-size:.95rem;text-align:center;">New specification</div>
+          <span style="font-size:.7rem;font-weight:700;color:var(--muted);">2/3</span>
+        </div>
+        <div style="display:flex;gap:6px;padding:12px 16px 4px;">
+          <span style="flex:1;height:4px;border-radius:2px;background:var(--green);"></span>
+          <span style="flex:1;height:4px;border-radius:2px;background:var(--green);"></span>
+          <span style="flex:1;height:4px;border-radius:2px;background:#e5e7eb;"></span>
+        </div>
+        <div class="body" style="padding-top:12px;">
+          <div>
+            <h2 class="serif" style="font-size:1.25rem;font-weight:700;letter-spacing:-.01em;">Configure Generation</h2>
+            <p style="font-size:.74rem;color:var(--muted);margin-top:3px;">Guidelines, documents and model quality.</p>
+          </div>
+          <div>
+            <div class="lbl" style="margin-bottom:7px;">University guidelines (.docx)</div>
+            <div style="border:1.5px dashed rgba(22,163,74,.4);border-radius:14px;background:var(--green-bg);padding:16px;display:flex;align-items:center;gap:12px;">
+              <div class="rico" style="background:#fff;"><svg viewBox="0 0 24 24"><use href="#i-doc"/></svg></div>
+              <div style="flex:1;min-width:0;"><b style="font-size:.78rem;">UNILAG_project_guidelines.docx</b><div style="font-size:.64rem;color:var(--muted);">248 KB · uploaded</div></div>
+              <svg width="15" height="15" viewBox="0 0 24 24" style="color:var(--muted)"><use href="#i-x"/></svg>
+            </div>
+          </div>
+          <div>
+            <div class="lbl" style="margin-bottom:7px;">Dataset <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:500;">(optional)</span></div>
+            <div style="border:1.5px dashed var(--border);border-radius:14px;padding:16px;display:flex;align-items:center;gap:12px;color:var(--muted);">
+              <svg width="19" height="19" viewBox="0 0 24 24"><use href="#i-up"/></svg>
+              <span style="font-size:.76rem;font-weight:600;">Tap to upload .csv / .xlsx</span>
+            </div>
+          </div>
+          <div>
+            <div class="lbl" style="margin-bottom:7px;">Model quality</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="card" style="padding:12px 14px;display:flex;align-items:center;gap:11px;border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1);">
+                <div style="width:18px;height:18px;border-radius:50%;border:5.5px solid var(--green);"></div>
+                <div style="flex:1;"><b style="font-size:.78rem;">Standard</b><div style="font-size:.64rem;color:var(--muted);">Best balance — recommended</div></div>
+                <span class="badge bg-g">FREE CREDIT OK</span>
+              </div>
+              <div class="card" style="padding:12px 14px;display:flex;align-items:center;gap:11px;">
+                <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border);"></div>
+                <div style="flex:1;"><b style="font-size:.78rem;">Premium</b><div style="font-size:.64rem;color:var(--muted);">Strongest models, slower</div></div>
+                <span class="badge bg-b">BYOK</span>
+              </div>
+              <div class="card" style="padding:12px 14px;display:flex;align-items:center;gap:11px;">
+                <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border);"></div>
+                <div style="flex:1;"><b style="font-size:.78rem;">Custom</b><div style="font-size:.64rem;color:var(--muted);">Pick a model per agent</div></div>
+                <svg width="15" height="15" viewBox="0 0 24 24" class="chev"><use href="#i-chev"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:12px 16px 30px;border-top:1px solid var(--border);display:flex;gap:10px;">
+          <div class="btn line" style="width:110px;">Back</div>
+          <div class="btn" style="flex:1;">Continue</div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="co" style="top:105px;right:-11px;">1</div>
+      <div class="co" style="top:210px;left:-11px;">2</div>
+      <div class="co" style="top:415px;left:-11px;">3</div>
+      <div class="co" style="top:672px;right:-11px;">4</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>One step per screen, segmented progress</b> + "2/3" count. The desktop page stacks Basic Information, Configure Generation and Review & Generate into one long scroll — on mobile each becomes its own screen with a single job.</span></li>
+        <li><span class="n">2</span><span><b>Upload zones become tap targets,</b> not drag-and-drop wells. Uploaded state shows filename + size + remove; the dashed green well is the app's existing visual, kept.</span></li>
+        <li><span class="n">3</span><span><b>Model tiers as radio cards</b> with the cost story on each: Standard is free-credit eligible, Premium flags BYOK. This is where the free-trial/BYOK feature becomes self-explanatory instead of a surprise 402.</span></li>
+        <li><span class="n">4</span><span><b>Sticky footer nav</b> — Back never competes with Continue (110px vs. flexible), and both clear the home indicator.</span></li>
+      </ul>
+      <div class="why"><b>The three steps</b>
+        <span style="display:block;margin-top:4px;">1 · <b>Basics</b> — field of study, topic, academic level (large select sheets, not dropdowns)<br>
+        2 · <b>Configure</b> — this screen<br>
+        3 · <b>Review & Generate</b> — summary card of every choice, estimated iterations (max_iterations 1–5 as a stepper), then a full-width green "Generate specification". Submitting routes straight to the live progress screen (sheet 10).</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 8 — PROJECTS ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 6 · /dashboard/projects</div><h2>Projects</h2></div><div class="pg">08 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen" style="background:var(--bg);">
+        <div class="sb"><span>9:41</span><span class="ic"><span class="batt"></span></span></div>
+        <div class="abar"><div class="ttl">Projects</div><div class="avat" style="margin-left:auto;">JS</div></div>
+        <div style="padding:0 16px 10px;">
+          <div class="inp" style="background:#fff;gap:9px;"><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-search"/></svg>Search projects…</div>
+          <div style="display:flex;gap:7px;margin-top:10px;">
+            <span class="chip on">All · 12</span><span class="chip">Complete · 9</span><span class="chip">Running · 1</span><span class="chip">Failed · 2</span>
+          </div>
+        </div>
+        <div class="body grey" style="gap:9px;">
+          <div class="card" style="padding:13px 14px;">
+            <div style="display:flex;gap:9px;align-items:flex-start;">
+              <b style="font-size:.8rem;line-height:1.35;flex:1;">Microfinance access and SME growth in Lagos state</b>
+              <span class="badge bg-a">RUNNING</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+              <div class="prog" style="flex:1;"><i style="width:64%;"></i></div><span style="font-size:.62rem;font-weight:800;color:var(--amber);">64%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:.62rem;color:var(--muted);margin-top:7px;">
+              <span>Economics · Econometric</span><span>Started 24 min ago</span>
+            </div>
+          </div>
+          <div class="card" style="padding:13px 14px;">
+            <div style="display:flex;gap:9px;align-items:flex-start;">
+              <b style="font-size:.8rem;line-height:1.35;flex:1;">Econometric analysis of remittance flows and household welfare</b>
+              <span class="badge bg-g">COMPLETE</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:9px;">
+              <span style="font-size:.62rem;color:var(--muted);">Economics · 14 Jul</span>
+              <span style="font-family:'Sora',sans-serif;font-size:.8rem;font-weight:800;">82<span style="font-size:.6rem;color:var(--muted);font-weight:600;">/100</span></span>
+            </div>
+          </div>
+          <div class="card" style="padding:13px 14px;">
+            <div style="display:flex;gap:9px;align-items:flex-start;">
+              <b style="font-size:.8rem;line-height:1.35;flex:1;">ML-based crop yield prediction for smallholder farms, Kano</b>
+              <span class="badge bg-g">COMPLETE</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:9px;">
+              <span style="font-size:.62rem;color:var(--muted);">Computer Science · 11 Jul</span>
+              <span style="font-family:'Sora',sans-serif;font-size:.8rem;font-weight:800;">78<span style="font-size:.6rem;color:var(--muted);font-weight:600;">/100</span></span>
+            </div>
+          </div>
+          <div class="card" style="padding:13px 14px;">
+            <div style="display:flex;gap:9px;align-items:flex-start;">
+              <b style="font-size:.8rem;line-height:1.35;flex:1;">Survey of fintech adoption among market traders</b>
+              <span class="badge bg-r">FAILED</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:9px;">
+              <span style="font-size:.62rem;color:var(--muted);">Business Admin · 8 Jul</span>
+              <span style="font-size:.66rem;font-weight:700;color:var(--green);">Retry →</span>
+            </div>
+          </div>
+          <div class="card" style="padding:13px 14px;opacity:.85;">
+            <div style="display:flex;gap:9px;align-items:flex-start;">
+              <b style="font-size:.8rem;line-height:1.35;flex:1;">Impact of school feeding programmes on enrolment</b>
+              <span class="badge bg-g">COMPLETE</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:9px;">
+              <span style="font-size:.62rem;color:var(--muted);">Education · 30 Jun</span>
+              <span style="font-family:'Sora',sans-serif;font-size:.8rem;font-weight:800;">85<span style="font-size:.6rem;color:var(--muted);font-weight:600;">/100</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-home"/></svg>Home</div>
+          <div class="tb on"><svg viewBox="0 0 24 24"><use href="#i-folder"/></svg>Projects</div>
+          <div class="fab"><div class="fb"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg></div></div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-bulb"/></svg>Topics</div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-user"/></svg>Profile</div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="co" style="top:118px;left:-11px;">1</div>
+      <div class="co" style="top:168px;right:-11px;">2</div>
+      <div class="co" style="top:395px;right:-11px;">3</div>
+      <div class="co" style="top:545px;left:-11px;">4</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>Search + filter chips replace the desktop table's controls.</b> Chips carry counts so the filter is informative before it's tapped. Invalid statuses can't be expressed — the chips <i>are</i> the enum.</span></li>
+        <li><span class="n">2</span><span><b>Status as a badge, top-right, always visible</b> — the desktop's colored-dot column doesn't survive a 360px row; badges + the title's two-line clamp do.</span></li>
+        <li><span class="n">3</span><span><b>Completed cards lead with the examiner mark</b> in Sora 800 — the number students actually compare across projects.</span></li>
+        <li><span class="n">4</span><span><b>Failed cards get an inline "Retry →"</b> — dead-ends always offer the next action on the card itself.</span></li>
+      </ul>
+      <div class="why"><b>Interactions</b>
+        Whole card = tap target (56px+). Long-press opens a bottom action sheet: Open, Download .docx, Delete (destructive red, confirm sheet — replaces the browser-native <i>confirm()</i> used today). Pull-to-refresh re-fetches the list; React Query's cache makes it instant.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 9 — PROJECT DETAIL (COMPLETE) ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 7 · /dashboard/projects/[id]</div><h2>Spec reader — completed project</h2></div><div class="pg">09 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen">
+        <div class="sb"><span>9:41</span><span class="ic"><span class="batt"></span></span></div>
+        <div class="abar" style="border-bottom:1px solid var(--border);">
+          <svg width="20" height="20" viewBox="0 0 24 24" style="transform:rotate(180deg);color:var(--ink-sec)"><use href="#i-chev"/></svg>
+          <div style="flex:1;min-width:0;"><div style="font-size:.8rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Econometric analysis of remittance flows…</div><span class="badge bg-g" style="margin-top:2px;">COMPLETE · 82/100</span></div>
+        </div>
+        <div style="display:flex;gap:7px;padding:10px 16px;overflow:hidden;border-bottom:1px solid var(--border);">
+          <span class="chip on" style="padding:6px 12px;font-size:.66rem;">Overview</span>
+          <span class="chip" style="padding:6px 12px;font-size:.66rem;">Justification</span>
+          <span class="chip" style="padding:6px 12px;font-size:.66rem;">Objectives</span>
+          <span class="chip" style="padding:6px 12px;font-size:.66rem;">Literature</span>
+          <span class="chip" style="padding:6px 12px;font-size:.66rem;">Method…</span>
+        </div>
+        <div class="body" style="padding-top:14px;background:var(--bg);margin:0;padding-left:16px;padding-right:16px;">
+          <div class="card" style="padding:15px 16px;">
+            <div class="lbl" style="margin-bottom:10px;">Overall assessment</div>
+            <div style="display:flex;align-items:center;gap:14px;">
+              <div style="position:relative;width:64px;height:64px;flex-shrink:0;">
+                <svg width="64" height="64" viewBox="0 0 64 64">
+                  <circle cx="32" cy="32" r="27" fill="none" stroke="#e5e7eb" stroke-width="7"/>
+                  <circle cx="32" cy="32" r="27" fill="none" stroke="#16a34a" stroke-width="7" stroke-linecap="round" stroke-dasharray="139 170" transform="rotate(-90 32 32)"/>
+                </svg>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Sora',sans-serif;font-weight:800;font-size:1rem;">82</div>
+              </div>
+              <p style="font-size:.7rem;line-height:1.55;color:var(--ink-sec);">Approved on iteration 2 of 3. Strong methodology and objectives; literature review flagged one stale citation, since replaced.</p>
+            </div>
+          </div>
+          <div class="card" style="padding:15px 16px;">
+            <div class="lbl" style="margin-bottom:12px;">Section scores</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div><div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:4px;"><b>Methodology</b><span style="font-weight:700;color:var(--ink);">18<span style="color:var(--muted)">/20</span></span></div><div class="prog"><i style="width:90%;"></i></div></div>
+              <div><div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:4px;"><b>Objectives</b><span style="font-weight:700;color:var(--ink);">17<span style="color:var(--muted)">/20</span></span></div><div class="prog"><i style="width:85%;"></i></div></div>
+              <div><div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:4px;"><b>Literature review</b><span style="font-weight:700;color:var(--ink);">15<span style="color:var(--muted)">/20</span></span></div><div class="prog"><i style="width:75%;"></i></div></div>
+              <div><div style="display:flex;justify-content:space-between;font-size:.68rem;margin-bottom:4px;"><b>Justification</b><span style="font-weight:700;color:var(--ink);">16<span style="color:var(--muted)">/20</span></span></div><div class="prog"><i style="width:80%;"></i></div></div>
+            </div>
+          </div>
+          <div class="card" style="padding:15px 16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <b class="serif" style="font-size:.92rem;">Justification</b>
+              <svg width="16" height="16" viewBox="0 0 24 24" style="color:var(--muted);transform:rotate(90deg)"><use href="#i-chev"/></svg>
+            </div>
+            <p class="doc" style="margin-top:9px;">Remittance inflows to Nigeria exceeded $20 billion in 2024, yet their household-level welfare effects remain contested. Existing studies rely on cross-sectional…</p>
+          </div>
+        </div>
+        <div style="padding:12px 16px 30px;border-top:1px solid var(--border);background:#fff;">
+          <div class="btn" style="height:52px;gap:9px;"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#i-dl"/></svg>Download .docx</div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="co" style="top:70px;left:-11px;">1</div>
+      <div class="co" style="top:128px;right:-11px;">2</div>
+      <div class="co" style="top:220px;left:-11px;">3</div>
+      <div class="co" style="top:390px;right:-11px;">4</div>
+      <div class="co" style="top:672px;left:-11px;">5</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>Title truncates, status + mark stay pinned</b> in the app bar — you always know what you're reading and how it scored.</span></li>
+        <li><span class="n">2</span><span><b>Horizontally scrollable section pills</b> jump-scroll to any of the 7 sections — the mobile stand-in for a desktop table of contents.</span></li>
+        <li><span class="n">3</span><span><b>Score ring for the headline number</b>, single green (magnitude = one hue), value in ink inside it; the reviewer's overall assessment sits beside it, not below the fold.</span></li>
+        <li><span class="n">4</span><span><b>Section scores as labeled bars</b> — value labels in ink on every bar (direct labels, no legend needed), single-hue green fills on gray tracks.</span></li>
+        <li><span class="n">5</span><span><b>Download is sticky.</b> The single most valuable output of the entire product never scrolls away.</span></li>
+      </ul>
+      <div class="why"><b>Reading mode</b>
+        Sections are collapsible cards; expanded prose reads in Georgia/Fraunces at 1.75 line-height on white — document typography, distinct from UI chrome. References render as a numbered list with DOI links (CrossRef-verified ones get a small ✓).
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 10 — PROJECT DETAIL (GENERATING) ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 7b · /dashboard/projects/[id]</div><h2>Live generation state</h2></div><div class="pg">10 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen" style="background:var(--bg);">
+        <div class="sb"><span>9:41</span><span class="ic"><span class="batt"></span></span></div>
+        <div class="abar">
+          <svg width="20" height="20" viewBox="0 0 24 24" style="transform:rotate(180deg);color:var(--ink-sec)"><use href="#i-chev"/></svg>
+          <div class="ttl" style="font-size:.95rem;">Generating…</div>
+        </div>
+        <div class="body grey" style="justify-content:flex-start;gap:14px;">
+          <div class="card" style="padding:22px 18px;text-align:center;">
+            <div style="position:relative;width:120px;height:120px;margin:0 auto;">
+              <svg width="120" height="120" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="52" fill="none" stroke="#e5e7eb" stroke-width="9"/>
+                <circle cx="60" cy="60" r="52" fill="none" stroke="url(#gg)" stroke-width="9" stroke-linecap="round" stroke-dasharray="209 327" transform="rotate(-90 60 60)"/>
+                <defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#16a34a"/><stop offset="1" stop-color="#22c55e"/></linearGradient></defs>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <span style="font-family:'Sora',sans-serif;font-weight:800;font-size:1.6rem;">64%</span>
+                <span style="font-size:.6rem;color:var(--muted);font-weight:700;">PHASE 4 OF 7</span>
+              </div>
+            </div>
+            <h2 style="font-family:'Sora',sans-serif;font-size:1.02rem;font-weight:800;margin-top:16px;">Generating your specification…</h2>
+            <p style="font-size:.72rem;color:var(--muted);margin-top:5px;">Formatting sections & verifying citations</p>
+          </div>
+          <div class="card" style="padding:6px 16px;">
+            <div class="rowc" style="padding:10px 0;border-bottom:1px solid var(--border);"><div style="width:22px;height:22px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="12" height="12" viewBox="0 0 24 24" style="color:#fff"><use href="#i-check"/></svg></div><span style="font-size:.74rem;font-weight:600;color:var(--ink-sec);">Guidelines parsed & topic locked</span></div>
+            <div class="rowc" style="padding:10px 0;border-bottom:1px solid var(--border);"><div style="width:22px;height:22px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="12" height="12" viewBox="0 0 24 24" style="color:#fff"><use href="#i-check"/></svg></div><span style="font-size:.74rem;font-weight:600;color:var(--ink-sec);">17 sources found · 15 DOI-verified</span></div>
+            <div class="rowc" style="padding:10px 0;border-bottom:1px solid var(--border);"><div style="width:22px;height:22px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="12" height="12" viewBox="0 0 24 24" style="color:#fff"><use href="#i-check"/></svg></div><span style="font-size:.74rem;font-weight:600;color:var(--ink-sec);">7 sections drafted</span></div>
+            <div class="rowc" style="padding:10px 0;border-bottom:1px solid var(--border);"><div style="width:22px;height:22px;border-radius:50%;border:2.5px solid var(--amber);flex-shrink:0;position:relative;"><span class="dot g-dot-pulse" style="position:absolute;inset:4px;background:var(--amber);border-radius:50%;"></span></div><span style="font-size:.74rem;font-weight:700;color:var(--ink);">Formatting & citation check</span></div>
+            <div class="rowc" style="padding:10px 0;"><div style="width:22px;height:22px;border-radius:50%;border:1.5px solid var(--border);flex-shrink:0;"></div><span style="font-size:.74rem;font-weight:600;color:var(--muted);">Examiner review · Humanize & finalize</span></div>
+          </div>
+          <div style="background:var(--green-bg);border:1px solid #bbf7d0;border-radius:12px;padding:11px 14px;font-size:.66rem;color:var(--ink-sec);line-height:1.5;">
+            You can close the app — generation continues on our servers. We'll be right here when you return.
+          </div>
+        </div>
+        <div style="padding:10px 16px 30px;background:var(--bg);">
+          <div class="btn line" style="height:48px;color:var(--red);border-color:#fecaca;background:#fff;">Cancel generation</div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="co" style="top:180px;right:-11px;">1</div>
+      <div class="co" style="top:415px;left:-11px;">2</div>
+      <div class="co" style="top:600px;right:-11px;">3</div>
+      <div class="co" style="top:680px;left:-11px;">4</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>One big ring, one big number.</b> The 3-second polling loop the app already runs feeds a 120px progress ring with the phase count under the percentage — status at arm's length, literally.</span></li>
+        <li><span class="n">2</span><span><b>Phase checklist with real telemetry</b> — "17 sources found · 15 DOI-verified" comes straight from the pipeline's own progress messages. Done = green check, active = pulsing amber, pending = hollow. Never color alone.</span></li>
+        <li><span class="n">3</span><span><b>"You can close the app"</b> — the single most important sentence on this screen. Mobile users <i>will</i> background the app during a 10-minute generation; telling them it's safe prevents both anxiety and rage-cancels.</span></li>
+        <li><span class="n">4</span><span><b>Cancel is quiet, red-outlined, and honest</b> — it now genuinely stops the task (this week's fix), so the button can finally say what it does. Confirmation sheet before firing.</span></li>
+      </ul>
+      <div class="why"><b>Failure state</b>
+        On FAILED: the ring turns into a red-tinted card with the sanitized error, the free-credit note if it was refunded, and two actions — "Try again" (primary) and "Contact support" (mailto). No dead ends.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 11 — TOPIC LAB HUB ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 8 · /dashboard/topics</div><h2>Topic Lab — hub</h2></div><div class="pg">11 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen" style="background:var(--bg);">
+        <div class="sb"><span>9:41</span><span class="ic"><span class="batt"></span></span></div>
+        <div class="abar">
+          <div><div class="ttl serif" style="font-weight:700;">Topic Lab</div><div style="font-size:.66rem;color:var(--muted);">Find, refine and vet your research topic</div></div>
+          <div class="avat" style="margin-left:auto;">JS</div>
+        </div>
+        <div class="body grey" style="gap:10px;">
+          <div class="dark" style="padding:16px;">
+            <div class="glow"></div>
+            <div style="position:relative;display:flex;align-items:center;gap:12px;">
+              <div style="width:40px;height:40px;border-radius:12px;background:rgba(34,197,94,.2);display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" style="color:#4ade80"><use href="#i-bulb"/></svg></div>
+              <div style="flex:1;"><b style="font-family:'Sora',sans-serif;font-size:.9rem;">Discover topics</b><div style="font-size:.64rem;color:rgba(255,255,255,.5);margin-top:2px;">Guided questions → 5 tailored ideas</div></div>
+              <svg width="17" height="17" viewBox="0 0 24 24" style="color:rgba(255,255,255,.5)"><use href="#i-chev"/></svg>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="card" style="padding:14px;">
+              <div class="rico" style="margin-bottom:9px;"><svg viewBox="0 0 24 24"><use href="#i-search"/></svg></div>
+              <b style="font-size:.76rem;">Scout a topic</b><div style="font-size:.62rem;color:var(--muted);margin-top:3px;line-height:1.4;">Feasibility & angle check</div>
+            </div>
+            <div class="card" style="padding:14px;">
+              <div class="rico" style="margin-bottom:9px;"><svg viewBox="0 0 24 24"><use href="#i-shield"/></svg></div>
+              <b style="font-size:.76rem;">Vet my topic</b><div style="font-size:.62rem;color:var(--muted);margin-top:3px;line-height:1.4;">Supervisor-proof scoring</div>
+            </div>
+            <div class="card" style="padding:14px;">
+              <div class="rico" style="margin-bottom:9px;"><svg viewBox="0 0 24 24"><use href="#i-flask"/></svg></div>
+              <b style="font-size:.76rem;">Refine</b><div style="font-size:.62rem;color:var(--muted);margin-top:3px;line-height:1.4;">Tighten scope & wording</div>
+            </div>
+            <div class="card" style="padding:14px;">
+              <div class="rico" style="margin-bottom:9px;"><svg viewBox="0 0 24 24"><use href="#i-doc"/></svg></div>
+              <b style="font-size:.76rem;">Past projects</b><div style="font-size:.62rem;color:var(--muted);margin-top:3px;line-height:1.4;">What's been done before</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:4px;">
+            <span class="lbl" style="font-size:.66rem;">History</span>
+          </div>
+          <div class="card rowc">
+            <div class="rico" style="background:var(--green-bg2);"><svg viewBox="0 0 24 24"><use href="#i-shield"/></svg></div>
+            <div style="flex:1;min-width:0;"><b style="font-size:.76rem;display:block;line-height:1.35;">Fintech adoption among market traders</b><span style="font-size:.62rem;color:var(--muted);">Vetted · scored 8.5/10 · today</span></div>
+            <svg width="16" height="16" viewBox="0 0 24 24" class="chev"><use href="#i-chev"/></svg>
+          </div>
+          <div class="card rowc">
+            <div class="rico"><svg viewBox="0 0 24 24"><use href="#i-bulb"/></svg></div>
+            <div style="flex:1;min-width:0;"><b style="font-size:.76rem;display:block;line-height:1.35;">Public-health topic discovery</b><span style="font-size:.62rem;color:var(--muted);">5 topics · linked to project · 2d ago</span></div>
+            <svg width="16" height="16" viewBox="0 0 24 24" class="chev"><use href="#i-chev"/></svg>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-home"/></svg>Home</div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-folder"/></svg>Projects</div>
+          <div class="fab"><div class="fb"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg></div></div>
+          <div class="tb on"><svg viewBox="0 0 24 24"><use href="#i-bulb"/></svg>Topics</div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-user"/></svg>Profile</div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="co" style="top:130px;left:-11px;">1</div>
+      <div class="co" style="top:250px;right:-11px;">2</div>
+      <div class="co" style="top:490px;left:-11px;">3</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>Discover gets the hero slot</b> (dark card — the app's "premium action" pattern) because it's the tool that starts the whole journey for an undecided student.</span></li>
+        <li><span class="n">2</span><span><b>The other four tools as a 2×2 grid</b> of equal cards — one icon, one job, six words max. The desktop page's 1,160 lines of tabbed UI become five honest entry points.</span></li>
+        <li><span class="n">3</span><span><b>History is first-class,</b> not a sidebar afterthought: each session row says what kind it was, its outcome ("scored 8.5/10", "linked to project") and when.</span></li>
+      </ul>
+      <div class="why"><b>Structural note</b>
+        Topic Lab is currently the one surface that bypasses the shared API client and React Query. The mobile rebuild is the natural moment to route it through <i>lib/api.ts</i> — the redesign assumes each tool is its own route (<i>/topics/discover</i>, <i>/topics/vet</i>…) instead of one monolithic page, which also fixes back-button behavior.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 12 — TOPIC LAB FLOW ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 8b · Topic Lab</div><h2>Guided flow — one question per screen</h2></div><div class="pg">12 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen">
+        <div class="sb"><span>9:41</span><span class="ic"><span class="batt"></span></span></div>
+        <div class="abar" style="border-bottom:1px solid var(--border);">
+          <svg width="18" height="18" viewBox="0 0 24 24" style="color:var(--ink-sec)"><use href="#i-x"/></svg>
+          <div class="ttl" style="font-size:.9rem;text-align:center;">Discover topics</div>
+          <span style="font-size:.7rem;font-weight:700;color:var(--muted);">3/6</span>
+        </div>
+        <div style="display:flex;gap:5px;padding:12px 16px 4px;">
+          <span style="flex:1;height:4px;border-radius:2px;background:var(--green);"></span>
+          <span style="flex:1;height:4px;border-radius:2px;background:var(--green);"></span>
+          <span style="flex:1;height:4px;border-radius:2px;background:var(--green);"></span>
+          <span style="flex:1;height:4px;border-radius:2px;background:#e5e7eb;"></span>
+          <span style="flex:1;height:4px;border-radius:2px;background:#e5e7eb;"></span>
+          <span style="flex:1;height:4px;border-radius:2px;background:#e5e7eb;"></span>
+        </div>
+        <div class="body" style="padding-top:22px;">
+          <h2 class="serif" style="font-size:1.35rem;font-weight:700;line-height:1.25;letter-spacing:-.01em;">What kind of data do you enjoy working with?</h2>
+          <p style="font-size:.76rem;color:var(--muted);">This shapes which methodologies we'll suggest.</p>
+          <div style="display:flex;flex-direction:column;gap:9px;margin-top:14px;">
+            <div class="card" style="padding:15px 16px;display:flex;align-items:center;gap:12px;border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.1);background:var(--green-bg);">
+              <span style="font-size:1.1rem;">📊</span><div style="flex:1;"><b style="font-size:.82rem;">Numbers & statistics</b><div style="font-size:.64rem;color:var(--muted);margin-top:2px;">Surveys, datasets, econometrics</div></div>
+              <div style="width:20px;height:20px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;"><svg width="11" height="11" viewBox="0 0 24 24" style="color:#fff"><use href="#i-check"/></svg></div>
+            </div>
+            <div class="card" style="padding:15px 16px;display:flex;align-items:center;gap:12px;">
+              <span style="font-size:1.1rem;">🗣️</span><div style="flex:1;"><b style="font-size:.82rem;">People & interviews</b><div style="font-size:.64rem;color:var(--muted);margin-top:2px;">Qualitative, ethnographic</div></div>
+            </div>
+            <div class="card" style="padding:15px 16px;display:flex;align-items:center;gap:12px;">
+              <span style="font-size:1.1rem;">⚙️</span><div style="flex:1;"><b style="font-size:.82rem;">Building systems</b><div style="font-size:.64rem;color:var(--muted);margin-top:2px;">Software, models, prototypes</div></div>
+            </div>
+            <div class="card" style="padding:15px 16px;display:flex;align-items:center;gap:12px;">
+              <span style="font-size:1.1rem;">📚</span><div style="flex:1;"><b style="font-size:.82rem;">Existing literature</b><div style="font-size:.64rem;color:var(--muted);margin-top:2px;">Systematic reviews, meta-analysis</div></div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:12px 16px 30px;border-top:1px solid var(--border);display:flex;gap:10px;">
+          <div class="btn line" style="width:110px;">Back</div>
+          <div class="btn" style="flex:1;">Next question</div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="co" style="top:70px;left:-11px;">1</div>
+      <div class="co" style="top:185px;right:-11px;">2</div>
+      <div class="co" style="top:300px;left:-11px;">3</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>X to exit, count to orient.</b> A guided flow is a modal journey: close is explicit (with a "save your progress?" sheet), progress is honest (3/6).</span></li>
+        <li><span class="n">2</span><span><b>The question is the headline</b> — Fraunces serif, 1.35rem. The desktop version already uses <i>QUESTIONS[q].label</i> as an h2; mobile gives it the whole screen.</span></li>
+        <li><span class="n">3</span><span><b>Answer cards, not radio dots:</b> emoji + label + example line, whole card tappable, selected state = green border + tinted fill + check. One tap, thumb-sized, self-explanatory.</span></li>
+      </ul>
+      <div class="why"><b>Results screen</b>
+        The "Generating your topics…" wait state reuses the progress-ring pattern from sheet 10 (shorter, ~30s). Results arrive as swipeable full-width topic cards — title, cluster badge, complexity, one-line rationale — with "Vet this topic" and "Start a spec from this" actions on each, chaining the tools together.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 13 — PROFILE ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Screen 9 · /dashboard/profile</div><h2>Profile & settings</h2></div><div class="pg">13 / 14</div></div>
+  <div class="layout">
+    <div class="pcol">
+      <div class="phone"><div class="screen" style="background:var(--bg);">
+        <div class="sb"><span>9:41</span><span class="ic"><span class="batt"></span></span></div>
+        <div class="abar"><div class="ttl">Profile</div></div>
+        <div class="body grey" style="gap:11px;">
+          <div class="card" style="padding:16px;display:flex;align-items:center;gap:13px;">
+            <div class="avat" style="width:48px;height:48px;font-size:1rem;border-radius:16px;">JS</div>
+            <div style="flex:1;">
+              <b style="font-family:'Sora',sans-serif;font-size:.95rem;">Jane Smith</b>
+              <div style="font-size:.66rem;color:var(--muted);margin-top:2px;">jane@university.ac.uk</div>
+            </div>
+            <span class="badge bg-b">EMAIL</span>
+          </div>
+          <div class="card" style="padding:14px 16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+              <span class="lbl" style="font-size:.64rem;">Free trial</span>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <div style="flex:1;background:var(--surface2);border-radius:10px;padding:10px 12px;">
+                <div style="display:flex;align-items:center;gap:6px;"><svg width="13" height="13" viewBox="0 0 24 24" style="color:var(--green)"><use href="#i-check"/></svg><b style="font-size:.72rem;">Topic credit</b></div>
+                <div style="font-size:.62rem;color:var(--green);font-weight:700;margin-top:3px;">Available</div>
+              </div>
+              <div style="flex:1;background:var(--surface2);border-radius:10px;padding:10px 12px;">
+                <div style="display:flex;align-items:center;gap:6px;"><svg width="13" height="13" viewBox="0 0 24 24" style="color:var(--muted)"><use href="#i-x"/></svg><b style="font-size:.72rem;">Spec credit</b></div>
+                <div style="font-size:.62rem;color:var(--muted);font-weight:700;margin-top:3px;">Used</div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="rowc" style="border-bottom:1px solid var(--border);">
+              <div class="rico"><svg viewBox="0 0 24 24"><use href="#i-key"/></svg></div>
+              <div style="flex:1;"><b style="font-size:.78rem;">OpenAI API key</b><div style="font-size:.62rem;color:var(--muted);margin-top:2px;">sk-…4x9A · encrypted</div></div>
+              <span class="badge bg-g">ACTIVE</span>
+            </div>
+            <div class="rowc">
+              <div class="rico"><svg viewBox="0 0 24 24"><use href="#i-flask"/></svg></div>
+              <div style="flex:1;"><b style="font-size:.78rem;">Model quality</b><div style="font-size:.62rem;color:var(--muted);margin-top:2px;">Standard tier</div></div>
+              <svg width="16" height="16" viewBox="0 0 24 24" class="chev"><use href="#i-chev"/></svg>
+            </div>
+          </div>
+          <div class="card">
+            <div class="rowc" style="border-bottom:1px solid var(--border);">
+              <div class="rico"><svg viewBox="0 0 24 24"><use href="#i-user"/></svg></div>
+              <div style="flex:1;"><b style="font-size:.78rem;">Edit profile</b></div>
+              <svg width="16" height="16" viewBox="0 0 24 24" class="chev"><use href="#i-chev"/></svg>
+            </div>
+            <div class="rowc" style="border-bottom:1px solid var(--border);">
+              <div class="rico"><svg viewBox="0 0 24 24"><use href="#i-shield"/></svg></div>
+              <div style="flex:1;"><b style="font-size:.78rem;">Security</b><div style="font-size:.62rem;color:var(--muted);margin-top:2px;">Password · 2FA coming soon</div></div>
+              <svg width="16" height="16" viewBox="0 0 24 24" class="chev"><use href="#i-chev"/></svg>
+            </div>
+            <div class="rowc">
+              <div class="rico" style="background:#fef2f2;color:var(--red);"><svg viewBox="0 0 24 24"><use href="#i-x"/></svg></div>
+              <div style="flex:1;"><b style="font-size:.78rem;color:var(--red);">Delete account</b></div>
+              <svg width="16" height="16" viewBox="0 0 24 24" class="chev"><use href="#i-chev"/></svg>
+            </div>
+          </div>
+          <div class="btn line" style="height:48px;">Sign out</div>
+        </div>
+        <div class="tabbar">
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-home"/></svg>Home</div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-folder"/></svg>Projects</div>
+          <div class="fab"><div class="fb"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg></div></div>
+          <div class="tb"><svg viewBox="0 0 24 24"><use href="#i-bulb"/></svg>Topics</div>
+          <div class="tb on"><svg viewBox="0 0 24 24"><use href="#i-user"/></svg>Profile</div>
+        </div>
+        <div class="homebar"></div>
+      </div></div>
+      <div class="co" style="top:105px;right:-11px;">1</div>
+      <div class="co" style="top:200px;left:-11px;">2</div>
+      <div class="co" style="top:330px;right:-11px;">3</div>
+      <div class="co" style="top:545px;left:-11px;">4</div>
+    </div>
+    <div class="acol">
+      <ul class="an">
+        <li><span class="n">1</span><span><b>Provider badge shows how this account signs in</b> — EMAIL or GOOGLE, driven by the <i>auth_provider</i> field added this week. No more hardcoded "Google OAuth 2.0" copy for password users.</span></li>
+        <li><span class="n">2</span><span><b>Trial credits as two honest cells</b> — Available/Used with icon + word, never color alone. This replaces the sidebar meter, which has no home on mobile.</span></li>
+        <li><span class="n">3</span><span><b>BYOK front and center:</b> masked key (sk-…4x9A, exactly what the API returns), "encrypted" stated plainly, ACTIVE badge. Tapping opens a sheet to replace or remove the key with the live-validation flow that already exists.</span></li>
+        <li><span class="n">4</span><span><b>Delete account is inside a group, red, and last</b> — findable but not a landmine. It opens a type-to-confirm sheet ("type DELETE") — the confirmation step the API currently lacks, enforced in UI first.</span></li>
+      </ul>
+      <div class="why"><b>Grouped-list pattern</b>
+        Settings-style stacked cards with 56px rows — the pattern every phone user already knows from iOS/Android settings. Nothing here needs invention; it needs familiarity.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═════════ SHEET 14 — ROLLOUT ═════════ -->
+<div class="sheet">
+  <div class="shead"><div><div class="k">Implementation</div><h2>How to ship this incrementally</h2></div><div class="pg">14 / 14</div></div>
+  <div style="display:flex;gap:26px;">
+    <div style="flex:1;">
+      <div style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--green);margin-bottom:12px;">Order of work</div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card" style="padding:15px 17px;">
+          <b style="font-size:.85rem;">1 · Tab bar + app bar shell <span class="badge bg-g" style="margin-left:6px;">~1 day</span></b>
+          <p style="font-size:.76rem;color:var(--ink-sec);line-height:1.55;margin-top:6px;">One new component pair in <i>dashboard/layout.tsx</i> behind the existing 860px breakpoint. The drawer and hamburger are deleted, not maintained in parallel. Desktop keeps the sidebar untouched.</p>
+        </div>
+        <div class="card" style="padding:15px 17px;">
+          <b style="font-size:.85rem;">2 · Dashboard, Projects, Profile <span class="badge bg-g" style="margin-left:6px;">~2–3 days</span></b>
+          <p style="font-size:.76rem;color:var(--ink-sec);line-height:1.55;margin-top:6px;">Mostly CSS restructuring: single column, cards instead of tables, stat tiles. The data hooks (<i>useProjects</i>, <i>useUser</i>) are reused as-is. Consolidate the three duplicated status-color functions into one helper while touching all three pages.</p>
+        </div>
+        <div class="card" style="padding:15px 17px;">
+          <b style="font-size:.85rem;">3 · Generate wizard + spec reader <span class="badge bg-a" style="margin-left:6px;">~3–4 days</span></b>
+          <p style="font-size:.76rem;color:var(--ink-sec);line-height:1.55;margin-top:6px;">Real component work: step state for the wizard, accordion + pills for the reader, progress ring for the live state. The polling infrastructure already exists; only presentation changes.</p>
+        </div>
+        <div class="card" style="padding:15px 17px;">
+          <b style="font-size:.85rem;">4 · Topic Lab split <span class="badge bg-r" style="margin-left:6px;">~1 week</span></b>
+          <p style="font-size:.76rem;color:var(--ink-sec);line-height:1.55;margin-top:6px;">The big one: break the 1,160-line page into per-tool routes, moving its raw-axios calls onto <i>lib/api.ts</i> + React Query in the same pass (fixing the known 401-handling gap). Do it last; everything else ships without it.</p>
+        </div>
+      </div>
+    </div>
+    <div style="width:300px;flex-shrink:0;">
+      <div style="font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;">Ground rules</div>
+      <div class="card" style="padding:16px;">
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:11px;font-size:.75rem;line-height:1.55;color:var(--ink-sec);">
+          <li>• <b>No new design language.</b> Every screen uses the existing tokens (#16a34a green, #0f1f0f ink, existing badge/card/button classes). This proposal adds layout patterns, not a theme.</li>
+          <li>• <b>No new dependencies</b> except optionally <i>vaul</i> (bottom sheets). Icons come from lucide-react, already installed — retiring the ~90 hand-rolled SVGs as pages are touched.</li>
+          <li>• <b>Accessibility is built in, not bolted on:</b> every tap target is a real <i>&lt;button&gt;</i>/<i>&lt;a&gt;</i>, 44px minimum, with focus-visible states — fixing the current div-onClick pattern as each screen is rebuilt.</li>
+          <li>• <b>Browser-native alert()/confirm() are replaced</b> by bottom sheets as each destructive action is touched.</li>
+        </ul>
+      </div>
+      <div class="why" style="margin-top:16px;"><b>What this buys beyond mobile</b>
+        The wizard steps, action sheets, status helper and typed section components are all reusable on desktop — this is the first concrete step toward collapsing the four coexisting design systems into one.
+      </div>
+      <div style="margin-top:22px;padding:16px;border-radius:14px;background:#0f1f0f;color:#fff;position:relative;overflow:hidden;">
+        <div style="position:absolute;top:-30px;right:-30px;width:130px;height:130px;border-radius:50%;background:radial-gradient(circle,rgba(34,197,94,.25),transparent 70%);"></div>
+        <div style="position:relative;font-size:.72rem;line-height:1.6;color:rgba(255,255,255,.7);">
+          <b style="color:#fff;display:block;margin-bottom:5px;font-family:'Sora',sans-serif;">Companion document</b>
+          The full-frontend aesthetic redesign (desktop) is proposed separately in <i>frontend-redesign-proposal.pdf</i> — same tokens, same components, one unified system across both form factors.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
