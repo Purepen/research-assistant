@@ -185,18 +185,86 @@
 }
 .g-btn-danger:hover { background: #fee2e2; border-color: #fca5a5; }
 
-/* ── Spec section content ───────────────────────────────────────── */
+/* ── Spec section content — manuscript typography, distinct from UI chrome ── */
 .g-spec-content {
-  font-size: .92rem; color: var(--g-text-sec); line-height: 1.8;
+  font-size: .95rem; color: var(--g-text-sec); line-height: 1.85;
   white-space: pre-wrap; font-family: 'Georgia', serif;
 }
 
 /* ── Responsive: mobile nav ───────────────────────────────────────
-   Below 860px the fixed sidebar has no room, so it's hidden in favor
-   of the hamburger menu + slide-out drawer in Header.tsx. */
+   Below 860px primary navigation moves to a bottom tab bar (TabBar.tsx):
+   four destinations + a raised center FAB for Generate. The sidebar
+   becomes a slide-out drawer — closed by default, opened via the menu
+   button in the header, closed by tapping the backdrop or any link.
+   Uses transform (not display) because the sidebar's flex layout is an
+   inline style, which a CSS `display:none` cannot override. */
+.g-tabbar { display: none; }
 .g-mobile-menu-btn { display: none; }
+.g-sidebar-backdrop { display: none; }
+/* z-index lives here, NOT inline on the element — inline would override the
+   mobile drawer stacking below and put the backdrop above the drawer,
+   making every link in it un-tappable. */
+.g-sidebar { z-index: 40; }
+
 @media (max-width: 860px) {
-  .g-sidebar { display: none; }
+  /* Stacking when the drawer is open, top to bottom:
+     drawer (61) > backdrop (55) > tab bar (45) > page.
+     The drawer must be ABOVE the backdrop or taps land on the backdrop. */
+  .g-sidebar {
+    transform: translateX(-105%);
+    transition: transform .28s cubic-bezier(.22, 1, .36, 1);
+    z-index: 61;
+    box-shadow: 12px 0 40px rgba(15, 31, 15, .35);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    overflow-y: auto;
+  }
+  .g-sidebar.open { transform: translateX(0); }
+
+  /* Collapse the nav's flex:1 stretch (inline style, hence !important) so the
+     Free Trial panel, account row and Sign out sit right under the nav instead
+     of being pushed to — and past — the bottom edge. */
+  .g-sidebar .sbd-navwrap { flex: 0 1 auto !important; }
+
+  .g-sidebar-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 55;
+    background: rgba(15, 31, 15, .45);
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  .g-sidebar-backdrop.show { opacity: 1; pointer-events: auto; }
+
+  .g-mobile-menu-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 10px;
+    border: 1px solid var(--g-border); background: white;
+    color: var(--g-text-sec); cursor: pointer; padding: 0; flex-shrink: 0;
+  }
+
   .g-main-wrap { padding-left: 0 !important; }
-  .g-mobile-menu-btn { display: inline-flex; }
+  .g-header { padding: 0 16px !important; }
+  .g-header-newspec { display: none; }   /* the FAB covers this action */
+  .g-main { padding: 20px 16px 110px !important; }  /* clear the tab bar */
+
+  .g-tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
+    display: flex; align-items: flex-start;
+    height: calc(64px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 8px env(safe-area-inset-bottom, 0px);
+    background: rgba(255,255,255,.97);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--g-border);
+  }
+  .g-tabbar-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding-top: 5px; min-height: 52px;
+    font-size: .6rem; font-weight: 700; text-decoration: none;
+    color: var(--g-text-muted); transition: color .15s;
+  }
+  .g-tabbar-item.active { color: var(--g-green); }
+  .g-tabbar-fab { flex: 1; display: flex; justify-content: center; text-decoration: none; }
+  .g-tabbar-fab-btn {
+    width: 52px; height: 52px; border-radius: 18px; margin-top: -24px;
+    background: linear-gradient(135deg, #16a34a, #22c55e); color: white;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 20px rgba(22,163,74,.4), 0 0 0 5px #ffffff;
+  }
 }

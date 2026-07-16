@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import axios from 'axios'
 import { ArrowLeft, ArrowRight, Sparkles, CheckCircle, AlertTriangle, FlaskConical, Brain, BarChart3 } from 'lucide-react'
 import { useGenerateSpecification } from '@/hooks/useProjects'
+import { useUserStats } from '@/hooks/useUser'
 import { topicsApi } from '@/lib/api'
 import { Step2FileUploads } from '@/components/generate/Step2FileUploads'
 import { Step3Questions, TrackAAnswers, TrackBAnswers } from '@/components/generate/Step3Questions'
@@ -126,7 +127,7 @@ function Stepper({ step, track }: { step: number; track: 'A' | 'B' }) {
                   : <span style={{ fontSize: '.72rem', fontWeight: 800, color: active ? 'white' : C.muted }}>{idx}</span>
                 }
               </div>
-              <span style={{
+              <span className="gen-steplabel" style={{
                 fontSize: '.65rem', fontWeight: active ? 800 : 500, marginTop: 7,
                 color: done ? accent : active ? C.dark : C.muted, whiteSpace: 'nowrap',
               }}>{label}</span>
@@ -215,7 +216,7 @@ function TrackConfirmation({
         {' '}<strong style={{ color: C.dark }}>This determines your entire methodology.</strong>
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="gen-track-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {/* Empirical Track */}
         <button
           onClick={() => onConfirm('A')}
@@ -360,6 +361,7 @@ export default function GeneratePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { mutateAsync: generateSpec, isPending } = useGenerateSpecification()
+  const { data: userStats } = useUserStats()
 
   const [step, setStep] = useState(1)
   const [error, setError] = useState<string | null>(null)
@@ -635,6 +637,29 @@ export default function GeneratePage() {
     </div>
   )
 
+  // ─── Cost-upfront card — no surprise 402s (design doc: "cost before the button") ──
+  const renderCostCard = () => {
+    const hasOwnKey = userStats?.has_own_api_key ?? false
+    const specCreditUsed = userStats?.free_spec_credit_used ?? false
+    const [bg, border, color, icon, text] = hasOwnKey
+      ? [C.greenLight, C.greenBorder, C.green, '🔑', 'This run uses your own OpenAI key — unlimited generations, you pay OpenAI directly.']
+      : !specCreditUsed
+        ? [C.greenLight, C.greenBorder, C.green, '🎁', 'This run uses your free spec credit — £0, on us. Estimated time: 5–15 minutes.']
+        : [C.amberLight, C.amberBorder, C.amber, '⚠️', 'Your free spec credit is used. Add your own OpenAI key in Profile before generating, or this run will fail.']
+    return (
+      <div style={{
+        display: 'flex', gap: 10, alignItems: 'flex-start',
+        background: bg, border: `1.5px solid ${border}`,
+        borderRadius: 12, padding: '12px 16px',
+      }}>
+        <span style={{ fontSize: '1rem', flexShrink: 0 }}>{icon}</span>
+        <p style={{ margin: 0, fontSize: '.8rem', color: C.dark, lineHeight: 1.55 }}>
+          <strong style={{ color }}>Cost of this run:</strong> {text}
+        </p>
+      </div>
+    )
+  }
+
   // ─── Step 4: Configure ────────────────────────────────────────────────────
   const renderStep4 = () => {
     const MODES = [
@@ -646,6 +671,7 @@ export default function GeneratePage() {
       <div>
         <SectionHead title="Configure Generation" sub="Tweak how the AI researches and builds your spec." />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {renderCostCard()}
           <FieldCard accent={trackColor}>
             <label style={{ display: 'block', fontWeight: 700, fontSize: '.86rem', color: C.dark, marginBottom: 12 }}>Past Projects Discovery</label>
             {MODES.map(m => {
@@ -674,6 +700,8 @@ export default function GeneratePage() {
             <label style={{ display: 'block', fontWeight: 700, fontSize: '.86rem', color: C.dark, marginBottom: 6 }}>Review Iterations</label>
             <p style={{ margin: '0 0 12px', fontSize: '.76rem', color: C.muted, lineHeight: 1.55 }}>
               How many times should the AI professor review and revise before finalising?
+              After the first draft, only the sections that under-scored are rewritten — extra
+              iterations sharpen weak sections without redoing good ones.
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               {[1, 2, 3].map(n => {
@@ -778,11 +806,20 @@ export default function GeneratePage() {
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 0 100px' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800;900&display=swap');
-        * { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
         .gen-spin { animation: genspin .9s linear infinite; display: inline-block; }
         @keyframes genspin { to { transform: rotate(360deg); } }
         .gen-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+        @media (max-width: 560px) {
+          .gen-steplabel { display: none; }
+          .gen-card { padding: 20px 16px !important; }
+          .gen-nav {
+            position: fixed; bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+            left: 0; right: 0; z-index: 40; margin-top: 0 !important;
+            padding: 10px 16px; background: rgba(255,255,255,.97);
+            backdrop-filter: blur(12px); border-top: 1px solid #e8ede8;
+          }
+          .gen-track-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
 
       {/* Header */}
@@ -824,7 +861,7 @@ export default function GeneratePage() {
       <Stepper step={step} track={track} />
 
       {/* Card */}
-      <div style={{
+      <div className="gen-card" style={{
         background: C.bg, border: `1.5px solid ${C.border}`, borderRadius: 20,
         padding: '28px 30px', minHeight: 420,
         boxShadow: '0 2px 8px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.04)',
@@ -855,7 +892,7 @@ export default function GeneratePage() {
       </div>
 
       {/* Navigation */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, alignItems: 'center' }}>
+      <div className="gen-nav" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, alignItems: 'center' }}>
         <button
           onClick={() => { setError(null); setStep(s => Math.max(1, s - 1)) }}
           disabled={step === 1}

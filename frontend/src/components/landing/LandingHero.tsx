@@ -25,8 +25,8 @@ export function LandingHero() {
             <div className="rai-badge">✦ AI-Powered Research Specifications</div>
 
             <h1 className="rai-h1">
-              Generate your<br />
-              <em>perfect research</em><br />
+              Generate your{' '}<br />
+              <em>perfect research</em>{' '}<br />
               spec in minutes
             </h1>
 
@@ -45,7 +45,7 @@ export function LandingHero() {
             <div className="rai-trust">
               <span className="rai-trust-item"><IconCheck /> No credit card required</span>
               <span className="rai-trust-item"><IconCheck /> MSc &amp; PhD ready</span>
-              <span className="rai-trust-item"><IconCheck /> 4,500+ students</span>
+              <span className="rai-trust-item"><IconCheck /> First spec free</span>
             </div>
           </div>
 

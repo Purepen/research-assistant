@@ -326,3 +326,24 @@
 .rai-footer-links { display: flex; gap: 18px; }
 .rai-footer-links a { color: rgba(255,255,255,0.40); text-decoration: none; font-size: 0.80rem; transition: color 0.2s; }
 .rai-footer-links a:hover { color: #86efac; }
+
+/* ── Mobile refinements (≤480px) ─────────────────────────────────
+   The h1's <br/>s force a ~400px min line width and the nav's
+   logo+two buttons exceed 390px — both overflowed small phones. */
+@media (max-width: 480px) {
+  .rai-nav-inner { padding: 0 16px; }
+  .rai-logo-text { display: none; }              /* icon-only logo */
+  .rai-btn-ghost { padding: 8px 12px; font-size: .82rem; }
+  .rai-btn-green { padding: 8px 14px; font-size: .82rem; }
+
+  .rai-container { padding: 0 16px; }
+  .rai-hero { padding: 56px 0 56px; }
+  .rai-h1 { font-size: 2rem; }
+  .rai-h1 br { display: none; }                  /* wrap naturally */
+  .rai-sub { font-size: .98rem; }
+  .rai-hero-ctas .rai-btn-hero,
+  .rai-hero-ctas .rai-btn-outline { width: 100%; justify-content: center; text-align: center; }
+
+  .rai-stats-grid { gap: 12px; }
+  .rai-stat-num { font-size: 1.8rem; }
+}

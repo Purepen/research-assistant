@@ -305,6 +305,7 @@ export default function ProjectDetailPage() {
   const [activeTab, setActiveTab] = useState<'specification'|'review'|'critic'>('specification')
   const [downloading, setDownloading] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const { data:project, isLoading:projectLoading } = useProject(projectId)
   const { data:statusData } = useProjectStatus(projectId, isActive(project?.status))
@@ -323,11 +324,16 @@ export default function ProjectDetailPage() {
     queryClient.invalidateQueries({ queryKey:['project-result', projectId] })
   }
 
+  // Two-tap inline confirm — first tap arms it (auto-disarms after 4s), second tap deletes.
   const handleDelete = async () => {
-    if (!confirm('Delete this specification? This cannot be undone.')) return
+    if (!confirmingDelete) {
+      setConfirmingDelete(true)
+      setTimeout(() => setConfirmingDelete(false), 4000)
+      return
+    }
     setIsDeleting(true)
     try { await deleteProject(projectId); router.push('/dashboard/projects') }
-    catch { setIsDeleting(false) }
+    catch { setIsDeleting(false); setConfirmingDelete(false) }
   }
 
   const handleDownload = async () => {
@@ -372,7 +378,14 @@ export default function ProjectDetailPage() {
 
   return (
     <div style={{ maxWidth:1060 }}>
-      <style>{`@keyframes g-spin{to{transform:rotate(360deg)}} .spin{animation:g-spin 1s linear infinite}`}</style>
+      <style>{`
+        @keyframes g-spin{to{transform:rotate(360deg)}} .spin{animation:g-spin 1s linear infinite}
+        .pd-rail { position: sticky; top: 70px; }
+        @media (max-width: 860px) {
+          .pd-grid { grid-template-columns: 1fr !important; }
+          .pd-rail { position: static; order: -1; }
+        }
+      `}</style>
 
       {/* ── Top bar ── */}
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:22, flexWrap:'wrap', gap:14 }}>
@@ -405,10 +418,10 @@ export default function ProjectDetailPage() {
             </button>
           )}
           <button onClick={handleDelete} disabled={isDeleting}
-            style={{ width:36, height:36, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:9, border:'1.5px solid #fecaca', background:'#fef2f2', color:'#dc2626', cursor:'pointer', transition:'all .15s', flexShrink:0 }}
-            onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background='#fee2e2'}}
-            onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.background='#fef2f2'}}>
-            <I.Trash/>
+            style={{ height:36, minWidth:36, padding: confirmingDelete?'0 12px':'0', display:'flex', alignItems:'center', justifyContent:'center', gap:6, borderRadius:9, border:'1.5px solid #fecaca', background: confirmingDelete?'#dc2626':'#fef2f2', color: confirmingDelete?'white':'#dc2626', cursor:'pointer', transition:'all .15s', flexShrink:0, fontSize:'.76rem', fontWeight:700 }}
+            onMouseEnter={e=>{ if(!confirmingDelete)(e.currentTarget as HTMLElement).style.background='#fee2e2' }}
+            onMouseLeave={e=>{ if(!confirmingDelete)(e.currentTarget as HTMLElement).style.background='#fef2f2' }}>
+            <I.Trash/>{confirmingDelete && 'Really delete?'}
           </button>
         </div>
       </div>
@@ -433,7 +446,7 @@ export default function ProjectDetailPage() {
 
       {/* ── Complete: 2-col layout ── */}
       {isComplete && (
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 260px', gap:18, alignItems:'start' }}>
+        <div className="pd-grid" style={{ display:'grid', gridTemplateColumns:'1fr 260px', gap:18, alignItems:'start' }}>
 
           {/* Left: spec/review/critic */}
           <div>
@@ -500,7 +513,7 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* Right: score + metadata */}
-          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+          <div className="pd-rail" style={{ display:'flex', flexDirection:'column', gap:14 }}>
             {result?.total_marks!=null && <ScoreCard marks={result.total_marks} decision={result.decision}/>}
 
             <div style={{ background:'white', border:'1px solid #e8ede8', borderRadius:14, overflow:'hidden', boxShadow:'0 1px 3px rgba(0,0,0,.04)' }}>

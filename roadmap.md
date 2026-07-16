@@ -68,6 +68,11 @@ Fixed by adding **`infra/modules/cdn`**: one CloudFront distribution in front of
 
 **Verified:** Google sign-in works end-to-end through the new URL. **Not yet verified:** the rest of the app's features through it — full generation pipeline, Topic Lab, file uploads (CloudFront's viewer-request body-size ceiling is an open risk for large guidelines/dataset uploads, untested), email links, downloads. See `context.md` §12's 2026-07-16 entry for the full implication list (HTTP-only origin traffic behind the edge, ALBs still directly reachable in parallel, new backend routes need manual entry in the CDN's path-pattern list, future custom-domain certs must be issued in `us-east-1`).
 
+**2026-07-16/17 update — frontend redesign shipped + real-device mobile fixes:**
+The full frontend redesign (unified green/ink design system, honest landing copy with single Free+BYOK pricing, dark sidebar, mobile bottom tab bar, wizard/reader/Topic-Lab upgrades — see `context.md` §13) was implemented, deployed via `deploy.sh frontend`, and tested by the user on a real Android phone. That testing surfaced two mobile drawer bugs (inline styles overriding responsive CSS — display, then z-index/flex), both fixed same-day; the sidebar is now a proper slide-out drawer on mobile (☰ opens, backdrop closes, sign-out fully visible above the tab bar). A reusable local verification harness now lives in `design/src/` (`_stub_api.py` + fixtures) for rendering the auth-gated dashboard headlessly without the real backend.
+
+**Next planned session:** custom domain — register domain → Route53 hosted zone → ACM cert in `us-east-1` → attach to the cdn module → add the new origin in Google Cloud Console → `deploy.sh frontend`; DNS-verify the same domain in Resend to unlock verification emails for strangers (~$20/yr all-in). Also still pending before "open to strangers": Google OAuth consent screen out of "Testing", a real file-upload test through CloudFront, and committing the (large) uncommitted working tree.
+
 ---
 
 ## Workstream 1 — Cloud-ready refactor (~2 weeks, still runs locally)

@@ -18,7 +18,7 @@ export function LandingLogos() {
   return (
     <div className="rai-logos">
       <div className="rai-logos-inner">
-        <span className="rai-logos-label">Trusted by students at</span>
+        <span className="rai-logos-label">Built for students at universities like</span>
         <div className="rai-logos-scroll">
           <div className="rai-logos-track">
             {all.map((u, i) => (

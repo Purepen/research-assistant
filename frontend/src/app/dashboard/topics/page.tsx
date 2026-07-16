@@ -2,8 +2,12 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useRouter } from 'next/navigation'
-import axios from 'axios'
+import { useRouter, useSearchParams } from 'next/navigation'
+import api from '@/lib/api'
+
+// Topic Lab agent calls run long LLM+web-search work — give them a generous
+// per-request timeout instead of the client's 2-minute default.
+const LLM_TIMEOUT = { timeout: 300000 }
 
 /* ─── Icons ──────────────────────────────────────────────────────────────── */
 const I = {
@@ -85,8 +89,9 @@ interface ChatMsg { role:'user'|'ai'; content:string }
 
 type Stage = 'gateway'|'vet'|'vet-loading'|'vet-result'|'form'|'loading'|'results'|'scouting'|'chat'|'final'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const authHeaders = ()=>({ Authorization:`Bearer ${localStorage.getItem('access_token')}` })
+// All requests go through the shared api client (lib/api.ts): auth header is
+// injected automatically and a 401 redirects to /signin — previously this page
+// used raw axios and an expired session surfaced as an endless generic error.
 
 function extractError(e: any, fallback: string): string {
   const detail = e?.response?.data?.detail
@@ -755,12 +760,12 @@ function ChatStage({ topic, formData, scoutData, onFinal, onChangeTopic }:
     try {
       const conversation: {role:string;content:string}[] = []
       messages.forEach(m=>conversation.push({role:m.role==='user'?'user':'assistant',content:m.content}))
-      const res = await axios.post(`${API}/topics/refine`,{
+      const res = await api.post('/topics/refine',{
         topic_title:topic.title, topic_one_liner:topic.one_liner,
         field:formData.field, degree_level:formData.degree_level, ambition_level:formData.ambition_level,
         stage, student_message:userMsg||null, conversation,
         scout_context: stage==='explain'?(scoutData?.advisor_context||null):undefined,
-      },{headers:authHeaders()})
+      },LLM_TIMEOUT)
       const data=res.data
       setMessages(p=>[...p,{role:'ai',content:data.ai_message}])
       if(data.is_final&&data.refined_topic) onFinal(data.refined_topic,data.refined_description||'')
@@ -876,7 +881,7 @@ function FinalStage({ topic, description, field, level, degree }:
   const handleFindProjects=async()=>{
     setFindingProjects(true); setProjectError('')
     try {
-      const res=await axios.post(`${API}/topics/find-projects`,{topic_title:topic,field,degree_level:degree},{headers:authHeaders()})
+      const res=await api.post('/topics/find-projects',{topic_title:topic,field,degree_level:degree},LLM_TIMEOUT)
       setProjects(res.data.projects||[]); setSearchNote(res.data.search_note||'')
     } catch(e:any) { setProjectError(extractError(e,'Search failed. Please try again.')) }
     finally { setFindingProjects(false) }
@@ -974,6 +979,7 @@ function FinalStage({ topic, description, field, level, degree }:
 ══════════════════════════════════════════════════════════════════════════ */
 export default function TopicsPage() {
   const router=useRouter()
+  const searchParams=useSearchParams()
 
   const [stage,setStage]                     = useState<Stage>('gateway')
   const [formData,setFormData]               = useState<FormData|null>(null)
@@ -989,6 +995,18 @@ export default function TopicsPage() {
   const stageNum = (stage==='results') ? 2 : (stage==='scouting'||stage==='chat') ? 3 : stage==='final' ? 4 : 1
   const isLiterature = formData?.project_type==='research-based'
 
+  // Deep-linkable tool entry points: /dashboard/topics?flow=vet | ?flow=discover
+  // let the dashboard, sidebar and docs link straight into a tool instead of
+  // always landing on the gateway.
+  const flowParam = searchParams.get('flow')
+  const flowApplied = useRef(false)
+  useEffect(() => {
+    if (flowApplied.current) return
+    flowApplied.current = true
+    if (flowParam === 'vet')      { setFlowOrigin('vet');       setStage('vet') }
+    if (flowParam === 'discover') { setFlowOrigin('discovery'); setStage('form') }
+  }, [flowParam])
+
   /* ── Discovery path ─────────────────────────────────────────────────── */
   const handleFormSubmit=async(data:FormData)=>{
     setFormData(data); setStage('loading'); setError(null); setFlowOrigin('discovery')
@@ -997,11 +1015,11 @@ export default function TopicsPage() {
       const geoVal = data.geographic_focus || 'none'
       const apiGeo = KNOWN_GEO.includes(geoVal) ? geoVal : 'none'
       const geoContext = KNOWN_GEO.includes(geoVal) ? undefined : geoVal
-      const res=await axios.post(`${API}/topics/discover`,{
+      const res=await api.post('/topics/discover',{
         ...data,
         geographic_focus: apiGeo,
         ...(geoContext ? { geo_context: geoContext } : {})
-      },{headers:authHeaders()})
+      },LLM_TIMEOUT)
       setDiscoveryResult(res.data); setStage('results')
     } catch(e:any) { setError(extractError(e,'Failed to generate topics.')); setStage('form') }
   }
@@ -1009,10 +1027,10 @@ export default function TopicsPage() {
   const handleTopicSelect=async(topic:Topic)=>{
     setSelectedTopic(topic); setStage('scouting'); setScoutData(null)
     try {
-      const res=await axios.post(`${API}/topics/scout`,{
+      const res=await api.post('/topics/scout',{
         topic_title:topic.title, field:formData?.field||'',
         degree_level:formData?.degree_level||'', project_type:formData?.project_type||'mixed',
-      },{headers:authHeaders()})
+      },LLM_TIMEOUT)
       setScoutData(res.data)
     } catch { setScoutData(null) }
     setStage('chat')
@@ -1032,14 +1050,14 @@ export default function TopicsPage() {
   const handleVetSubmit=async(input:VetInput)=>{
     setVetInput(input); setStage('vet-loading'); setError(null); setFlowOrigin('vet')
     try {
-      const res=await axios.post(`${API}/topics/vet`,{
+      const res=await api.post('/topics/vet',{
         original_topic: input.original_topic,
         field:          input.field,
         degree_level:   input.degree_level,
         project_type:   input.project_type,
         geographic_focus: input.geographic_focus,
         ambition_level: input.ambition_level,
-      },{headers:authHeaders()})
+      },LLM_TIMEOUT)
       setVetResult(res.data); setStage('vet-result')
     } catch(e:any) {
       setError(extractError(e,'Vetting failed. Please try again.'))
@@ -1057,7 +1075,7 @@ export default function TopicsPage() {
 
     // Save the vet session to DB (non-fatal — never blocks the user)
     try {
-      await axios.post(`${API}/topics/vet/save`,{
+      await api.post('/topics/vet/save',{
         original_topic:  vetInput.original_topic,
         chosen_title:    chosenTitle,
         one_liner:       vetResult.one_liner,
@@ -1067,7 +1085,7 @@ export default function TopicsPage() {
         ambition_level:  vetInput.ambition_level,
         geographic_focus:vetInput.geographic_focus,
         origin,
-      },{headers:authHeaders()})
+      })
     } catch(e) { console.warn('Vet save non-fatal:', e) }
 
     // Set formData so FinalStage has valid field/level/degree context

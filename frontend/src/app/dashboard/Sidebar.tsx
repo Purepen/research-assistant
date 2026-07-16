@@ -16,14 +16,14 @@ const IcoUser    = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="n
 const IcoOut     = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
 
 export const NAV = [
-  { label:'Dashboard', href:'/dashboard',         icon:IcoGrid,  desc:'Overview',        accent:false },
-  { label:'Topic Lab', href:'/dashboard/topics',  icon:IcoFlask, desc:'Find & refine',   accent:true  },
-  { label:'Projects',  href:'/dashboard/projects',icon:IcoFiles, desc:'All specs',        accent:false },
-  { label:'Generate',  href:'/dashboard/generate',icon:IcoPlus,  desc:'New spec',         accent:false },
-  { label:'Profile',   href:'/dashboard/profile', icon:IcoUser,  desc:'Settings',         accent:false },
+  { label:'Dashboard', href:'/dashboard',         icon:IcoGrid,  desc:'Overview',      isNew:false },
+  { label:'Topic Lab', href:'/dashboard/topics',  icon:IcoFlask, desc:'Find & refine', isNew:true  },
+  { label:'Projects',  href:'/dashboard/projects',icon:IcoFiles, desc:'All specs',      isNew:false },
+  { label:'Generate',  href:'/dashboard/generate',icon:IcoPlus,  desc:'New spec',       isNew:false },
+  { label:'Profile',   href:'/dashboard/profile', icon:IcoUser,  desc:'Settings',       isNew:false },
 ]
 
-export function Sidebar() {
+export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: () => void }) {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
   const { data: stats } = useUserStats()
@@ -37,60 +37,58 @@ export function Sidebar() {
   const topicsUsed = topicData?.total ?? 0
 
   return (
-    <div className="g-sidebar" style={{ position:'fixed',top:0,left:0,bottom:0,width:'var(--g-sidebar-w)',zIndex:40,display:'flex',flexDirection:'column',background:'#ffffff',borderRight:'1px solid #e8ede8' }}>
+    <div className={`g-sidebar surface-forest ${open ? 'open' : ''}`} style={{ position:'fixed',top:0,left:0,bottom:0,width:'var(--g-sidebar-w)',display:'flex',flexDirection:'column' }}>
       <style>{`
-        .sb-logout{transition:all .15s;cursor:pointer;background:none;border:none;width:100%;text-align:left;}
-        .sb-logout:hover{background:#fef2f2!important;color:#dc2626!important;}
-        .sb-accent-nav:hover{background:#faf5ff!important;border-color:rgba(124,58,237,.2)!important;}
-        .sb-accent-nav.active{background:#faf5ff!important;border-color:rgba(124,58,237,.3)!important;}
-        .sb-accent-nav.active .sb-nav-text{color:#7c3aed!important;}
-        .sb-accent-nav .sb-nav-text{color:#7c3aed;}
+        .sbd-logout{transition:all .15s;cursor:pointer;background:none;border:none;width:100%;text-align:left;}
+        .sbd-logout:hover{background:rgba(220,38,38,.16)!important;color:#fca5a5!important;}
+        .sbd-nav{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;border:1px solid transparent;transition:all .15s;text-decoration:none;color:rgba(255,255,255,.55);}
+        .sbd-nav:hover{background:rgba(255,255,255,.06);color:rgba(255,255,255,.85);}
+        .sbd-nav.active{background:rgba(34,197,94,.16);border-color:rgba(74,222,128,.2);color:#4ade80;}
       `}</style>
 
+      {/* Glow */}
+      <div style={{ position:'absolute',top:-100,left:-100,width:320,height:320,borderRadius:'50%',background:'radial-gradient(circle, rgba(34,197,94,0.14) 0%, transparent 70%)',pointerEvents:'none' }}/>
+
       {/* Logo */}
-      <div style={{ padding:'22px 18px 16px' }}>
+      <div style={{ padding:'22px 18px 16px',position:'relative' }}>
         <Link href="/" style={{ display:'flex',alignItems:'center',gap:10,textDecoration:'none',width:'fit-content' }}>
           <div style={{ width:34,height:34,borderRadius:10,background:'#16a34a',display:'flex',alignItems:'center',justifyContent:'center',color:'white' }}>
             <IcoLayers/>
           </div>
           <div>
-            <div style={{ fontSize:'.88rem',fontWeight:800,color:'#0f1f0f',letterSpacing:'-.02em',lineHeight:1.1 }}>ResearchAI</div>
-            <div style={{ fontSize:'.6rem',color:'#16a34a',fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase' }}>SPEC GENERATOR</div>
+            <div style={{ fontSize:'.88rem',fontWeight:800,color:'white',letterSpacing:'-.02em',lineHeight:1.1,fontFamily:'Sora,sans-serif' }}>Research<span style={{ color:'#4ade80' }}>AI</span></div>
+            <div style={{ fontSize:'.6rem',color:'rgba(74,222,128,.75)',fontWeight:700,letterSpacing:'.07em',textTransform:'uppercase' }}>SPEC GENERATOR</div>
           </div>
         </Link>
       </div>
 
-      <div style={{ height:1,background:'#f0f4f0',margin:'0 16px' }}/>
+      <div style={{ height:1,background:'rgba(255,255,255,.08)',margin:'0 16px',position:'relative' }}/>
 
-      {/* Nav */}
-      <div style={{ padding:'12px 10px',flex:1,overflowY:'auto' }}>
-        <p style={{ fontSize:'.6rem',fontWeight:700,letterSpacing:'.12em',textTransform:'uppercase',color:'#9ca3af',padding:'0 8px',marginBottom:6 }}>MENU</p>
+      {/* Nav — flex:1 pushes the footer down on desktop; on mobile the
+          sbd-navwrap override collapses this so the trial panel + account +
+          sign-out sit directly under the nav and are never pushed off-screen. */}
+      <div className="sbd-navwrap" style={{ padding:'12px 10px',flex:1,overflowY:'auto',position:'relative' }}>
+        <p style={{ fontSize:'.6rem',fontWeight:700,letterSpacing:'.12em',textTransform:'uppercase',color:'rgba(255,255,255,.3)',padding:'0 8px',marginBottom:6 }}>MENU</p>
         <div style={{ display:'flex',flexDirection:'column',gap:2 }}>
           {NAV.map(item => {
             const active = pathname===item.href || (item.href!=='/dashboard'&&pathname.startsWith(item.href))
             return (
-              <Link key={item.href} href={item.href} className="g-nav">
-                <motion.div whileTap={{ scale:.97 }}
-                  className={`g-nav-inner ${active?'active':''} ${item.accent?'sb-accent-nav':''}`}>
+              <Link key={item.href} href={item.href} onClick={onClose} style={{ textDecoration:'none',display:'block' }}>
+                <motion.div whileTap={{ scale:.97 }} className={`sbd-nav ${active?'active':''}`}>
                   <div style={{ width:30,height:30,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .15s',
-                    background: item.accent
-                      ? (active?'#ede9fe':'#f5f3ff')
-                      : (active?'#dcfce7':'#f9fafb'),
-                    color: item.accent
-                      ? (active?'#7c3aed':'#a78bfa')
-                      : (active?'#16a34a':'#9ca3af'),
+                    background: active?'rgba(34,197,94,.22)':'rgba(255,255,255,.06)',
+                    color: active?'#4ade80':'rgba(255,255,255,.45)',
                   }}>
                     <item.icon/>
                   </div>
                   <div style={{ flex:1,minWidth:0 }}>
-                    <div className={`sb-nav-text`} style={{ fontSize:'.83rem',fontWeight:active?700:500,color:active&&!item.accent?'#0f1f0f':'inherit',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>
+                    <div style={{ fontSize:'.83rem',fontWeight:active?700:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>
                       {item.label}
                     </div>
-                    <div style={{ fontSize:'.66rem',color:'#9ca3af',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{item.desc}</div>
+                    <div style={{ fontSize:'.66rem',color:'rgba(255,255,255,.3)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{item.desc}</div>
                   </div>
-                  {/* NEW badge for Topic Lab */}
-                  {item.accent && (
-                    <span style={{ fontSize:'.55rem',fontWeight:800,letterSpacing:'.06em',background:'#7c3aed',color:'white',padding:'2px 6px',borderRadius:999,textTransform:'uppercase',flexShrink:0 }}>
+                  {item.isNew && (
+                    <span style={{ fontSize:'.55rem',fontWeight:800,letterSpacing:'.06em',background:'rgba(34,197,94,.25)',color:'#4ade80',padding:'2px 6px',borderRadius:999,textTransform:'uppercase',flexShrink:0,border:'1px solid rgba(74,222,128,.3)' }}>
                       NEW
                     </span>
                   )}
@@ -101,34 +99,34 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div style={{ height:1,background:'#f0f4f0',margin:'0 16px' }}/>
+      <div style={{ height:1,background:'rgba(255,255,255,.08)',margin:'0 16px',position:'relative' }}/>
 
       {/* Usage tier */}
-      <div style={{ padding:'12px 16px' }}>
-        <div style={{ background:'#f9fafb',borderRadius:12,padding:'12px 14px',border:'1px solid #f0f4f0' }}>
+      <div style={{ padding:'12px 16px',position:'relative' }}>
+        <div style={{ background:'rgba(255,255,255,.05)',borderRadius:12,padding:'12px 14px',border:'1px solid rgba(255,255,255,.09)' }}>
           <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8 }}>
-            <span style={{ fontSize:'.72rem',fontWeight:700,color:'#374151' }}>{hasOwnKey ? 'Your API key' : 'Free trial'}</span>
-            {hasOwnKey && <span style={{ fontSize:'.68rem',fontWeight:700,color:'#16a34a' }}>Unlimited</span>}
+            <span style={{ fontSize:'.62rem',fontWeight:700,color:'#4ade80',letterSpacing:'.1em',textTransform:'uppercase' }}>{hasOwnKey ? 'Your API key' : 'Free trial'}</span>
+            {hasOwnKey && <span style={{ fontSize:'.68rem',fontWeight:700,color:'#4ade80' }}>Unlimited</span>}
           </div>
           {hasOwnKey ? (
-            <p style={{ margin:0,fontSize:'.68rem',color:'#9ca3af' }}>Generations run on your own OpenAI key.</p>
+            <p style={{ margin:0,fontSize:'.68rem',color:'rgba(255,255,255,.5)' }}>Generations run on your own OpenAI key.</p>
           ) : (
             <>
               <div style={{ display:'flex',flexDirection:'column',gap:5,marginBottom:8 }}>
                 <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
-                  <span style={{ fontSize:'.7rem',color:'#6b7280' }}>Topic Lab try</span>
-                  <span style={{ fontSize:'.7rem',fontWeight:700,color: topicCredit?'#dc2626':'#16a34a' }}>{topicCredit?'Used':'Available'}</span>
+                  <span style={{ fontSize:'.7rem',color:'rgba(255,255,255,.6)' }}>Topic Lab try</span>
+                  <span style={{ fontSize:'.7rem',fontWeight:700,color: topicCredit?'rgba(255,255,255,.35)':'#4ade80' }}>{topicCredit?'Used':'Available'}</span>
                 </div>
                 <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
-                  <span style={{ fontSize:'.7rem',color:'#6b7280' }}>Spec generation try</span>
-                  <span style={{ fontSize:'.7rem',fontWeight:700,color: specCredit?'#dc2626':'#16a34a' }}>{specCredit?'Used':'Available'}</span>
+                  <span style={{ fontSize:'.7rem',color:'rgba(255,255,255,.6)' }}>Spec generation try</span>
+                  <span style={{ fontSize:'.7rem',fontWeight:700,color: specCredit?'rgba(255,255,255,.35)':'#4ade80' }}>{specCredit?'Used':'Available'}</span>
                 </div>
               </div>
               <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
-                <span style={{ fontSize:'.66rem',color:'#9ca3af' }}><span style={{ fontSize:'.6rem',marginRight:3 }}>🧪</span>{topicsUsed} topic{topicsUsed!==1?'s':''} explored</span>
+                <span style={{ fontSize:'.66rem',color:'rgba(255,255,255,.35)' }}><span style={{ fontSize:'.6rem',marginRight:3 }}>🧪</span>{topicsUsed} topic{topicsUsed!==1?'s':''} explored</span>
               </div>
               {(topicCredit || specCredit) && (
-                <Link href="/dashboard/profile" style={{ display:'block',textAlign:'center',fontSize:'.68rem',fontWeight:700,color:'#16a34a',textDecoration:'none',padding:'8px 0 0',marginTop:8,borderTop:'1px solid #e8ede8' }}>
+                <Link href="/dashboard/profile" onClick={onClose} style={{ display:'block',textAlign:'center',fontSize:'.68rem',fontWeight:700,color:'#4ade80',textDecoration:'none',padding:'8px 0 0',marginTop:8,borderTop:'1px solid rgba(255,255,255,.09)' }}>
                   Add your API key for unlimited use →
                 </Link>
               )}
@@ -138,18 +136,18 @@ export function Sidebar() {
       </div>
 
       {/* User */}
-      <div style={{ padding:'10px 12px 16px' }}>
-        <div style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 8px',borderRadius:10,transition:'all .15s' }}>
+      <div style={{ padding:'10px 12px 16px',position:'relative' }}>
+        <div style={{ display:'flex',alignItems:'center',gap:10,padding:'10px 8px',borderRadius:10 }}>
           <div style={{ width:34,height:34,borderRadius:10,background:'linear-gradient(135deg,#16a34a,#22c55e)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontSize:'.78rem',fontWeight:800,flexShrink:0 }}>
             {initials}
           </div>
           <div style={{ flex:1,minWidth:0 }}>
-            <div style={{ fontSize:'.8rem',fontWeight:700,color:'#0f1f0f',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{user?.full_name||'Researcher'}</div>
-            <div style={{ fontSize:'.66rem',color:'#9ca3af',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{user?.email||''}</div>
+            <div style={{ fontSize:'.8rem',fontWeight:700,color:'white',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{user?.full_name||'Researcher'}</div>
+            <div style={{ fontSize:'.66rem',color:'rgba(255,255,255,.4)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{user?.email||''}</div>
           </div>
         </div>
-        <button className="sb-logout" onClick={signOut}
-          style={{ display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,color:'#6b7280',fontSize:'.78rem',fontWeight:600,marginTop:2 }}>
+        <button className="sbd-logout" onClick={signOut}
+          style={{ display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:8,color:'rgba(255,255,255,.5)',fontSize:'.78rem',fontWeight:600,marginTop:2 }}>
           <IcoOut/> Sign out
         </button>
       </div>

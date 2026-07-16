@@ -14,7 +14,7 @@ export function LandingCTA() {
           Ready to write your best<br />specification yet?
         </h2>
         <p className="rai-cta-sub">
-          Join 4,500+ students who stopped struggling with research specs — and started submitting with confidence.
+          Stop struggling with research specs — your first one is free, generated end-to-end in minutes.
         </p>
         <div className="rai-cta-btns">
           <Link href="/register" className="rai-btn-white">

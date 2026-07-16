@@ -1,57 +1,50 @@
-const REVIEW_PLATFORMS = [
-  { name: 'Trustpilot', score: '4.9 / 5.0' },
-  { name: 'Google',     score: '4.8 / 5.0' },
-  { name: 'Sitejabber', score: '4.7 / 5.0' },
+const FACTS = [
+  { name: 'CrossRef',   detail: 'every DOI independently verified' },
+  { name: 'Examiner AI', detail: 'reviewed against your rubric' },
+  { name: 'Your guidelines', detail: 'parsed, not guessed' },
 ]
 
-const TESTIMONIALS = [
+const USE_CASES = [
   {
-    name: 'Adaeze Okonkwo',
-    uni: 'MSc Data Science · University of Manchester',
-    text: '"I uploaded my guidelines on a Monday evening and had a supervisor-approved specification by Tuesday morning. ResearchAI understood every marking criterion."',
+    field: 'Econometrics & Finance',
+    desc: 'Causal designs done properly — identification strategy, treatment and outcome variables, robustness checks, and a work plan that matches how empirical economics is actually supervised.',
     color: '#16a34a',
-    initials: 'AO',
+    initials: 'EC',
   },
   {
-    name: 'James Kowalski',
-    uni: 'PhD Computer Science · Imperial College London',
-    text: '"The live progress tracker is incredible — you can literally watch the AI building your spec. My supervisor said it was the most complete first draft she\'d seen in 10 years."',
-    color: '#2563eb',
-    initials: 'JK',
+    field: 'Machine Learning & Systems',
+    desc: 'Model selection justified against baselines, evaluation metrics fixed up front, dataset profiling built in — specs that survive a technical supervisor’s first read.',
+    color: '#15803d',
+    initials: 'ML',
   },
   {
-    name: 'Fatima Al-Rashid',
-    uni: 'MSc Artificial Intelligence · UCL',
-    text: '"I was struggling to narrow my topic for weeks. ResearchAI not only structured my spec perfectly but suggested a more novel angle I hadn\'t considered."',
-    color: '#7c3aed',
-    initials: 'FA',
+    field: 'Surveys & Qualitative',
+    desc: 'Sampling frames, instrument design, ethics and positionality written as original prose from your project’s facts — never boilerplate pasted between students.',
+    color: '#22c55e',
+    initials: 'SQ',
   },
   {
-    name: 'Liam Murphy',
-    uni: 'MSc Cybersecurity · University of Edinburgh',
-    text: '"The past project upload feature is a game changer. It picked up on the exact tone my university expects. My specification scored 97% on completeness."',
-    color: '#dc2626',
-    initials: 'LM',
+    field: 'Systematic Reviews',
+    desc: 'Search strategy, inclusion criteria and PRISMA-style flow scoped from your guidelines, with a citation pool that’s verified before it’s cited.',
+    color: '#059669',
+    initials: 'SR',
   },
   {
-    name: 'Ngozi Obiechina',
-    uni: "PhD Biomedical Engineering · King's College",
-    text: '"Worth every penny. I used to spend 3 weeks writing a specification — with ResearchAI it took 8 minutes. Better quality than anything I wrote manually."',
-    color: '#d97706',
-    initials: 'NO',
+    field: 'Any department’s format',
+    desc: 'Upload the brief your department actually uses — word limits, section structure and marking criteria are read from your document, not assumed.',
+    color: '#0f766e',
+    initials: 'AF',
   },
 ]
 
-function TestimonialCard({ t }: { t: typeof TESTIMONIALS[0] }) {
+function UseCaseCard({ t }: { t: typeof USE_CASES[0] }) {
   return (
     <div className="rai-testi-card">
-      <div className="rai-testi-stars">★★★★★</div>
-      <p className="rai-testi-text">{t.text}</p>
+      <p className="rai-testi-text">{t.desc}</p>
       <div className="rai-testi-author">
         <div className="rai-avatar" style={{ background: t.color }}>{t.initials}</div>
         <div>
-          <div className="rai-testi-name">{t.name}</div>
-          <div className="rai-testi-uni">{t.uni}</div>
+          <div className="rai-testi-name">{t.field}</div>
         </div>
       </div>
     </div>
@@ -63,42 +56,38 @@ export function LandingTestimonials() {
     <section className="rai-testimonials" id="testimonials">
       <div className="rai-container">
         <div className="rai-section-header">
-          <span className="rai-tag">Student Reviews</span>
-          <h2 className="rai-h2">What students are saying</h2>
+          <span className="rai-tag">Use cases</span>
+          <h2 className="rai-h2">Built for how research is actually graded</h2>
           <p className="rai-section-sub">
-            Thousands of postgraduate students used ResearchAI to get their specs approved first time.
+            The pipeline detects your project&apos;s research paradigm and writes to its
+            standards — not to a generic template.
           </p>
         </div>
 
-        {/* Review platforms bar */}
+        {/* Product-facts bar (replaces the review-scores bar) */}
         <div className="rai-reviews-bar">
-          {REVIEW_PLATFORMS.map((r, i) => (
+          {FACTS.map((r, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
               {i > 0 && <div className="rai-vdivider" />}
               <div className="rai-rp">
                 <span className="rai-rp-name">{r.name}</span>
-                <span className="rai-stars">★★★★★</span>
-                <span className="rai-rp-score">{r.score}</span>
+                <span className="rai-rp-score">{r.detail}</span>
               </div>
             </div>
           ))}
-          <div className="rai-vdivider" />
-          <span style={{ fontSize: '0.85rem', color: '#4b6b4b', fontWeight: 600 }}>
-            4,500+ verified reviews
-          </span>
         </div>
 
         {/* First row — 3 cards */}
         <div className="rai-testi-grid">
-          {TESTIMONIALS.slice(0, 3).map((t, i) => (
-            <TestimonialCard key={i} t={t} />
+          {USE_CASES.slice(0, 3).map((t, i) => (
+            <UseCaseCard key={i} t={t} />
           ))}
         </div>
 
         {/* Second row — 2 cards centred */}
         <div className="rai-testi-grid-2">
-          {TESTIMONIALS.slice(3).map((t, i) => (
-            <TestimonialCard key={i} t={t} />
+          {USE_CASES.slice(3).map((t, i) => (
+            <UseCaseCard key={i} t={t} />
           ))}
         </div>
       </div>

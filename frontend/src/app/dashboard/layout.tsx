@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { Sidebar } from '@/app/dashboard/Sidebar'
 import { Header } from '@/app/dashboard/Header'
+import { TabBar } from '@/app/dashboard/TabBar'
 import '@/app/dashboard/dashboard.css'
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1 } } })
@@ -23,17 +24,21 @@ function LoadingScreen() {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { isAuthenticated, isLoading } = useAuth()
+  // Mobile-only slide-out drawer state; on desktop the sidebar is always visible.
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   useEffect(() => { if (!isLoading && !isAuthenticated) router.push('/signin') }, [isAuthenticated, isLoading, router])
   if (isLoading || !isAuthenticated) return <LoadingScreen />
 
   return (
     <QueryClientProvider client={queryClient}>
       <div style={{ minHeight:'100vh', background:'var(--g-bg)' }}>
-        <Sidebar />
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className={`g-sidebar-backdrop ${sidebarOpen ? 'show' : ''}`} onClick={() => setSidebarOpen(false)} />
         <div className="g-main-wrap" style={{ paddingLeft:'var(--g-sidebar-w)' }}>
-          <Header />
-          <main style={{ padding:'28px 32px 60px', maxWidth:1240, boxSizing:'border-box' }}>{children}</main>
+          <Header onMenu={() => setSidebarOpen(true)} />
+          <main className="g-main" style={{ padding:'28px 32px 60px', maxWidth:1240, boxSizing:'border-box' }}>{children}</main>
         </div>
+        <TabBar />
       </div>
     </QueryClientProvider>
   )

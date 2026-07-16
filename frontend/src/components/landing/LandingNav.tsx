@@ -29,7 +29,7 @@ export function LandingNav() {
           <li><a href="#features">Features</a></li>
           <li><a href="#how">How it works</a></li>
           <li><a href="#pricing">Pricing</a></li>
-          <li><a href="#testimonials">Reviews</a></li>
+          <li><a href="#testimonials">Use cases</a></li>
         </ul>
 
         <div className="rai-nav-ctas">

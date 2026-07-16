@@ -1,8 +1,8 @@
 const STATS = [
-  { num: '4,500+', label: 'Specifications Generated' },
-  { num: '94%',    label: 'Average Completeness Score' },
-  { num: '3 min',  label: 'Average Generation Time' },
-  { num: '4.8 ★',  label: 'Student Rating' },
+  { num: '73',   label: 'Specifications Generated' },
+  { num: '7',    label: 'AI Pipeline Phases' },
+  { num: '15+',  label: 'Verified Sources Per Spec' },
+  { num: '£0',   label: 'Your First Spec' },
 ]
 
 export function LandingStats() {
