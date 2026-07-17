@@ -5,7 +5,8 @@
 # Bucket exists now so that follow-up work has nothing left to provision.
 
 resource "aws_s3_bucket" "uploads" {
-  bucket = "${var.name_prefix}-uploads"
+  bucket        = "${var.name_prefix}-uploads"
+  force_destroy = true # v1 showcase — lets `terraform destroy` remove the bucket even if it holds objects
 }
 
 resource "aws_s3_bucket_public_access_block" "uploads" {

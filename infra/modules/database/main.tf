@@ -60,7 +60,8 @@ resource "aws_rds_cluster_instance" "this" {
 }
 
 resource "aws_secretsmanager_secret" "database_url" {
-  name = "${var.name_prefix}/database-url"
+  name                    = "${var.name_prefix}/database-url"
+  recovery_window_in_days = 0 # v1 showcase — delete immediately so a re-apply can reuse the name
 }
 
 resource "aws_secretsmanager_secret_version" "database_url" {
