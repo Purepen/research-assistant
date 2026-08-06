@@ -1,0 +1,30 @@
+app = "research-assistant-backend"
+primary_region = "lhr"
+
+[build]
+
+[env]
+  STORAGE_TYPE = "local"
+  STORAGE_PATH = "/app/storage"
+  REQUIRE_BYOK = "false"
+  GOOGLE_CLIENT_ID = "285969619076-pcqgf2of84vdgrlne4ueik68vrial5kt.apps.googleusercontent.com"
+  FRONTEND_URL = "https://researchai.fly.dev"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

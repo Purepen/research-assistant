@@ -23,6 +23,11 @@ import os
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./research_assistant.db")
 
+# Some providers (Fly Postgres, formerly Heroku) hand out "postgres://" URLs;
+# SQLAlchemy 2.0 only registers the "postgresql://" dialect name.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 # Add check_same_thread=False for SQLite only (ignored by other DBs)
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 

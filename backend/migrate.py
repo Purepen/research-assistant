@@ -16,7 +16,10 @@ from sqlalchemy import create_engine, text
 # Honor DATABASE_URL like the rest of the app (app/api/dependencies.py) instead
 # of always targeting the local SQLite file — running this against a
 # configured Postgres deployment used to silently migrate the wrong database.
-engine = create_engine(os.getenv("DATABASE_URL", "sqlite:///./research_assistant.db"))
+_database_url = os.getenv("DATABASE_URL", "sqlite:///./research_assistant.db")
+if _database_url.startswith("postgres://"):
+    _database_url = _database_url.replace("postgres://", "postgresql://", 1)
+engine = create_engine(_database_url)
 
 migrations = [
     # Apr 2026 — Model Tier + BYOK

@@ -1,0 +1,19 @@
+app = "researchai"
+primary_region = "lhr"
+
+[build]
+  [build.args]
+    NEXT_PUBLIC_API_URL = "https://research-assistant-backend.fly.dev"
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID = "285969619076-pcqgf2of84vdgrlne4ueik68vrial5kt.apps.googleusercontent.com"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
